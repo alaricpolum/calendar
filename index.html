@@ -529,6 +529,8 @@ let hasFocusedInput = false;
 let viewDateOverride = null;
 let ORBIT_TOTAL_LEN  = 0;
 let isBouncing       = false;   // 悬浮版滚动吸附
+let _bounceCooldown  = false;   // 移动端回弹冷却期
+const _isTouchDevice = navigator.maxTouchPoints > 0;
 let _lastSecond      = -1;
 let _physInfoHasError = false;
 let _renderRaf       = null;
@@ -549,7 +551,9 @@ function initDOMCache() {
      'earthNode','daySide','terminatorLine','earthAxis','moonNode','moonVisualPhase',
      'solidOrbitPath','seasonSyncTag',
      'wTemp','wDesc','wAppTemp','wHumi','wAqi','wUvi','wWind','wPres','wRise','wSet',
-     'forecastBrief','daysPassed','daysLeft','yIn'
+     'forecastBrief','daysPassed','daysLeft','yIn',
+     'statusCard','calView','vHomeYearBg','heroSpace','heroPlaceholder',
+     'tooltip','convIn','convOut','modeToggle'
     ].forEach(id => { DOM[id] = document.getElementById(id); });
 }
 
@@ -674,7 +678,7 @@ function getMoonPhase(date) {
     const diffDays = (date.getTime() - BASE_NEW_MOON_MS) / 86400000;
     let phase = (diffDays / 29.530588853) % 1;
     if (phase < 0) phase += 1;
-    return { age: phase*29.53, normalized: phase };
+    return { age: phase*29.530588853, normalized: phase };
 }
 function getAstronomyParams(date, forceYear) {
     const vYear    = forceYear;
@@ -736,7 +740,11 @@ function initMoonTable() {
 // ═══════════════════════════════════════════════════════════════
 
 // 月亮赤经赤纬（简化公式，精度约1°，足够视觉展示）
+// 缓存到秒级：同一秒内多次调用（视位置角+月出月落）直接复用
+let _moonRADecCache = null;
 function _getMoonRADec(date) {
+    const sec = Math.floor(date.getTime() / 1000);
+    if (_moonRADecCache && _moonRADecCache.sec === sec) return _moonRADecCache.val;
     const T  = (date.getTime()/86400000 - 10957.5) / 36525; // J2000起的儒略世纪
     // 月亮平黄经
     const L0 = (218.3165 + 481267.8813*T) % 360;
@@ -773,7 +781,9 @@ function _getMoonRADec(date) {
         Math.cos(moonLat)*Math.sin(moonLon)*Math.cos(eps) - Math.sin(moonLat)*Math.sin(eps),
         Math.cos(moonLat)*Math.cos(moonLon)
     ); // 赤经（弧度）
-    return { ra: ((ra % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), dec };
+    const val = { ra: ((ra % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI), dec };
+    _moonRADecCache = { sec: Math.floor(date.getTime()/1000), val };
+    return val;
 }
 
 // 格林尼治恒星时（GMST，弧度）
@@ -805,11 +815,18 @@ function getMoonParallacticAngle(date, latDeg, lonDeg) {
 
 // ── 月出月落计算 ─────────────────────────────────────────────
 // 算法：用月亮时角求升落时刻，精度约 ±5 分钟
+// 结果缓存到日期+位置粒度，日期不变则直接复用
+let _moonRiseSetCache = null;
 function _getMoonRiseSet(date, latDeg, lonDeg) {
+    const dateKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const locKey  = `${latDeg?.toFixed(2)}_${lonDeg?.toFixed(2)}`;
+    if (_moonRiseSetCache && _moonRiseSetCache.dateKey === dateKey && _moonRiseSetCache.locKey === locKey) {
+        return _moonRiseSetCache.val;
+    }
     if (latDeg === null || lonDeg === null) return null;
 
     const lat = latDeg * Math.PI / 180;
-    // 月亮地平视差修正高度（约-0.833°，同太阳）
+    // 月亮地平修正高度：大气折射约0.583°+ 月球视半径约0.267°≈ 0.85°，取-0.833°为通用近似
     const h0  = -0.833 * Math.PI / 180;
 
     // 以目标日期正午为基准，迭代两次提高精度
@@ -823,21 +840,15 @@ function _getMoonRiseSet(date, latDeg, lonDeg) {
         if (cosH < -1 || cosH > 1) return null; // 极夜/极昼
         const H0 = Math.acos(cosH); // 升落时角（弧度）
 
-        // 格林尼治恒星时（度）
-        const T    = (d.getTime()/86400000 - 10957.5) / 36525;
-        const gmst = ((280.46061837 + 360.98564736629*(d.getTime()/86400000 - 10957.5)
-                     + 0.000387933*T*T) % 360 + 360) % 360;
-        // 月亮过中天的UT（小时）
-        const raDeg  = ra * 180 / Math.PI;
-        let   transit = (raDeg - gmst - lonDeg) / 15; // 单位：小时
+        // 复用 _getGMST，不再内联重复公式
+        const gmstDeg = _getGMST(d) * 180 / Math.PI;
+        const raDeg   = ra * 180 / Math.PI;
+        let   transit = (raDeg - gmstDeg - lonDeg) / 15;
         transit = ((transit % 24) + 24) % 24;
 
-        const H0h   = H0 * 180 / Math.PI / 15; // 时角转小时
-        let   rise  = transit - H0h;
-        let   set_  = transit + H0h;
-        // 归一化到0-24
-        rise  = ((rise  % 24) + 24) % 24;
-        set_  = ((set_  % 24) + 24) % 24;
+        const H0h = H0 * 180 / Math.PI / 15;
+        let   rise = ((transit - H0h) % 24 + 24) % 24;
+        let   set_ = ((transit + H0h) % 24 + 24) % 24;
         return { rise, set: set_ };
     }
 
@@ -853,7 +864,9 @@ function _getMoonRiseSet(date, latDeg, lonDeg) {
         const hh2 = mm === 60 ? (hh + 1) % 24 : hh;
         return `${String(hh2).padStart(2,'0')}:${String(mm2).padStart(2,'0')}`;
     }
-    return { rise: fmt(result.rise), set: fmt(result.set) };
+    const val = { rise: fmt(result.rise), set: fmt(result.set) };
+    _moonRiseSetCache = { dateKey, locKey, val };
+    return val;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -879,6 +892,8 @@ function moonPhaseColor(n){ const i=Math.floor(((n+.0625)%1)*8); return i===4?'#
 // ═══════════════════════════════════════════════════════════════
 async function updateWeather(lat, lon, cityName) {
     if (lat !== undefined && lon !== undefined) {
+        // 位置变化时清除月出月落缓存
+        if (lat !== _currentLat || lon !== _currentLon) _moonRiseSetCache = null;
         _currentLat=lat; _currentLon=lon; _currentCity=cityName||null;
     }
     if (_currentLat===null || _currentLon===null) return;
@@ -975,7 +990,7 @@ function _renderForecast(days) {
 // ═══════════════════════════════════════════════════════════════
 function showTooltip(e, data) {
     e.stopPropagation();
-    const tt  = document.getElementById('tooltip');
+    const tt  = DOM.tooltip;
     const now = new Date();
     const cellId = data.gStr+'_'+data.offset;
     const gNums  = data.gStr.match(/\d+/g);
@@ -983,7 +998,7 @@ function showTooltip(e, data) {
     if (tt.style.display==='block' && tt.getAttribute('data-active-cell')===cellId) { hideTooltip(e); return; }
     tt.setAttribute('data-active-cell', cellId);
 
-    const ttW=172, ttH=150, GAP=8;
+    const ttW=172, ttH=220, GAP=8;
     const winW=document.documentElement.clientWidth, winH=document.documentElement.clientHeight;
     const cell=(e.target.closest('.cell')||e.target).getBoundingClientRect();
     const flipX = cell.right+GAP+ttW > winW;
@@ -1076,11 +1091,11 @@ function showTooltip(e, data) {
     }
     requestAnimationFrame(() => { tt.style.animation='tt-appear .15s ease-out both'; tt.style.display='block'; });
     viewDateOverride = targetDate;
-    document.getElementById('statusCard').classList.add('is-observing');
+    DOM.statusCard.classList.add('is-observing');
     update();
 }
 function hideTooltip(e) {
-    const tt = document.getElementById('tooltip');
+    const tt = DOM.tooltip;
     if (tt?.style.display==='block') { tt.style.display='none'; tt.setAttribute('data-active-cell',''); }
 }
 
@@ -1161,9 +1176,9 @@ function update() {
     const _isSouth = _currentLat !== null && _currentLat < -5;
     // moonVisualPhase 路径以Y轴为对称轴，亮面朝右为0°基准
     // 视位置角顺时针为正，SVG rotate顺时针为正，直接使用
-    // 南半球：水平镜像（scale(-1,1)）再旋转
+    // 南半球：天顶朝向相反，亮面水平镜像，等价于 rotate(180 - pa)
     const _moonTransform = _isSouth
-        ? `scale(-1,1) rotate(${-_pa})`
+        ? `rotate(${180 - _pa})`
         : `rotate(${_pa})`;
     DOM.moonVisualPhase.setAttribute('transform', _moonTransform);
     const moonName  = MOON_NAMES[Math.floor(((moon.normalized+.0625)%1)*8)];
@@ -1208,8 +1223,8 @@ function _doRender() {
         _physInfoHasError=true; return;
     }
     _physInfoHasError=false; physInfo.style.color='#7f8c8d';
-    document.getElementById('vHomeYearBg').innerText=y;
-    const cEq=getShEq(y), total=isLeapYearV(y), view=document.getElementById('calView');
+    DOM.vHomeYearBg.innerText=y;
+    const cEq=getShEq(y), total=isLeapYearV(y), view=DOM.calView;
     view.innerHTML='';
 
     const now=new Date(), TERMS=_calcTermOffsets(y);
@@ -1282,12 +1297,6 @@ function _doRender() {
             h += `<div class="${cellCls}" role="button" tabindex="0" aria-label="${gD.getMonth()+1}月${gD.getDate()}日" data-tt='${ttData}'>${termTag}<div class="v-num" style="color:${numColor}">${d<10?'0'+d:d}</div><div class="g-info">${gD.getMonth()+1}.${gD.getDate()}</div></div>`;
         }
         card.innerHTML=h+'</div>';
-        // 用事件委托代替 onclick 内联
-        card.querySelectorAll('.cell').forEach(c=>{
-            const handler=e=>{e.stopPropagation();showTooltip(e,JSON.parse(c.dataset.tt));};
-            c.addEventListener('click',handler);
-            c.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();handler(e);}});
-        });
         view.appendChild(card);
     }
     if (total>364) {
@@ -1305,13 +1314,19 @@ function _doRender() {
             eh+=`<div class="${cellCls}" role="button" tabindex="0" aria-label="${name}" data-tt='${ttData}'><div class="v-num" style="color:var(--accent);font-weight:800;">${name}</div><div class="g-info">${gD.getMonth()+1}.${gD.getDate()}</div></div>`;
         }
         extra.innerHTML=eh+'</div>';
-        extra.querySelectorAll('.cell').forEach(c=>{
-            const handler=e=>{e.stopPropagation();showTooltip(e,JSON.parse(c.dataset.tt));};
-            c.addEventListener('click',handler);
-            c.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();handler(e);}});
-        });
         view.appendChild(extra);
     }
+    // 事件委托：对整个 calView 容器绑定一次，替代逐格绑定
+    view.addEventListener('click', e=>{
+        const cell=e.target.closest('.cell');
+        if(cell?.dataset.tt){e.stopPropagation();showTooltip(e,JSON.parse(cell.dataset.tt));}
+    });
+    view.addEventListener('keydown', e=>{
+        if(e.key==='Enter'||e.key===' '){
+            const cell=e.target.closest('.cell');
+            if(cell?.dataset.tt){e.preventDefault();e.stopPropagation();showTooltip(e,JSON.parse(cell.dataset.tt));}
+        }
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1319,7 +1334,7 @@ function _doRender() {
 // ═══════════════════════════════════════════════════════════════
 function setMode(mode, focus=false) {
     currentMode=mode;
-    const i=document.getElementById('convIn'), t=document.getElementById('modeToggle');
+    const i=DOM.convIn, t=DOM.modeToggle;
     t.classList.toggle('v-mode',mode==='V');
     i.placeholder=mode==='V'?"例：2026年3月14日":"例：20260314 或 2026-3-14";
     document.querySelectorAll('.mode-btn').forEach((b,idx)=>{
@@ -1329,14 +1344,12 @@ function setMode(mode, focus=false) {
 }
 function goHome() {
     viewDateOverride=null;
-    document.getElementById('statusCard').classList.remove('is-observing');
+    DOM.statusCard.classList.remove('is-observing');
     const now=new Date(); let y=now.getFullYear(); if(now<getShEq(y)) y--;
-    document.getElementById('yIn').value=y; _doRender(); update();
+    DOM.yIn.value=y; _doRender(); update();
     setTimeout(()=>{document.querySelector('.is-today')?.scrollIntoView({behavior:'smooth',block:'center'});},50);
 }
 
-// convHistory 元素已移除，recordHistory 保留为空函数避免调用报错
-function recordHistory(_text) { /* no-op */ }
 
 function cn2Num(str) {
     if (!str) return "";
@@ -1356,8 +1369,8 @@ function cn2Num(str) {
 }
 
 function executeConvert() {
-    const raw=document.getElementById('convIn').value.trim();
-    const out=document.getElementById('convOut');
+    const raw=DOM.convIn.value.trim();
+    const out=DOM.convOut;
     if (!raw){out.innerText="➡ 输入公历日期或更替历日期，即可完成双历互转";return;}
     const proc=raw.replace(/两/g,'二').replace(/([零一二三四五六七八九十百千○〇]+)/g,m=>cn2Num(m));
 
@@ -1378,9 +1391,8 @@ function executeConvert() {
         out.innerText = diff<364
             ? `➡ 更替历：${vY}年${Math.floor(diff/28)+1}月${diff%28+1}日（${WKS[diff%7]}）`
             : `➡ 更替历：${vY}年 ${total===365?"更替日 A":(diff===364?"更替日 B":"更替日 A")}`;
-        recordHistory(out.innerText.replace('➡ ',''));
     } else {
-        const isGengtiDay=/更替日?\s*[AB]/i.test(proc)||/^[\d\s年月日]*[AB]$/i.test(proc.trim());
+        const isGengtiDay=/更替\s*日?\s*[AB]/i.test(proc)||/^\s*[AB]\s*$/i.test(proc.trim())||/[AB]\s*日/i.test(proc);
         const nums=proc.match(/\d+/g);
         if (!nums||nums.length<1){out.innerText="➡ 格式错误，例：2026年3月14日";return;}
         const p=[];
@@ -1401,7 +1413,6 @@ function executeConvert() {
         }
         const r=new Date(getShEq(y).getTime()+off*86400000);
         out.innerText=`➡ 公历：${r.getFullYear()}年${r.getMonth()+1}月${r.getDate()}日（${WKS[(r.getDay()||7)-1]}）`;
-        recordHistory(out.innerText.replace('➡ ',''));
     }
 }
 
@@ -1409,26 +1420,34 @@ function executeConvert() {
 //  悬浮吸附（修复竞态 + passive wheel + 动态占位高度）
 // ═══════════════════════════════════════════════════════════════
 function _syncHeroPlaceholder() {
-    const h = document.getElementById('heroSpace');
-    const p = document.getElementById('heroPlaceholder');
+    const h = DOM.heroSpace;
+    const p = DOM.heroPlaceholder;
     if (h && p) p.style.height = h.offsetHeight + 'px';
 }
 
 function _applyScrollClass(y) {
-    const h=document.getElementById('heroSpace'), c=document.getElementById('statusCard');
-    const scrolled = y > 300;
+    const h=DOM.heroSpace, c=DOM.statusCard;
+    const threshold = DOM.heroPlaceholder ? DOM.heroPlaceholder.offsetHeight * 0.6 : 300;
+    const scrolled = y > threshold;
     h.classList.toggle('scrolled',scrolled);
     c.classList.toggle('scrolled',scrolled);
 }
 
 // isBouncing 解锁：scrollend 事件 + 最长800ms超时保险（修复 Safari 竞态）
-function _unlock() { isBouncing=false; }
+function _unlock() {
+    isBouncing=false;
+    // 移动端：解锁后启动冷却期，防止 touchend 触发的连续回弹
+    if (_isTouchDevice) {
+        _bounceCooldown=true;
+        setTimeout(()=>{ _bounceCooldown=false; }, 1000);
+    }
+}
 function triggerBounce() {
     // 悬浮模式关闭时不执行回弹
     if (!document.getElementById('togFloat')?.checked) return;
     if (isBouncing) return;
     isBouncing=true;
-    const target = document.getElementById('heroPlaceholder');
+    const target = DOM.heroPlaceholder;
     const scrollTo = target ? target.offsetTop + target.offsetHeight : 430;
     window.scrollTo({top:scrollTo, behavior:'smooth'});
     const t = setTimeout(_unlock, 800);
@@ -1493,7 +1512,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── 动态同步占位高度（resize 自适应）
     _syncHeroPlaceholder();
-    new ResizeObserver(_syncHeroPlaceholder).observe(document.getElementById('heroSpace'));
+    new ResizeObserver(_syncHeroPlaceholder).observe(DOM.heroSpace);
 
     // ── 按钮事件（消除内联 onclick）
     document.getElementById('btnHome').addEventListener('click',  e=>{e.stopPropagation();goHome();});
@@ -1504,7 +1523,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnModeV').addEventListener('click',  ()=>setMode('V'));
 
     // ── 输入框事件
-    const convIn=document.getElementById('convIn'), yIn=DOM.yIn;
+    const convIn=DOM.convIn, yIn=DOM.yIn;
     convIn.addEventListener('keydown', e=>{if(e.key==='Enter') executeConvert();});
     convIn.addEventListener('focus',   ()=>{hasFocusedInput=true;});
     convIn.addEventListener('blur',    ()=>{hasFocusedInput=false;});
@@ -1544,7 +1563,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // 悬浮模式开启时才执行淡出和回弹判断
         if (document.getElementById('togFloat')?.checked) {
             _applyScrollClass(cy);
-            const heroBottom=document.getElementById('heroPlaceholder');
+            const heroBottom=DOM.heroPlaceholder;
             const hBottom=heroBottom?heroBottom.offsetTop+heroBottom.offsetHeight:430;
             if(!isBouncing && cy<lastScrollY && cy<hBottom && cy>hBottom-350) triggerBounce();
         }
@@ -1553,7 +1572,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // wheel：passive:true（不阻塞滚动性能），isBouncing 时用 scrollTo 代替 preventDefault
     window.addEventListener('wheel',e=>{
-        if(document.getElementById('tooltip').style.display==='block') hideTooltip(e);
+        if(DOM.tooltip.style.display==='block') hideTooltip(e);
         if(isBouncing && e.deltaY<0) { window.scrollTo({top:lastScrollY,behavior:'instant'}); }
     },{passive:true});
 
@@ -1562,9 +1581,9 @@ window.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('touchstart',e=>{_tsY=e.touches[0].clientY;},{passive:true});
     window.addEventListener('touchend',e=>{
         const dy=_tsY-e.changedTouches[0].clientY, cy=window.scrollY;
-        const hBottom=document.getElementById('heroPlaceholder');
+        const hBottom=DOM.heroPlaceholder;
         const hB=hBottom?hBottom.offsetTop+hBottom.offsetHeight:430;
-        if(dy<-30&&!isBouncing&&cy<hB&&cy>hB-350) triggerBounce();
+        if(dy<-30&&!isBouncing&&!_bounceCooldown&&cy<hB&&cy>hB-350) triggerBounce();
     },{passive:true});
 
     // ── Page Visibility：标签页隐藏时暂停 rAF
