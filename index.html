@@ -204,7 +204,7 @@
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
 
     /* 5天预报 */
-    .fc-day   { display:flex; align-items:center; justify-content:space-around; background:var(--muted); border-radius:8px; padding:8px 2px; border:1px solid var(--border); box-sizing:border-box; min-width:0; overflow:hidden; min-height:72px; }
+    .fc-day   { display:flex; align-items:center; justify-content:space-around; background:var(--muted); border-radius:8px; padding:8px 2px; border:1px solid var(--border); box-sizing:border-box; min-width:0; overflow:hidden; }
     .fc-day.fc-today { background:#FFFDF7; border:2px solid var(--accent); }
     .fc-left  { display:flex; flex-direction:column; align-items:center; gap:2px; }
     .fc-right { display:flex; flex-direction:column; align-items:center; gap:1px; }
@@ -493,8 +493,8 @@
                 <button class="btn-act" id="btnRender" style="background:var(--accent);">更替历视图</button>
             </div>
             <p id="physInfo" style="font-size:.75rem;color:#7f8c8d;margin-top:8px;margin-bottom:0;">当前进度: --% | 年度天数: --天</p>
-            <div style="flex:1;"></div>
-            <hr style="border:none;border-top:1.5px dashed var(--border);margin:10px 0;">
+            <p id="dayStatLine" style="font-size:.75rem;color:#7f8c8d;margin-top:6px;margin-bottom:0;flex:1;">已过 <span id="daysPassed" style="color:var(--primary);font-weight:700;">--</span> 天 · 剩余 <span id="daysLeft" style="color:var(--primary);font-weight:700;">--</span> 天</p>
+            <hr style="border:none;border-top:1.5px dashed var(--border);margin:10px 0 10px;margin-top:auto;">
             <div id="forecastBrief" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;">
                 <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
                 <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
@@ -1202,6 +1202,14 @@ function _doRender() {
         _physInfoHasError=true; return;
     }
     _physInfoHasError=false; physInfo.style.color='#7f8c8d';
+    // 已过/剩余天数统计
+    const _now = new Date();
+    const _cEq = getShEq(y), _nEq = getShEq(y+1), _tot = isLeapYearV(y);
+    const _passed = _now < _cEq ? 0 : _now >= _nEq ? _tot : Math.min(_tot, getDayDiff(_cEq, _now));
+    const _left   = Math.max(0, _tot - _passed);
+    const _dp = document.getElementById('daysPassed'), _dl = document.getElementById('daysLeft');
+    if (_dp) _dp.innerText = _passed;
+    if (_dl) _dl.innerText = _left;
     document.getElementById('vHomeYearBg').innerText=y;
     const cEq=getShEq(y), total=isLeapYearV(y), view=document.getElementById('calView');
     view.innerHTML='';
