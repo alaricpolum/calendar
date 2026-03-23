@@ -398,7 +398,7 @@
             <circle cx="400" cy="210" r="36" fill="none" stroke="#DCD3BC" stroke-width="1"/>
             <circle cx="400" cy="210" r="20" fill="#B8860B" opacity=".85"/>
             <!-- 地球（r=20，悬浮版尺寸） -->
-            <g id="earthNode" transform="translate(400,80)" style="visibility:hidden">
+            <g id="earthNode" transform="translate(400,80)">
                 <circle cx="0" cy="0" r="20" fill="#2C3E50"/>
                 <path id="daySide" d="M 0 0 L 0 -20 A 20 20 0 0 1 0 20 Z" fill="#FCFAF5" opacity=".92" transform="rotate(0)"/>
                 <line id="terminatorLine" x1="0" y1="-20" x2="0" y2="20" stroke="#B22222" stroke-width="1.8" transform="rotate(0)"/>
@@ -408,7 +408,7 @@
                 <circle cx="0" cy="0" r="36" fill="none" stroke="#B8860B" stroke-width=".6" stroke-dasharray="2,4" opacity=".3"/>
                 <g id="moonNode" transform="translate(36,0)">
                     <circle cx="0" cy="0" r="6.5" fill="#FCFAF5" stroke="#DCD3BC" stroke-width=".8"/>
-                    <path id="moonVisualPhase" fill="#2C3E50" d="M 0 -6.5 A 6.5 6.5 0 0 1 0 6.5 A 6.5 6.5 0 0 1 0 -6.5"/>
+                    <path id="moonVisualPhase" fill="#2C3E50" d="M 0 -6.5 A 6.5 6.5 0 0 1 0 6.5 A 6.5 6.5 0 0 1 0 -6.5" style="opacity:0"/>
                 </g>
             </g>
         </svg>
@@ -935,7 +935,10 @@ async function fetchWaqi(lat, lon) {
     // 通过 Cloudflare Worker 代理请求，token 不暴露在前端
     const WORKER = 'https://aqi-proxy.alaricpolum.workers.dev';
     try {
-        const res  = await fetch(`${WORKER}/aqi?lat=${lat}&lon=${lon}`);
+        const controller = new AbortController();
+        const tid = setTimeout(()=>controller.abort(), 8000);
+        const res  = await fetch(`${WORKER}/aqi?lat=${lat}&lon=${lon}`, {signal:controller.signal});
+        clearTimeout(tid);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         const aqi  = Number(json.aqi);
@@ -1159,7 +1162,6 @@ function update() {
     const eX = 400 + 340*Math.cos(astro.orbitAngle);
     const eY = 210 + 130*Math.sin(astro.orbitAngle);
     DOM.earthNode.setAttribute('transform',`translate(${eX},${eY})`);
-    DOM.earthNode.style.visibility = 'visible';
     const sunDeg = Math.atan2(210-eY, 400-eX)*180/Math.PI;
     DOM.daySide.setAttribute('transform',`rotate(${sunDeg})`);
     DOM.terminatorLine.setAttribute('transform',`rotate(${sunDeg})`);
@@ -1181,6 +1183,8 @@ function update() {
         ? `rotate(${180 - _pa})`
         : `rotate(${_pa})`;
     DOM.moonVisualPhase.setAttribute('transform', _moonTransform);
+    // 定位完成后才显示月亮亮面（定位前pa=0，亮面朝右不正确）
+    if (_currentLat !== null) DOM.moonVisualPhase.style.opacity = '1';
     const moonName  = MOON_NAMES[Math.floor(((moon.normalized+.0625)%1)*8)];
     DOM.moonPhaseLabel.innerHTML=`${viewDateOverride?'彼时月相':'当前月相'}：<span style="color:${moonPhaseColor(moon.normalized)}">${moonName}</span>（月龄 ${moon.age.toFixed(1)}）${viewDateOverride?' · 观测模式':''}`;
     // 月出月落
@@ -1592,7 +1596,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── 定位 → 天气
     DOM.seasonSyncTag.innerText='正在定位…';
-    const fallback=()=>{DOM.seasonSyncTag.innerText='上海（默认）';updateWeather(31.23,121.47,'上海');fetchWaqi(31.23,121.47);};
+    const fallback=()=>{DOM.seasonSyncTag.innerText='上海（默认）';updateWeather(31.23,121.47,'上海');fetchWaqi(31.23,121.47);_lastSecond=-1;update();};
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async pos=>{
             const {latitude:lat,longitude:lon}=pos.coords;
@@ -1603,6 +1607,7 @@ window.addEventListener('DOMContentLoaded', () => {
             } catch(_){}
             updateWeather(lat,lon,city);
             fetchWaqi(lat,lon);
+            _lastSecond=-1; update(); // 定位完成，强制刷新月相视位置角
         }, fallback, {timeout:8000,maximumAge:300000});
     } else { fallback(); }
 
