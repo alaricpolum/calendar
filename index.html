@@ -1092,7 +1092,15 @@ function showTooltip(e, data) {
             <div style="font-size:.88rem;font-weight:900;color:${dateColor};letter-spacing:.5px;">${data.gStr}</div>${subLine}
         </div>${rows}`;
     }
-    requestAnimationFrame(() => { tt.style.animation='tt-appear .15s ease-out both'; tt.style.display='block'; });
+    requestAnimationFrame(() => {
+        tt.style.animation='tt-appear .15s ease-out both';
+        tt.style.display='block';
+        // 向上翻转时用真实高度修正 top（之前用估算值 ttH 会有偏差）
+        if (flipY) {
+            const realH = tt.offsetHeight;
+            tt.style.top = Math.max(8, cell.top - realH - GAP) + 'px';
+        }
+    });
     viewDateOverride = targetDate;
     DOM.statusCard.classList.add('is-observing');
     update();
