@@ -1434,14 +1434,7 @@ function _applyScrollClass(y) {
 }
 
 // isBouncing 解锁：scrollend 事件 + 最长800ms超时保险（修复 Safari 竞态）
-function _unlock() {
-    isBouncing=false;
-    // 移动端：解锁后启动冷却期，防止 touchend 触发的连续回弹
-    if (_isTouchDevice) {
-        _bounceCooldown=true;
-        setTimeout(()=>{ _bounceCooldown=false; }, 1000);
-    }
-}
+function _unlock() { isBouncing=false; }
 function triggerBounce() {
     // 悬浮模式关闭时不执行回弹
     if (!document.getElementById('togFloat')?.checked) return;
@@ -1450,6 +1443,11 @@ function triggerBounce() {
     const target = DOM.heroPlaceholder;
     const scrollTo = target ? target.offsetTop + target.offsetHeight : 430;
     window.scrollTo({top:scrollTo, behavior:'smooth'});
+    // 移动端：回弹启动时立即开启冷却期，解锁后仍有1200ms不可再次触发
+    if (_isTouchDevice) {
+        _bounceCooldown=true;
+        setTimeout(()=>{ _bounceCooldown=false; }, 1200);
+    }
     const t = setTimeout(_unlock, 800);
     if ('onscrollend' in window) {
         window.addEventListener('scrollend', ()=>{clearTimeout(t);_unlock();},{once:true});
@@ -1565,7 +1563,7 @@ window.addEventListener('DOMContentLoaded', () => {
             _applyScrollClass(cy);
             const heroBottom=DOM.heroPlaceholder;
             const hBottom=heroBottom?heroBottom.offsetTop+heroBottom.offsetHeight:430;
-            if(!isBouncing && cy<lastScrollY && cy<hBottom && cy>hBottom-350) triggerBounce();
+            if(!isBouncing && !_bounceCooldown && cy<lastScrollY && cy<hBottom && cy>hBottom-350) triggerBounce();
         }
         lastScrollY=cy;
     },{passive:true});
