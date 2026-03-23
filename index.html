@@ -7,6 +7,11 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>更替历 · 五色旗民国风</title>
+<meta name="description" content="更替历——以春分为岁首、每月28天的天文历法，含节气、月相、天气与双历互转。">
+<meta property="og:title" content="更替历 · 五色旗民国风">
+<meta property="og:description" content="以春分为岁首、每月28天的天文历法，含节气、月相、天气与双历互转。">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#2C3E50">
 <!--
   合并优化版 · 修复清单
   ① 三版特性全部合并（Noto Serif SC + 悬浮吸附 + 大地球 + precipColor）
@@ -180,6 +185,8 @@
     .cell.is-today { background: #FFFDF7 !important; border: 2.5px solid var(--accent) !important; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; overflow: hidden; }
     .cell.is-today .v-num { color: var(--accent) !important; }
     @keyframes pulse-today { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 70% { box-shadow: 0 0 0 6px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
+    @keyframes highlight-jump { 0% { box-shadow:0 0 0 0 rgba(47,79,79,.6); background:var(--muted); } 30% { box-shadow:0 0 0 6px rgba(47,79,79,.15); background:#e8f0e8; } 100% { box-shadow:0 0 0 0 rgba(47,79,79,0); background:transparent; } }
+    .cell-highlight { animation: highlight-jump 1.8s ease-out forwards !important; }
 
     .is-full-moon::before { content:""; position:absolute; width:28px; height:28px; border:2px solid #B8860B; border-radius:50%; z-index:1; pointer-events:none; opacity:.5; }
     .is-wangshu::before   { content:""; position:absolute; width:28px; height:28px; border:2px solid #DF1B12; border-radius:50%; z-index:1; pointer-events:none; opacity:.8; }
@@ -1217,118 +1224,105 @@ function update() {
 
 // ═══════════════════════════════════════════════════════════════
 //  render() 日历
+//  优化：首次全量构建 DOM + 缓存 cell 引用；
+//        后续年份切换只更新可变部分（公历小字、节气、特殊标记）
 // ═══════════════════════════════════════════════════════════════
 function getSeasonClass(off) {
     return off<93?'m-spring':off<187?'m-summer':off<277?'m-autumn':'m-winter';
 }
+
+// 缓存：364个普通格 + 最多2个更替日格
+const _cellCache = [];      // 索引 = offset（0~363）
+const _extraCache = [];     // 索引 0=B或A，1=A（闰年）
+let   _calBuilt   = false;  // 是否已完成首次构建
+let   _lastTotal  = 0;      // 上次渲染的年份总天数（用于判断更替日区域是否需要重建）
+
 function render() {
     if (_renderRaf) cancelAnimationFrame(_renderRaf);
     _renderRaf = requestAnimationFrame(() => { _renderRaf=null; _doRender(); });
 }
-function _doRender() {
-    const yIn    = DOM.yIn;
-    const physInfo = DOM.physInfo;
-    const y      = parseInt(yIn.value);
-    if (!y||y<1900||y>2200) {
-        physInfo.innerText='⚠ 年份请输入 1900～2200 之间的整数';
-        physInfo.style.color='var(--accent)';
-        _physInfoHasError=true; return;
-    }
-    _physInfoHasError=false; physInfo.style.color='#7f8c8d';
-    DOM.vHomeYearBg.innerText=y;
-    const cEq=getShEq(y), total=isLeapYearV(y), view=DOM.calView;
-    view.innerHTML='';
 
-    const now=new Date(), TERMS=_calcTermOffsets(y);
-    const majorOffsets = Object.entries(TERMS).filter(([,n])=>['春分','夏至','秋分','冬至'].includes(n)).map(([o])=>+o);
-    const MAJOR_TERMS  = new Set(majorOffsets);
+// ── 计算年份相关的可变数据（与 DOM 无关）─────────────────────────
+function _calcYearData(y) {
+    const cEq  = getShEq(y);
+    const total = isLeapYearV(y);
+    const now   = new Date();
+    const TERMS = _calcTermOffsets(y);
+    const majorOffsets = Object.entries(TERMS)
+        .filter(([,n])=>['春分','夏至','秋分','冬至'].includes(n)).map(([o])=>+o);
+    const MAJOR_TERMS = new Set(majorOffsets);
 
-    // ── 望舒日计算（新规则）────────────────────────────────────
-    // ⑴ 秋分日本身是满月 → 秋分日即望舒日
-    // ⑵ 否则取秋分前后最近满月；距离相等取秋分前的满月
-    const isFM = off => Math.abs(getMoonPhase(
+    const isFMfn = off => Math.abs(getMoonPhase(
         new Date(new Date(cEq.getTime()+off*86400000).setHours(12,0,0,0))
     ).normalized - 0.5) < 0.017;
-
-    // 动态获取秋分偏移量（避免硬编码187）
-    const autumnOff = +( Object.entries(TERMS).find(([,n])=>n==='秋分')?.[0] ?? 187 );
+    const autumnOff = +(Object.entries(TERMS).find(([,n])=>n==='秋分')?.[0] ?? 187);
 
     let wangshuOff = -1;
-    if (isFM(autumnOff)) {
-        // ⑴ 秋分即满月
+    if (isFMfn(autumnOff)) {
         wangshuOff = autumnOff;
     } else {
-        // ⑵ 向前找秋分之前最近满月
-        let prevFM = -1;
-        for (let o = autumnOff - 1; o >= 0; o--) {
-            if (isFM(o)) { prevFM = o; break; }
-        }
-        // 向后找秋分之后最近满月
-        let nextFM = -1;
-        for (let o = autumnOff + 1; o < total; o++) {
-            if (isFM(o)) { nextFM = o; break; }
-        }
-        if (prevFM === -1 && nextFM === -1) {
-            wangshuOff = -1; // 理论上不会发生
-        } else if (prevFM === -1) {
-            wangshuOff = nextFM;
-        } else if (nextFM === -1) {
-            wangshuOff = prevFM;
-        } else {
-            const dPrev = autumnOff - prevFM;
-            const dNext = nextFM - autumnOff;
-            // 距离相等取秋分前
-            wangshuOff = dPrev <= dNext ? prevFM : nextFM;
-        }
+        let prevFM=-1, nextFM=-1;
+        for (let o=autumnOff-1; o>=0; o--)    { if(isFMfn(o)){prevFM=o;break;} }
+        for (let o=autumnOff+1; o<total; o++)  { if(isFMfn(o)){nextFM=o;break;} }
+        if      (prevFM===-1)  wangshuOff = nextFM;
+        else if (nextFM===-1)  wangshuOff = prevFM;
+        else { const dP=autumnOff-prevFM, dN=nextFM-autumnOff; wangshuOff = dP<=dN?prevFM:nextFM; }
     }
-    // ────────────────────────────────────────────────────────────
+    return { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn };
+}
+
+// ── 首次全量构建（只执行一次）────────────────────────────────────
+function _buildCalendar(y) {
+    const view = DOM.calView;
+    view.innerHTML = '';
+    _cellCache.length = 0;
+    _extraCache.length = 0;
+
+    const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
 
     for (let m=1; m<=13; m++) {
-        const startOff=( m-1)*28, midOff=startOff+13;
-        const card=document.createElement('div');
-        card.className=`month-box ${getSeasonClass(midOff)}`;
-        let h=`<div class="m-title">${m} 月</div><div class="m-divider"></div>
-            <div class="week-bar">${WKS.map((w,i)=>`<div class="wk-day" style="color:${WK_COLORS[i]}">${w}</div>`).join('')}</div>
-            <div class="day-grid">`;
+        const startOff=(m-1)*28, midOff=startOff+13;
+        const card = document.createElement('div');
+        card.className = `month-box ${getSeasonClass(midOff)}`;
+        const weekBar = WKS.map((w,i)=>`<div class="wk-day" style="color:${WK_COLORS[i]}">${w}</div>`).join('');
+        card.innerHTML = `<div class="m-title">${m} 月</div><div class="m-divider"></div>
+            <div class="week-bar">${weekBar}</div><div class="day-grid"></div>`;
+        const dayGrid = card.querySelector('.day-grid');
+
         for (let d=1; d<=28; d++) {
-            const off=startOff+(d-1), gD=new Date(cEq.getTime()+off*86400000);
-            const isT   = gD.toDateString()===now.toDateString();
-            const isFM  = Math.abs(getMoonPhase(new Date(gD.getFullYear(),gD.getMonth(),gD.getDate(),12,0,0)).normalized-.5)<.017;
-            const termName  = TERMS[off]||'';
-            const isMajor   = MAJOR_TERMS.has(off);
-            const dayColor  = WK_COLORS[(d-1)%7];
-            const isEqToday = isT && off===0;
-            const isWang    = off===wangshuOff;
-            const cellCls   = `cell ${isEqToday?'is-equinox-today':(isT?'is-today':'')} ${isFM?'is-full-moon':''} ${isWang?'is-wangshu':''}`.trim();
-            const numColor  = isEqToday?'#DF1B12':(isT?'var(--accent)':dayColor);
-            // 节气标注加 title 属性（色盲友好）
-            const termTag   = isEqToday?`<span class="equinox-yuan" aria-hidden="true">元</span>`
-                : (termName?`<span class="term-tag ${isMajor?'major-red':'minor-term'}" title="${termName}" aria-label="${termName}">${termName}</span>`:'');
-            const ttData    = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang});
-            // role="button" tabindex="0" 可访问性
-            h += `<div class="${cellCls}" role="button" tabindex="0" aria-label="${gD.getMonth()+1}月${gD.getDate()}日" data-tt='${ttData}'>${termTag}<div class="v-num" style="color:${numColor}">${d<10?'0'+d:d}</div><div class="g-info">${gD.getMonth()+1}.${gD.getDate()}</div></div>`;
+            const off = startOff+(d-1);
+            const gD  = new Date(cEq.getTime()+off*86400000);
+            const cell = document.createElement('div');
+            cell.setAttribute('role','button');
+            cell.setAttribute('tabindex','0');
+
+            // 不变部分：数字
+            const dayColor = WK_COLORS[(d-1)%7];
+            const numEl = document.createElement('div');
+            numEl.className = 'v-num';
+            numEl.textContent = d<10?'0'+d:d;
+
+            // 可变部分：节气占位、公历小字
+            const termEl = document.createElement('span');
+            termEl.className = 'term-placeholder';
+            const gInfoEl = document.createElement('div');
+            gInfoEl.className = 'g-info';
+
+            cell.appendChild(termEl);
+            cell.appendChild(numEl);
+            cell.appendChild(gInfoEl);
+            dayGrid.appendChild(cell);
+            _cellCache[off] = { cell, numEl, termEl, gInfoEl, dayColor };
         }
-        card.innerHTML=h+'</div>';
         view.appendChild(card);
     }
-    if (total>364) {
-        const extra=document.createElement('div');
-        extra.className='month-box extra-box';
-        let eh=`<div class="m-title" style="color:var(--accent)">岁末更替期</div>
-            <div class="m-divider" style="border-color:var(--accent)"></div>
-            <div class="day-grid" style="grid-template-columns:repeat(2,1fr);">`;
-        for (let i=0;i<total-364;i++){
-            const off=364+i, gD=new Date(cEq.getTime()+off*86400000);
-            const name=(total===365)?"更替日 A":(i===0?"更替日 B":"更替日 A");
-            const isFM=Math.abs(getMoonPhase(new Date(gD.getFullYear(),gD.getMonth(),gD.getDate(),12,0,0)).normalized-.5)<.017;
-            const cellCls=`cell ${gD.toDateString()===now.toDateString()?'is-today':''} ${isFM?'is-full-moon':''}`.trim();
-            const ttData=JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1});
-            eh+=`<div class="${cellCls}" role="button" tabindex="0" aria-label="${name}" data-tt='${ttData}'><div class="v-num" style="color:var(--accent);font-weight:800;">${name}</div><div class="g-info">${gD.getMonth()+1}.${gD.getDate()}</div></div>`;
-        }
-        extra.innerHTML=eh+'</div>';
-        view.appendChild(extra);
-    }
-    // 事件委托：对整个 calView 容器绑定一次，替代逐格绑定
+
+    // 更替日区域（根据 total 决定结构）
+    _buildExtraBox(y, cEq, total, now, isFMfn);
+    _lastTotal = total;
+    _calBuilt  = true;
+
+    // 事件委托只绑定一次
     view.addEventListener('click', e=>{
         const cell=e.target.closest('.cell');
         if(cell?.dataset.tt){e.stopPropagation();showTooltip(e,JSON.parse(cell.dataset.tt));}
@@ -1339,6 +1333,132 @@ function _doRender() {
             if(cell?.dataset.tt){e.preventDefault();e.stopPropagation();showTooltip(e,JSON.parse(cell.dataset.tt));}
         }
     });
+
+    // 填入可变数据
+    _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn);
+}
+
+// ── 构建/重建更替日区域 ───────────────────────────────────────────
+function _buildExtraBox(y, cEq, total, now, isFMfn) {
+    const view = DOM.calView;
+    // 移除旧的 extra-box（如有）
+    view.querySelectorAll('.extra-box').forEach(el=>el.remove());
+    _extraCache.length = 0;
+    if (total <= 364) return;
+
+    const extra = document.createElement('div');
+    extra.className = 'month-box extra-box';
+    extra.innerHTML = `<div class="m-title" style="color:var(--accent)">岁末更替期</div>
+        <div class="m-divider" style="border-color:var(--accent)"></div>
+        <div class="day-grid" style="grid-template-columns:repeat(2,1fr);"></div>`;
+    const dg = extra.querySelector('.day-grid');
+
+    for (let i=0; i<total-364; i++) {
+        const off  = 364+i;
+        const gD   = new Date(cEq.getTime()+off*86400000);
+        const name = (total===365)?"更替日 A":(i===0?"更替日 B":"更替日 A");
+        const isFM = isFMfn(off);
+        const isT  = gD.toDateString()===now.toDateString();
+        const cellCls = `cell ${isT?'is-today':''} ${isFM?'is-full-moon':''}`.trim();
+        const ttData  = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1});
+        const cell = document.createElement('div');
+        cell.className = cellCls;
+        cell.setAttribute('role','button');
+        cell.setAttribute('tabindex','0');
+        cell.setAttribute('aria-label', name);
+        cell.dataset.tt = ttData;
+        cell.innerHTML = `<div class="v-num" style="color:var(--accent);font-weight:800;">${name}</div><div class="g-info">${gD.getMonth()+1}.${gD.getDate()}</div>`;
+        dg.appendChild(cell);
+        _extraCache[i] = cell;
+    }
+    view.appendChild(extra);
+}
+
+// ── 只更新可变部分（年份切换时调用）─────────────────────────────
+function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn) {
+    const nowStr = now.toDateString();
+
+    for (let off=0; off<364; off++) {
+        const cached = _cellCache[off];
+        if (!cached) continue;
+        const { cell, numEl, termEl, gInfoEl, dayColor } = cached;
+        const d  = (off % 28) + 1;
+        const gD = new Date(cEq.getTime()+off*86400000);
+        const isT      = gD.toDateString()===nowStr;
+        const isFM     = isFMfn(off);
+        const termName = TERMS[off]||'';
+        const isMajor  = MAJOR_TERMS.has(off);
+        const isEqToday= isT && off===0;
+        const isWang   = off===wangshuOff;
+
+        // className
+        cell.className = `cell ${isEqToday?'is-equinox-today':(isT?'is-today':'')} ${isFM?'is-full-moon':''} ${isWang?'is-wangshu':''}`.trim();
+        cell.setAttribute('aria-label', `${gD.getMonth()+1}月${gD.getDate()}日`);
+        cell.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang});
+
+        // 数字颜色（今日/春分/普通）
+        numEl.style.color = isEqToday?'#DF1B12':(isT?'var(--accent)':dayColor);
+
+        // 节气占位更新
+        if (isEqToday) {
+            termEl.className = 'equinox-yuan';
+            termEl.removeAttribute('title');
+            termEl.removeAttribute('aria-label');
+            termEl.textContent = '元';
+        } else if (termName) {
+            termEl.className = `term-tag ${isMajor?'major-red':'minor-term'}`;
+            termEl.setAttribute('title', termName);
+            termEl.setAttribute('aria-label', termName);
+            termEl.textContent = termName;
+        } else {
+            termEl.className = 'term-placeholder';
+            termEl.removeAttribute('title');
+            termEl.removeAttribute('aria-label');
+            termEl.textContent = '';
+        }
+
+        // 公历小字
+        gInfoEl.textContent = `${gD.getMonth()+1}.${gD.getDate()}`;
+    }
+
+    // 更替日区域：total变化时重建，否则只更新日期小字
+    if (total !== _lastTotal) {
+        _buildExtraBox(y, cEq, total, now, isFMfn);
+        _lastTotal = total;
+    } else if (total > 364) {
+        for (let i=0; i<total-364; i++) {
+            const off = 364+i;
+            const gD  = new Date(cEq.getTime()+off*86400000);
+            const isT = gD.toDateString()===nowStr;
+            const isFM = isFMfn(off);
+            const ec  = _extraCache[i];
+            if (!ec) continue;
+            ec.className = `cell ${isT?'is-today':''} ${isFM?'is-full-moon':''}`.trim();
+            ec.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1});
+            ec.querySelector('.g-info').textContent = `${gD.getMonth()+1}.${gD.getDate()}`;
+        }
+    }
+}
+
+function _doRender() {
+    const y = parseInt(DOM.yIn.value);
+    if (!y||y<1900||y>2200) {
+        DOM.physInfo.innerText='⚠ 年份请输入 1900～2200 之间的整数';
+        DOM.physInfo.style.color='var(--accent)';
+        _physInfoHasError=true; return;
+    }
+    _physInfoHasError=false; DOM.physInfo.style.color='#7f8c8d';
+    DOM.vHomeYearBg.innerText=y;
+    document.title = `${y}年 · 更替历`;
+
+    if (!_calBuilt) {
+        // 首次：全量构建
+        _buildCalendar(y);
+    } else {
+        // 后续：只更新可变部分
+        const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
+        _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1362,6 +1482,28 @@ function goHome() {
     setTimeout(()=>{document.querySelector('.is-today')?.scrollIntoView({behavior:'smooth',block:'center'});},50);
 }
 
+
+// F3：转换结果跳转到日历格
+function _jumpToCalCell(vY, offset) {
+    // 切换推演年份
+    DOM.yIn.value = vY;
+    _doRender();
+    // 短暂高亮目标格子
+    setTimeout(() => {
+        const cells = DOM.calView.querySelectorAll('.cell');
+        let target = null;
+        for (const c of cells) {
+            try {
+                const d = JSON.parse(c.dataset.tt || '{}');
+                if (d.offset === offset) { target = c; break; }
+            } catch(_) {}
+        }
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.add('cell-highlight');
+        setTimeout(() => target.classList.remove('cell-highlight'), 1800);
+    }, 50);
+}
 
 function cn2Num(str) {
     if (!str) return "";
@@ -1403,6 +1545,7 @@ function executeConvert() {
         out.innerText = diff<364
             ? `➡ 更替历：${vY}年${Math.floor(diff/28)+1}月${diff%28+1}日（${WKS[diff%7]}）`
             : `➡ 更替历：${vY}年 ${total===365?"更替日 A":(diff===364?"更替日 B":"更替日 A")}`;
+        _jumpToCalCell(vY, diff);
     } else {
         const isGengtiDay=/更替\s*日?\s*[AB]/i.test(proc)||/^\s*[AB]\s*$/i.test(proc.trim())||/[AB]\s*日/i.test(proc);
         const nums=proc.match(/\d+/g);
@@ -1425,6 +1568,7 @@ function executeConvert() {
         }
         const r=new Date(getShEq(y).getTime()+off*86400000);
         out.innerText=`➡ 公历：${r.getFullYear()}年${r.getMonth()+1}月${r.getDate()}日（${WKS[(r.getDay()||7)-1]}）`;
+        _jumpToCalCell(y, off);
     }
 }
 
@@ -1558,6 +1702,10 @@ window.addEventListener('DOMContentLoaded', () => {
         else if((e.key==='ArrowUp'||e.key==='ArrowDown')&&document.activeElement.tagName!=='INPUT'){
             e.preventDefault();
             yIn.value=parseInt(yIn.value)+(e.key==='ArrowUp'?1:-1); render();
+        }
+        else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&document.activeElement.tagName!=='INPUT'){
+            e.preventDefault();
+            yIn.value=parseInt(yIn.value)+(e.key==='ArrowRight'?1:-1); render();
         }
         else if(e.key==='Tab'&&!e.ctrlKey&&!e.shiftKey){
             e.preventDefault();
