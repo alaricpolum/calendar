@@ -1126,6 +1126,14 @@ function update() {
             DOM.physInfo.innerText=`当前进度: ${tProgress}% | 年度天数: ${tTotal}天（${tTotal===366?'闰年':tTotal===365?'平年':'基年'}）`;
         }
         DOM.physInfo.style.color='#7f8c8d';
+        // 已过/剩余天数：跟随 yIn，与 physInfo 同步刷新
+        const _renderY2 = parseInt(document.getElementById('yIn').value);
+        const _targetY2 = (!isNaN(_renderY2) && _renderY2>=1900 && _renderY2<=2200) ? _renderY2 : astro.vYear;
+        const _cEq2 = getShEq(_targetY2), _nEq2 = getShEq(_targetY2+1), _tot2 = isLeapYearV(_targetY2);
+        const _passed2 = now < _cEq2 ? 0 : now >= _nEq2 ? _tot2 : Math.min(_tot2, getDayDiff(_cEq2, now));
+        const _dp = document.getElementById('daysPassed'), _dl = document.getElementById('daysLeft');
+        if (_dp) _dp.innerText = _passed2;
+        if (_dl) _dl.innerText = Math.max(0, _tot2 - _passed2);
     }
 
     const vLabel = diffDays<364
@@ -1202,14 +1210,6 @@ function _doRender() {
         _physInfoHasError=true; return;
     }
     _physInfoHasError=false; physInfo.style.color='#7f8c8d';
-    // 已过/剩余天数统计
-    const _now = new Date();
-    const _cEq = getShEq(y), _nEq = getShEq(y+1), _tot = isLeapYearV(y);
-    const _passed = _now < _cEq ? 0 : _now >= _nEq ? _tot : Math.min(_tot, getDayDiff(_cEq, _now));
-    const _left   = Math.max(0, _tot - _passed);
-    const _dp = document.getElementById('daysPassed'), _dl = document.getElementById('daysLeft');
-    if (_dp) _dp.innerText = _passed;
-    if (_dl) _dl.innerText = _left;
     document.getElementById('vHomeYearBg').innerText=y;
     const cEq=getShEq(y), total=isLeapYearV(y), view=document.getElementById('calView');
     view.innerHTML='';
