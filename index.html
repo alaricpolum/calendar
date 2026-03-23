@@ -204,7 +204,7 @@
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
 
     /* 5天预报 */
-    .fc-day   { display:flex; align-items:center; justify-content:space-around; background:var(--muted); border-radius:8px; padding:8px 2px; border:1px solid var(--border); box-sizing:border-box; min-width:0; overflow:hidden; }
+    .fc-day   { display:flex; align-items:center; justify-content:space-around; background:var(--muted); border-radius:8px; padding:8px 2px; border:1px solid var(--border); box-sizing:border-box; min-width:0; overflow:hidden; min-height:72px; }
     .fc-day.fc-today { background:#FFFDF7; border:2px solid var(--accent); }
     .fc-left  { display:flex; flex-direction:column; align-items:center; gap:2px; }
     .fc-right { display:flex; flex-direction:column; align-items:center; gap:1px; }
@@ -900,9 +900,7 @@ async function updateWeather(lat, lon, cityName) {
         DOM.wRise.style.color  = '#B8860B';
         DOM.wSet.innerText     = day.sunset.substring(0,5);
         DOM.wSet.style.color   = '#B22222';
-        // AQI：优先用 WAQI API，VC 不提供综合 AQI 字段，此处降级为 '--'（由 fetchWaqi 覆盖）
-        DOM.wAqi.innerText = '--';
-        DOM.wAqi.style.color = 'var(--primary)';
+        // AQI 由 fetchWaqi 独立维护，updateWeather 不覆盖已有值（避免闪烁）
         _weatherLastUpdate = new Date();
         _updateSeasonTagTime();
         _renderForecast(vd.days);
@@ -963,7 +961,7 @@ function _renderForecast(days) {
         const total  = isLeapYearV(vY);
         const precip = Math.round(d.precipprob??0);
         const isGengti = diff >= 364;
-        const label  = isGengti ? ((total===365||diff===365)?'A':'B') : (isToday?'今天':WKS[diff%7]);
+        const label  = isGengti ? ((total===365 || diff===365) ? 'A' : (diff===364 ? 'B' : 'A')) : (isToday?'今天':WKS[diff%7]);
         return `<div class="fc-day${isToday?' fc-today':''}">
             <div class="fc-left"><span class="fc-label">${label}</span><span class="fc-rain" style="color:${precipColor(precip)}">${precip}%</span></div>
             <div class="fc-divider"></div>
@@ -1046,7 +1044,7 @@ function showTooltip(e, data) {
                     <span style="font-size:.65rem;color:#ccc;">·</span>
                     <span style="font-size:.88rem;font-weight:900;color:${cW};letter-spacing:2px;">望舒</span>
                 </div>
-                <div style="font-size:.65rem;color:${cA};font-weight:700;margin-top:3px;letter-spacing:1px;opacity:.85;">${data.gStr} · 秋分满月</div>
+                <div style="font-size:.65rem;color:${cA};font-weight:700;margin-top:3px;letter-spacing:1px;opacity:.85;">${data.gStr} · 秋分&满月</div>
             </div>${rows}`;
     } else if (majorCfg) {
         tt.style.border = `1.5px solid ${majorCfg.border}`;
@@ -1059,9 +1057,10 @@ function showTooltip(e, data) {
         const c = isToday?'#B22222':'#D4A853';
         tt.style.border = `1.5px solid ${c}`;
         tt.style.boxShadow = '';
+        const wangshuSub = termAtOffset ? `${data.gStr} · ${termAtOffset}满月` : `${data.gStr} · 满月`;
         tt.innerHTML = `<div style="text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${c};">
             <div style="font-size:.88rem;font-weight:900;color:${c};letter-spacing:3px;">望舒</div>
-            <div style="font-size:.65rem;color:${c};font-weight:700;margin-top:2px;opacity:.85;letter-spacing:1px;">${data.gStr} · 秋分满月</div>
+            <div style="font-size:.65rem;color:${c};font-weight:700;margin-top:2px;opacity:.85;letter-spacing:1px;">${wangshuSub}</div>
         </div>${rows}`;
     } else {
         tt.style.boxShadow = '';
@@ -1090,7 +1089,10 @@ function hideTooltip(e) {
 // ═══════════════════════════════════════════════════════════════
 function scheduleUpdate() {
     if (_paused) return;
-    _updateRaf = requestAnimationFrame(() => { update(); scheduleUpdate(); });
+    _updateRaf = requestAnimationFrame(() => {
+        try { update(); } catch(e) { console.error('[update]', e); }
+        scheduleUpdate();
+    });
 }
 function update() {
     const now = new Date();
@@ -1113,13 +1115,17 @@ function update() {
             const vProgress=Math.min(100,Math.max(0,(viewDateOverride-vEq)/(vNextEq-vEq)*100)).toFixed(1);
             DOM.physInfo.innerText=`当前进度: ${vProgress}% | 年度天数: ${vTotal}天（${vTotal===366?'闰年':vTotal===365?'平年':'基年'}）`;
         } else {
-            // 始终显示当前更替历年的进度，与推演引擎输入年份无关
-            const curEq=getShEq(astro.vYear), curNextEq=getShEq(astro.vYear+1), curTotal=isLeapYearV(astro.vYear);
-            const curProgress=Math.min(100,Math.max(0,(now-curEq)/(curNextEq-curEq)*100)).toFixed(1);
-            DOM.physInfo.innerText=`当前进度: ${curProgress}% | 年度天数: ${curTotal}天（${curTotal===366?'闰年':curTotal===365?'平年':'基年'}）`;
+            // 与推演引擎年份联动：未来年→0%，过去年→100%，当前年→实时进度
+            const renderY = parseInt(document.getElementById('yIn').value);
+            const targetY = (!isNaN(renderY) && renderY>=1900 && renderY<=2200) ? renderY : astro.vYear;
+            const tEq = getShEq(targetY), tNextEq = getShEq(targetY+1), tTotal = isLeapYearV(targetY);
+            let tProgress;
+            if      (now < tEq)      tProgress = '0.0';
+            else if (now >= tNextEq) tProgress = '100.0';
+            else    tProgress = Math.min(100, Math.max(0, (now-tEq)/(tNextEq-tEq)*100)).toFixed(1);
+            DOM.physInfo.innerText=`当前进度: ${tProgress}% | 年度天数: ${tTotal}天（${tTotal===366?'闰年':tTotal===365?'平年':'基年'}）`;
         }
         DOM.physInfo.style.color='#7f8c8d';
-
     }
 
     const vLabel = diffDays<364
@@ -1496,7 +1502,15 @@ window.addEventListener('DOMContentLoaded', () => {
     convIn.addEventListener('keydown', e=>{if(e.key==='Enter') executeConvert();});
     convIn.addEventListener('focus',   ()=>{hasFocusedInput=true;});
     convIn.addEventListener('blur',    ()=>{hasFocusedInput=false;});
-    yIn.addEventListener('keydown',    e=>{if(e.key==='Enter') render();});
+    yIn.addEventListener('keydown', e=>{if(e.key==='Enter') render();});
+    yIn.addEventListener('focus', ()=>{
+        if (viewDateOverride) {
+            viewDateOverride = null;
+            document.getElementById('statusCard').classList.remove('is-observing');
+            hideTooltip();
+            update();
+        }
+    });
 
     // ── Body 点击：关闭 tooltip + 退出观测模式
     document.body.addEventListener('click', e=>{
@@ -1570,7 +1584,7 @@ window.addEventListener('DOMContentLoaded', () => {
     } else { fallback(); }
 
     // ── 天气定时刷新（15分钟）+ AQI刷新（30分钟）+ 标签时间（1分钟）
-    setInterval(()=>updateWeather(), 900000);
+    setInterval(()=>{ if(_currentLat!==null){ updateWeather(_currentLat,_currentLon,_currentCity); fetchWaqi(_currentLat,_currentLon); } }, 900000);
     setInterval(()=>{ if(_currentLat!==null) fetchWaqi(_currentLat,_currentLon); }, 1800000);
     setInterval(_updateSeasonTagTime, 60000);
 
