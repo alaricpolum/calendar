@@ -1498,9 +1498,6 @@ window.addEventListener('DOMContentLoaded', () => {
     // ── Body 点击：关闭 tooltip + 退出观测模式
     document.body.addEventListener('click', e=>{
         hideTooltip(e);
-        viewDateOverride=null;
-        document.getElementById('statusCard').classList.remove('is-observing');
-        update();
     });
 
     // ── 键盘快捷键
