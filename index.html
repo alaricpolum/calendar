@@ -220,15 +220,9 @@
     .cell:hover { background: var(--muted); }
     .cell:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     /* outline 不参与盒模型，不撑高格子；outline-offset:-2px 向内收避免超出边界 */
-    .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2.5s infinite ease-in-out; }
-    .cell.is-today .v-num  { color: var(--accent) !important; animation: breath-num  2.5s infinite ease-in-out; transform-origin: center center; }
-    .cell.is-today .g-info { animation: breath-info 2.5s infinite ease-in-out; transform-origin: center center; }
-    /* 格子外发光：纯 box-shadow，不 scale，不影响布局 */
-    @keyframes pulse-today  { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 50% { box-shadow: 0 0 0 8px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
-    /* 大数字以自身中心呼吸，不受父级偏移影响 */
-    @keyframes breath-num  { 0% { transform: scale(1);    } 50% { transform: scale(1.08); } 100% { transform: scale(1);    } }
-    /* 公历小字幅度略小，层次更自然 */
-    @keyframes breath-info { 0% { transform: scale(1);    } 50% { transform: scale(1.05); } 100% { transform: scale(1);    } }
+    .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; }
+    .cell.is-today .v-num  { color: var(--accent) !important; }
+    @keyframes pulse-today { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 70% { box-shadow: 0 0 0 6px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
     @keyframes highlight-jump { 0% { box-shadow:0 0 0 0 rgba(47,79,79,.6); background:var(--muted); } 30% { box-shadow:0 0 0 6px rgba(47,79,79,.15); background:#e8f0e8; } 100% { box-shadow:0 0 0 0 rgba(47,79,79,0); background:transparent; } }
     .cell-highlight { animation: highlight-jump 1.8s ease-out forwards !important; }
     /* 移动端（粗指针/触屏）：高亮动画延长至 4s，便于观察 */
@@ -253,10 +247,8 @@
 
     /* 春分节点 */
     @keyframes pulse-equinox { 0% { box-shadow:0 0 0 0 rgba(184,134,11,.9); } 70% { box-shadow:0 0 0 12px rgba(184,134,11,0); } 100% { box-shadow:0 0 0 0 rgba(184,134,11,0); } }
-    /* outline 不占盒模型空间，不撑高格子；子元素各自呼吸同 is-today 一致 */
     .cell.is-equinox-today { background:#FFFDF7 !important; outline:2.5px solid #B8860B; outline-offset:-2px; animation:pulse-equinox 1.6s infinite ease-out !important; }
-    .cell.is-equinox-today .v-num  { color:#DF1B12 !important; animation: breath-num  1.6s infinite ease-in-out; transform-origin: center center; }
-    .cell.is-equinox-today .g-info { animation: breath-info 1.6s infinite ease-in-out; transform-origin: center center; }
+    .cell.is-equinox-today .v-num { color:#DF1B12 !important; }
     .equinox-rings { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; border-radius:8px; }
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
 
