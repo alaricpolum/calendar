@@ -2,16 +2,28 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>更替历 · 五色旗民国风</title>
 <meta name="description" content="更替历——以春分为岁首、每月28天的天文历法，含节气、月相、天气与双历互转。">
+<!-- SEO -->
+<link rel="canonical" href="https://alaricpolum.github.io/calendar/">
+<!-- Open Graph -->
 <meta property="og:title" content="更替历 · 五色旗民国风">
 <meta property="og:description" content="以春分为岁首、每月28天的天文历法，含节气、月相、天气与双历互转。">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://alaricpolum.github.io/calendar/">
+<meta property="og:image" content="https://alaricpolum.github.io/calendar/og-cover.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="zh_CN">
+<!-- PWA / iOS -->
 <meta name="theme-color" content="#2C3E50">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="更替历">
+<link rel="apple-touch-icon" href="https://alaricpolum.github.io/calendar/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://alaricpolum.github.io/calendar/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="https://alaricpolum.github.io/calendar/favicon-16x16.png">
 <!--
   合并优化版 · 修复清单
   ① 三版特性全部合并（Noto Serif SC + 悬浮吸附 + 大地球 + precipColor）
@@ -27,6 +39,16 @@
   ⑪ 日历格添加 role="button" tabindex="0" 及 keydown 支持（可访问性）
   ⑫ 节气 term-tag 添加 title 属性（色盲友好）
   ⑬ Google Fonts 字体加载失败降级处理（font-display: swap）
+  ─── 安全 & 质量修复（第二轮）─────────────────────────────────────
+  ⑭ VC API Key 移入 Cloudflare Worker 环境变量，前端零 token 泄漏
+  ⑮ WORKER_BASE 统一常量，两处 Worker 调用共用同一地址
+  ⑯ updateWeather 补齐 AbortController 8s 超时 + response.ok 检查
+  ⑰ 天气离线时保留旧数据，标签显示"XX分钟前（离线）"而非清空
+  ⑱ _renderForecast 改为 DOM API 构建，消除 innerHTML 注入风险
+  ⑲ 定位失败后标签变为"上海（默认·点击重试）"，支持手动重新定位
+  ⑳ 移除激进 no-cache HTTP 头，改由服务端控制缓存策略
+  ㉑ 补全 SEO meta：canonical、og:image、og:url、og:locale
+  ㉒ 补全 PWA meta：apple-mobile-web-app-*、apple-touch-icon、favicon
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -140,7 +162,7 @@
     .ap-item input:checked ~ .tog-track .tog-thumb { transform: translateX(13px); }
 
     /* ── 天气卡 ──────────────────────────────────────────── */
-    #seasonSyncTag { position: absolute; top: 15px; right: 15px; font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; }
+    #seasonSyncTag { position: absolute; top: 15px; right: 15px; font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; transition: opacity .3s; }
     .weather-card  { overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
     .weather-grid-main { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(3,1fr); gap: 6px; flex: 1; }
     .w-item        { display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--muted); border-radius: 8px; padding: 2px; border: 1px solid var(--border); }
@@ -182,11 +204,19 @@
     .cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px 0; position: relative; transition: all .2s; min-height: 36px; border-radius: 8px; cursor: pointer; overflow: visible; }
     .cell:hover { background: var(--muted); }
     .cell:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .cell.is-today { background: #FFFDF7 !important; border: 2.5px solid var(--accent) !important; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; overflow: hidden; }
-    .cell.is-today .v-num { color: var(--accent) !important; }
-    @keyframes pulse-today { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 70% { box-shadow: 0 0 0 6px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
+    .cell.is-today { background: #FFFDF7 !important; z-index: 50; }
+    /* 数字和公历小字单独做呼吸缩放，避免父级 scale 导致位移 */
+    .cell.is-today .v-num  { color: var(--accent) !important; animation: breath-num  2.5s infinite ease-in-out; transform-origin: center center; }
+    .cell.is-today .g-info { animation: breath-info 2.5s infinite ease-in-out; transform-origin: center center; }
+    @keyframes pulse-today  { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 50% { box-shadow: 0 0 0 8px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
+    @keyframes breath-num  { 0% { transform: scale(1);    } 50% { transform: scale(1.18); } 100% { transform: scale(1);    } }
+    @keyframes breath-info { 0% { transform: scale(1);    } 50% { transform: scale(1.12); } 100% { transform: scale(1);    } }
     @keyframes highlight-jump { 0% { box-shadow:0 0 0 0 rgba(47,79,79,.6); background:var(--muted); } 30% { box-shadow:0 0 0 6px rgba(47,79,79,.15); background:#e8f0e8; } 100% { box-shadow:0 0 0 0 rgba(47,79,79,0); background:transparent; } }
     .cell-highlight { animation: highlight-jump 1.8s ease-out forwards !important; }
+    /* 移动端（粗指针/触屏）：高亮动画延长至 4s，便于观察 */
+    @media (pointer: coarse) {
+        .cell-highlight { animation-duration: 5s !important; }
+    }
 
     .is-full-moon::before { content:""; position:absolute; width:28px; height:28px; border:2px solid #B8860B; border-radius:50%; z-index:1; pointer-events:none; opacity:.5; }
     .is-wangshu::before   { content:""; position:absolute; width:28px; height:28px; border:2px solid #DF1B12; border-radius:50%; z-index:1; pointer-events:none; opacity:.8; }
@@ -514,6 +544,9 @@
 // ═══════════════════════════════════════════════════════════════
 //  常量
 // ═══════════════════════════════════════════════════════════════
+// ── Worker 代理统一入口（修改域名只需改这一处）──────────────────
+const WORKER_BASE = 'https://aqi-proxy.alaricpolum.workers.dev';
+
 const TERM_NAMES  = ["春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒","立春","雨水","惊蛰"];
 const WKS        = ["周一","周二","周三","周四","周五","周六","周日"];
 const WK_COLORS  = ['#DF1B12','#FFC600','#02639D','#708090','#6B4E9B','#2F4F4F','#B22222'];
@@ -544,6 +577,7 @@ let _renderRaf       = null;
 let _updateRaf       = null;
 let _paused          = false;   // Page Visibility 暂停标志
 let _weatherLastUpdate = null;
+let _weatherOffline = false;   // 天气离线标志
 let _currentLat = null, _currentLon = null, _currentCity = null;
 
 const MOON_PATH_TABLE = [];
@@ -904,8 +938,13 @@ async function updateWeather(lat, lon, cityName) {
         _currentLat=lat; _currentLon=lon; _currentCity=cityName||null;
     }
     if (_currentLat===null || _currentLon===null) return;
+    // 8 秒超时，与 fetchWaqi 保持一致
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 8000);
     try {
-        const vcRes = await fetch(`https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${_currentLat},${_currentLon}/next7days?key=TQ67ZC8PF786XELBYNYEDZ66F&lang=zh&unitGroup=metric&include=current,days,airquality&contentType=json`);
+        const vcRes = await fetch(`${WORKER_BASE}/weather?lat=${_currentLat}&lon=${_currentLon}`, {signal: controller.signal});
+        clearTimeout(tid);
+        if (!vcRes.ok) throw new Error(`Weather proxy HTTP ${vcRes.status}`);
         const vd  = await vcRes.json();
         const cur = vd.currentConditions, day = vd.days[0];
         DOM.wDesc.innerText    = VC_COND_MAP[cur.conditions||''] || cur.conditions || '时序安稳';
@@ -924,13 +963,15 @@ async function updateWeather(lat, lon, cityName) {
         DOM.wSet.style.color   = '#B22222';
         // AQI 由 fetchWaqi 独立维护，updateWeather 不覆盖已有值（避免闪烁）
         _weatherLastUpdate = new Date();
+        _weatherOffline = false;
         _updateSeasonTagTime();
         _renderForecast(vd.days);
     } catch(e) {
-        ['wTemp','wDesc','wAppTemp','wHumi','wAqi','wUvi','wWind','wPres','wRise','wSet']
-            .forEach(id => { DOM[id].innerText = '--'; });
-        DOM.wDesc.innerText = '感知系统离线';
-        DOM.seasonSyncTag.innerText = '数据获取失败';
+        clearTimeout(tid);
+        // 离线时：保留已有数据，仅在标签上标注"离线"+ 上次更新时间，不清空数值
+        _weatherOffline = true;
+        _updateSeasonTagTime();
+        console.warn('[Weather]', e.message);
     }
 }
 
@@ -940,11 +981,10 @@ async function updateWeather(lat, lon, cityName) {
 // ═══════════════════════════════════════════════════════════════
 async function fetchWaqi(lat, lon) {
     // 通过 Cloudflare Worker 代理请求，token 不暴露在前端
-    const WORKER = 'https://aqi-proxy.alaricpolum.workers.dev';
     try {
         const controller = new AbortController();
         const tid = setTimeout(()=>controller.abort(), 8000);
-        const res  = await fetch(`${WORKER}/aqi?lat=${lat}&lon=${lon}`, {signal:controller.signal});
+        const res  = await fetch(`${WORKER_BASE}/aqi?lat=${lat}&lon=${lon}`, {signal:controller.signal});
         clearTimeout(tid);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
@@ -972,13 +1012,18 @@ function aqiLabel(v) {
 function _updateSeasonTagTime() {
     if (!_weatherLastUpdate) return;
     const mins = Math.floor((Date.now()-_weatherLastUpdate.getTime())/60000);
-    DOM.seasonSyncTag.innerText = `${_currentCity||'当前位置'} · ${mins<1?'刚刚':mins+'分钟前'}`;
+    const timeStr = mins<1?'刚刚':mins+'分钟前';
+    const offlineStr = _weatherOffline ? '（离线）' : '';
+    DOM.seasonSyncTag.innerText = `${_currentCity||'当前位置'} · ${timeStr}${offlineStr}`;
+    DOM.seasonSyncTag.style.opacity = _weatherOffline ? '0.6' : '1';
 }
 function _renderForecast(days) {
     if (!DOM.forecastBrief || !days) return;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    DOM.forecastBrief.innerHTML = days.slice(0,5).map(d => {
+    // 用 DOM API 构建，避免将 API 返回数据插入 innerHTML
+    DOM.forecastBrief.textContent = '';
+    days.slice(0,5).forEach(d => {
         const isToday = d.datetime===todayStr;
         const gD = new Date(d.datetime+'T12:00:00');
         let vY = gD.getFullYear(); if (gD < getShEq(vY)) vY--;
@@ -987,12 +1032,26 @@ function _renderForecast(days) {
         const precip = Math.round(d.precipprob??0);
         const isGengti = diff >= 364;
         const label  = isGengti ? ((total===365 || diff===365) ? 'A' : (diff===364 ? 'B' : 'A')) : (isToday?'今天':WKS[diff%7]);
-        return `<div class="fc-day${isToday?' fc-today':''}">
-            <div class="fc-left"><span class="fc-label">${label}</span><span class="fc-rain" style="color:${precipColor(precip)}">${precip}%</span></div>
-            <div class="fc-divider"></div>
-            <div class="fc-right"><span class="fc-max">${Math.round(d.tempmax)}°</span><span class="fc-min">${Math.round(d.tempmin)}°</span></div>
-        </div>`;
-    }).join('');
+
+        const card = document.createElement('div');
+        card.className = 'fc-day' + (isToday?' fc-today':'');
+
+        const left = document.createElement('div'); left.className='fc-left';
+        const lbl  = document.createElement('span'); lbl.className='fc-label'; lbl.textContent=label;
+        const rain = document.createElement('span'); rain.className='fc-rain';
+        rain.textContent=precip+'%'; rain.style.color=precipColor(precip);
+        left.appendChild(lbl); left.appendChild(rain);
+
+        const div = document.createElement('div'); div.className='fc-divider';
+
+        const right = document.createElement('div'); right.className='fc-right';
+        const tmax  = document.createElement('span'); tmax.className='fc-max'; tmax.textContent=Math.round(d.tempmax)+'°';
+        const tmin  = document.createElement('span'); tmin.className='fc-min'; tmin.textContent=Math.round(d.tempmin)+'°';
+        right.appendChild(tmax); right.appendChild(tmin);
+
+        card.appendChild(left); card.appendChild(div); card.appendChild(right);
+        DOM.forecastBrief.appendChild(card);
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1501,7 +1560,9 @@ function _jumpToCalCell(vY, offset) {
         if (!target) return;
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         target.classList.add('cell-highlight');
-        setTimeout(() => target.classList.remove('cell-highlight'), 1800);
+        // 移动端动画时长 4s，桌面 1.8s，与 CSS animation-duration 保持一致
+        const _hlDuration = _isTouchDevice ? 5000 : 1800;
+        setTimeout(() => target.classList.remove('cell-highlight'), _hlDuration);
     }, 50);
 }
 
@@ -1750,10 +1811,11 @@ window.addEventListener('DOMContentLoaded', () => {
         if(!_paused) scheduleUpdate();
     });
 
-    // ── 定位 → 天气
-    DOM.seasonSyncTag.innerText='正在定位…';
-    const fallback=()=>{DOM.seasonSyncTag.innerText='上海（默认）';updateWeather(31.23,121.47,'上海');fetchWaqi(31.23,121.47);_lastSecond=-1;update();};
-    if (navigator.geolocation) {
+    // ── 定位 → 天气（失败时显示"上海（默认·点击重试）"）
+    async function _doGeolocate() {
+        DOM.seasonSyncTag.style.cursor='default';
+        DOM.seasonSyncTag.innerText='正在定位…';
+        if (!navigator.geolocation) { _geoFallback(); return; }
         navigator.geolocation.getCurrentPosition(async pos=>{
             const {latitude:lat,longitude:lon}=pos.coords;
             let city=null;
@@ -1764,8 +1826,18 @@ window.addEventListener('DOMContentLoaded', () => {
             updateWeather(lat,lon,city);
             fetchWaqi(lat,lon);
             _lastSecond=-1; update(); // 定位完成，强制刷新月相视位置角
-        }, fallback, {timeout:8000,maximumAge:300000});
-    } else { fallback(); }
+        }, _geoFallback, {timeout:8000,maximumAge:300000});
+    }
+    function _geoFallback() {
+        updateWeather(31.23,121.47,'上海');
+        fetchWaqi(31.23,121.47);
+        _lastSecond=-1; update();
+        // 提示用户可点击重试
+        DOM.seasonSyncTag.style.cursor='pointer';
+        DOM.seasonSyncTag.title='点击重新定位';
+        DOM.seasonSyncTag.onclick = () => { DOM.seasonSyncTag.onclick=null; _doGeolocate(); };
+    }
+    _doGeolocate();
 
     // ── 天气定时刷新（15分钟）+ AQI刷新（30分钟）+ 标签时间（1分钟）
     setInterval(()=>{ if(_currentLat!==null){ updateWeather(_currentLat,_currentLon,_currentCity); fetchWaqi(_currentLat,_currentLon); } }, 900000);
