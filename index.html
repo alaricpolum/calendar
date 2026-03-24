@@ -49,6 +49,16 @@
   ⑳ 移除激进 no-cache HTTP 头，改由服务端控制缓存策略
   ㉑ 补全 SEO meta：canonical、og:image、og:url、og:locale
   ㉒ 补全 PWA meta：apple-mobile-web-app-*、apple-touch-icon、favicon
+  ─── 代码 & 功能优化（第三轮）────────────────────────────────────
+  ㉓ showTooltip 全部 innerHTML 改为 DOM API，彻底消除注入风险
+  ㉔ _jumpToCalCell 改为 O(1) _cellCache 直读，不再遍历 DOM
+  ㉕ 提取 _scrollToCell()，goHome 与 _jumpToCalCell 共用
+  ㉖ _cachedRenderYear 缓存推演年份，update() 不再每帧读取 DOM
+  ㉗ numEl.style.color 写入前对比旧值，跳过无变化的样式重计算
+  ㉘ Escape 键关闭 tooltip
+  ㉙ yIn 补全 min/max 属性，移动端键盘提示输入范围
+  ㉚ 天气卡加载中显示骨架屏脉冲动画，消除空白等待感
+  ㉛ 天气定时器封装为 _startWeatherTimers/_stopWeatherTimers，页面隐藏时暂停
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -163,6 +173,11 @@
 
     /* ── 天气卡 ──────────────────────────────────────────── */
     #seasonSyncTag { position: absolute; top: 15px; right: 15px; font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; transition: opacity .3s; }
+    /* 天气加载中：数值格显示脉冲骨架屏 */
+    .weather-loading .w-val { color: transparent !important; background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; border-radius: 4px; }
+    .weather-loading .w-temp-big { color: transparent !important; background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; border-radius: 6px; }
+    .weather-loading .w-desc-main { color: transparent !important; background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; border-radius: 4px; }
+    @keyframes skeleton-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .weather-card  { overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
     .weather-grid-main { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(3,1fr); gap: 6px; flex: 1; }
     .w-item        { display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--muted); border-radius: 8px; padding: 2px; border: 1px solid var(--border); }
@@ -204,9 +219,16 @@
     .cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px 0; position: relative; transition: all .2s; min-height: 36px; border-radius: 8px; cursor: pointer; overflow: visible; }
     .cell:hover { background: var(--muted); }
     .cell:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .cell.is-today { background: #FFFDF7 !important; border: 2.5px solid var(--accent) !important; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; overflow: hidden; }
-    .cell.is-today .v-num { color: var(--accent) !important; }
-    @keyframes pulse-today { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 70% { box-shadow: 0 0 0 6px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
+    /* outline 不参与盒模型，不撑高格子；outline-offset:-2px 向内收避免超出边界 */
+    .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2.5s infinite ease-in-out; }
+    .cell.is-today .v-num  { color: var(--accent) !important; animation: breath-num  2.5s infinite ease-in-out; transform-origin: center center; }
+    .cell.is-today .g-info { animation: breath-info 2.5s infinite ease-in-out; transform-origin: center center; }
+    /* 格子外发光：纯 box-shadow，不 scale，不影响布局 */
+    @keyframes pulse-today  { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 50% { box-shadow: 0 0 0 8px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
+    /* 大数字以自身中心呼吸，不受父级偏移影响 */
+    @keyframes breath-num  { 0% { transform: scale(1);    } 50% { transform: scale(1.08); } 100% { transform: scale(1);    } }
+    /* 公历小字幅度略小，层次更自然 */
+    @keyframes breath-info { 0% { transform: scale(1);    } 50% { transform: scale(1.05); } 100% { transform: scale(1);    } }
     @keyframes highlight-jump { 0% { box-shadow:0 0 0 0 rgba(47,79,79,.6); background:var(--muted); } 30% { box-shadow:0 0 0 6px rgba(47,79,79,.15); background:#e8f0e8; } 100% { box-shadow:0 0 0 0 rgba(47,79,79,0); background:transparent; } }
     .cell-highlight { animation: highlight-jump 1.8s ease-out forwards !important; }
     /* 移动端（粗指针/触屏）：高亮动画延长至 4s，便于观察 */
@@ -231,8 +253,10 @@
 
     /* 春分节点 */
     @keyframes pulse-equinox { 0% { box-shadow:0 0 0 0 rgba(184,134,11,.9); } 70% { box-shadow:0 0 0 12px rgba(184,134,11,0); } 100% { box-shadow:0 0 0 0 rgba(184,134,11,0); } }
-    .cell.is-equinox-today { background:#FFFDF7 !important; border:2.5px solid #B8860B !important; animation:pulse-equinox 1.6s infinite ease-out !important; }
-    .cell.is-equinox-today .v-num { color:#DF1B12 !important; }
+    /* outline 不占盒模型空间，不撑高格子；子元素各自呼吸同 is-today 一致 */
+    .cell.is-equinox-today { background:#FFFDF7 !important; outline:2.5px solid #B8860B; outline-offset:-2px; animation:pulse-equinox 1.6s infinite ease-out !important; }
+    .cell.is-equinox-today .v-num  { color:#DF1B12 !important; animation: breath-num  1.6s infinite ease-in-out; transform-origin: center center; }
+    .cell.is-equinox-today .g-info { animation: breath-info 1.6s infinite ease-in-out; transform-origin: center center; }
     .equinox-rings { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; border-radius:8px; }
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
 
@@ -518,7 +542,7 @@
         <div class="glass-card">
             <div class="card-h">推演引擎</div>
             <div style="display:flex;gap:10px;margin-top:5px;">
-                <input type="number" id="yIn">
+                <input type="number" id="yIn" min="1900" max="2200">
                 <button class="btn-act" id="btnRender" style="background:var(--accent);">更替历视图</button>
             </div>
             <p id="physInfo" style="font-size:.75rem;color:#7f8c8d;margin-top:8px;margin-bottom:0;">当前进度: --% | 年度天数: --天</p>
@@ -574,6 +598,7 @@ let _updateRaf       = null;
 let _paused          = false;   // Page Visibility 暂停标志
 let _weatherLastUpdate = null;
 let _weatherOffline = false;   // 天气离线标志
+let _cachedRenderYear = null;  // 推演年份缓存，避免 update() 每帧读取 DOM
 let _currentLat = null, _currentLon = null, _currentCity = null;
 
 const MOON_PATH_TABLE = [];
@@ -960,12 +985,14 @@ async function updateWeather(lat, lon, cityName) {
         // AQI 由 fetchWaqi 独立维护，updateWeather 不覆盖已有值（避免闪烁）
         _weatherLastUpdate = new Date();
         _weatherOffline = false;
+        document.querySelector('.weather-card')?.classList.remove('weather-loading');
         _updateSeasonTagTime();
         _renderForecast(vd.days);
     } catch(e) {
         clearTimeout(tid);
         // 离线时：保留已有数据，仅在标签上标注"离线"+ 上次更新时间，不清空数值
         _weatherOffline = true;
+        document.querySelector('.weather-card')?.classList.remove('weather-loading');
         _updateSeasonTagTime();
         console.warn('[Weather]', e.message);
     }
@@ -1096,13 +1123,23 @@ function showTooltip(e, data) {
     const isWangshu = data.isWangshu||false;
     const isToday   = dayGap===0;
 
-    const rows = `
-        <div style="padding:7px 12px 8px;display:flex;flex-direction:column;gap:4px;">
-            <div class="tt-item"><span class="tt-label">距今天数</span><span class="tt-val">${dayGapStr}</span></div>
-            <div class="tt-item"><span class="tt-label">月相进度</span><span class="tt-val">${(moon.normalized*100).toFixed(1)}%</span></div>
-            <div class="tt-item"><span class="tt-label">岁律节点</span><span class="tt-val term-val">${daysStr}</span></div>
-            <div class="tt-item"><span class="tt-label">公历星期</span><span class="tt-val">${WKS[data.realGDayWk]}</span></div>
-        </div>`;
+    // 用 DOM API 构建 rows，避免将计算值拼入 innerHTML
+    function _makeTtRow(label, val, extraClass='') {
+        const row = document.createElement('div'); row.className = 'tt-item';
+        const l = document.createElement('span'); l.className = 'tt-label'; l.textContent = label;
+        const v = document.createElement('span'); v.className = 'tt-val' + (extraClass?' '+extraClass:''); v.textContent = val;
+        row.appendChild(l); row.appendChild(v);
+        return row;
+    }
+    function _makeTtRows() {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'padding:7px 12px 8px;display:flex;flex-direction:column;gap:4px;';
+        wrap.appendChild(_makeTtRow('距今天数', dayGapStr));
+        wrap.appendChild(_makeTtRow('月相进度', (moon.normalized*100).toFixed(1)+'%'));
+        wrap.appendChild(_makeTtRow('岁律节点', daysStr, 'term-val'));
+        wrap.appendChild(_makeTtRow('公历星期', WKS[data.realGDayWk]));
+        return wrap;
+    }
 
     tt.style.padding  = '0';
     tt.style.overflow = 'hidden';
@@ -1117,42 +1154,51 @@ function showTooltip(e, data) {
         const cA = '#B8860B', cW = isToday ? '#B22222' : '#D4A853';
         tt.style.border = `1.5px solid ${cA}`;
         tt.style.boxShadow = `0 0 0 1.5px ${cW}`;
-        tt.innerHTML = `
-            <div style="text-align:center;padding:8px 12px 4px;border-bottom:1px dashed ${cA};">
-                <div style="display:flex;justify-content:center;align-items:baseline;gap:8px;">
-                    <span style="font-size:.88rem;font-weight:900;color:${cA};letter-spacing:2px;">归衡</span>
-                    <span style="font-size:.65rem;color:#ccc;">·</span>
-                    <span style="font-size:.88rem;font-weight:900;color:${cW};letter-spacing:2px;">望舒</span>
-                </div>
-                <div style="font-size:.65rem;color:${cA};font-weight:700;margin-top:3px;letter-spacing:1px;opacity:.85;">${data.gStr} · 秋分&满月</div>
-            </div>${rows}`;
+        tt.textContent = '';
+        const _h1 = document.createElement('div');
+        _h1.style.cssText = `text-align:center;padding:8px 12px 4px;border-bottom:1px dashed ${cA};`;
+        const _hRow = document.createElement('div');
+        _hRow.style.cssText = 'display:flex;justify-content:center;align-items:baseline;gap:8px;';
+        const _s1=document.createElement('span'); _s1.style.cssText=`font-size:.88rem;font-weight:900;color:${cA};letter-spacing:2px;`; _s1.textContent='归衡';
+        const _sd=document.createElement('span'); _sd.style.cssText='font-size:.65rem;color:#ccc;'; _sd.textContent='·';
+        const _s2=document.createElement('span'); _s2.style.cssText=`font-size:.88rem;font-weight:900;color:${cW};letter-spacing:2px;`; _s2.textContent='望舒';
+        _hRow.appendChild(_s1); _hRow.appendChild(_sd); _hRow.appendChild(_s2);
+        const _hsub=document.createElement('div'); _hsub.style.cssText=`font-size:.65rem;color:${cA};font-weight:700;margin-top:3px;letter-spacing:1px;opacity:.85;`; _hsub.textContent=data.gStr+' · 秋分&满月';
+        _h1.appendChild(_hRow); _h1.appendChild(_hsub);
+        tt.appendChild(_h1); tt.appendChild(_makeTtRows());
     } else if (majorCfg) {
         tt.style.border = `1.5px solid ${majorCfg.border}`;
         tt.style.boxShadow = '';
-        tt.innerHTML = `<div style="text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${majorCfg.border};">
-            <div style="font-size:.88rem;font-weight:900;color:${majorCfg.titleColor};letter-spacing:2px;">${majorCfg.title}</div>
-            <div style="font-size:.65rem;color:${majorCfg.titleColor};font-weight:700;margin-top:2px;letter-spacing:1px;opacity:.85;">${majorCfg.sub}</div>
-        </div>${rows}`;
+        tt.textContent = '';
+        const _m1=document.createElement('div'); _m1.style.cssText=`text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${majorCfg.border};`;
+        const _mt=document.createElement('div'); _mt.style.cssText=`font-size:.88rem;font-weight:900;color:${majorCfg.titleColor};letter-spacing:2px;`; _mt.textContent=majorCfg.title;
+        const _ms=document.createElement('div'); _ms.style.cssText=`font-size:.65rem;color:${majorCfg.titleColor};font-weight:700;margin-top:2px;letter-spacing:1px;opacity:.85;`; _ms.textContent=majorCfg.sub;
+        _m1.appendChild(_mt); _m1.appendChild(_ms);
+        tt.appendChild(_m1); tt.appendChild(_makeTtRows());
     } else if (isWangshu) {
         const c = isToday?'#B22222':'#D4A853';
         tt.style.border = `1.5px solid ${c}`;
         tt.style.boxShadow = '';
-        const wangshuSub = termAtOffset ? `${data.gStr} · ${termAtOffset}满月` : `${data.gStr} · 满月`;
-        tt.innerHTML = `<div style="text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${c};">
-            <div style="font-size:.88rem;font-weight:900;color:${c};letter-spacing:3px;">望舒</div>
-            <div style="font-size:.65rem;color:${c};font-weight:700;margin-top:2px;opacity:.85;letter-spacing:1px;">${wangshuSub}</div>
-        </div>${rows}`;
+        const wangshuSub = termAtOffset ? data.gStr+' · '+termAtOffset+'满月' : data.gStr+' · 满月';
+        tt.textContent = '';
+        const _w1=document.createElement('div'); _w1.style.cssText=`text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${c};`;
+        const _wt=document.createElement('div'); _wt.style.cssText=`font-size:.88rem;font-weight:900;color:${c};letter-spacing:3px;`; _wt.textContent='望舒';
+        const _ws=document.createElement('div'); _ws.style.cssText=`font-size:.65rem;color:${c};font-weight:700;margin-top:2px;opacity:.85;letter-spacing:1px;`; _ws.textContent=wangshuSub;
+        _w1.appendChild(_wt); _w1.appendChild(_ws);
+        tt.appendChild(_w1); tt.appendChild(_makeTtRows());
     } else {
         tt.style.boxShadow = '';
         const termName   = TERMS[data.offset]||'';
         const borderColor= isToday?'#B22222':'#DCD3BC';
         const dateColor  = isToday?'#B22222':'#2C3E50';
         const dashColor  = isToday?'#B22222':'#DCD3BC';
-        const subLine    = termName?`<div style="font-size:.65rem;color:#7f8c8d;font-weight:700;margin-top:2px;letter-spacing:1px;">${termName}</div>`:'';
         tt.style.border  = `${isToday?'1.5px':'1px'} solid ${borderColor}`;
-        tt.innerHTML     = `<div style="text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${dashColor};">
-            <div style="font-size:.88rem;font-weight:900;color:${dateColor};letter-spacing:.5px;">${data.gStr}</div>${subLine}
-        </div>${rows}`;
+        tt.textContent = '';
+        const _d1=document.createElement('div'); _d1.style.cssText=`text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${dashColor};`;
+        const _dt=document.createElement('div'); _dt.style.cssText=`font-size:.88rem;font-weight:900;color:${dateColor};letter-spacing:.5px;`; _dt.textContent=data.gStr;
+        _d1.appendChild(_dt);
+        if (termName) { const _dn=document.createElement('div'); _dn.style.cssText='font-size:.65rem;color:#7f8c8d;font-weight:700;margin-top:2px;letter-spacing:1px;'; _dn.textContent=termName; _d1.appendChild(_dn); }
+        tt.appendChild(_d1); tt.appendChild(_makeTtRows());
     }
     requestAnimationFrame(() => {
         tt.style.animation='tt-appear .15s ease-out both';
@@ -1197,8 +1243,8 @@ function update() {
     const total    = isLeapYearV(astro.vYear);
 
     if (!_physInfoHasError) {
-        // 推演年份（两处逻辑共用）
-        const renderY = parseInt(DOM.yIn.value);
+        // 推演年份：读一次缓存，避免每帧访问 DOM 输入框
+        const renderY = _cachedRenderYear ?? parseInt(DOM.yIn.value);
         const targetY = (!isNaN(renderY) && renderY>=1900 && renderY<=2200) ? renderY : astro.vYear;
         const tEq = getShEq(targetY), tNextEq = getShEq(targetY+1), tTotal = isLeapYearV(targetY);
 
@@ -1451,8 +1497,9 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
         cell.setAttribute('aria-label', `${gD.getMonth()+1}月${gD.getDate()}日`);
         cell.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang});
 
-        // 数字颜色（今日/春分/普通）
-        numEl.style.color = isEqToday?'#DF1B12':(isT?'var(--accent)':dayColor);
+        // 数字颜色（只在变化时写入，避免不必要的样式重计算）
+        const _newColor = isEqToday?'#DF1B12':(isT?'var(--accent)':dayColor);
+        if (numEl.style.color !== _newColor) numEl.style.color = _newColor;
 
         // 节气占位更新
         if (isEqToday) {
@@ -1497,6 +1544,7 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
 
 function _doRender() {
     const y = parseInt(DOM.yIn.value);
+    _cachedRenderYear = (!isNaN(y) && y>=1900 && y<=2200) ? y : null;
     if (!y||y<1900||y>2200) {
         DOM.physInfo.innerText='⚠ 年份请输入 1900～2200 之间的整数';
         DOM.physInfo.style.color='var(--accent)';
@@ -1534,31 +1582,29 @@ function goHome() {
     DOM.statusCard.classList.remove('is-observing');
     const now=new Date(); let y=now.getFullYear(); if(now<getShEq(y)) y--;
     DOM.yIn.value=y; _doRender(); update();
-    setTimeout(()=>{document.querySelector('.is-today')?.scrollIntoView({behavior:'smooth',block:'center'});},50);
+    setTimeout(()=>{ _scrollToCell(document.querySelector('.is-today')); }, 50);
 }
 
 
-// F3：转换结果跳转到日历格
+// ── 滚动到格子并播放高亮（goHome 和 _jumpToCalCell 共用）────────
+function _scrollToCell(el) {
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('cell-highlight');
+    const _hlDuration = _isTouchDevice ? 5000 : 1800;
+    setTimeout(() => el.classList.remove('cell-highlight'), _hlDuration);
+}
+
+// F3：转换结果跳转到日历格（O(1) 直接读缓存，不遍历 DOM）
 function _jumpToCalCell(vY, offset) {
-    // 切换推演年份
     DOM.yIn.value = vY;
     _doRender();
-    // 短暂高亮目标格子
     setTimeout(() => {
-        const cells = DOM.calView.querySelectorAll('.cell');
-        let target = null;
-        for (const c of cells) {
-            try {
-                const d = JSON.parse(c.dataset.tt || '{}');
-                if (d.offset === offset) { target = c; break; }
-            } catch(_) {}
-        }
-        if (!target) return;
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        target.classList.add('cell-highlight');
-        // 移动端动画时长 4s，桌面 1.8s，与 CSS animation-duration 保持一致
-        const _hlDuration = _isTouchDevice ? 5000 : 1800;
-        setTimeout(() => target.classList.remove('cell-highlight'), _hlDuration);
+        // 普通格直接走 _cellCache；更替日走 _extraCache
+        const target = offset < 364
+            ? _cellCache[offset]?.cell
+            : _extraCache[offset - 364];
+        _scrollToCell(target);
     }, 50);
 }
 
@@ -1755,6 +1801,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── 键盘快捷键
     window.addEventListener('keydown', e=>{
+        if(e.key==='Escape'){ hideTooltip(e); return; }
         if(e.key==='Home'){e.preventDefault();goHome();}
         else if((e.key==='ArrowUp'||e.key==='ArrowDown')&&document.activeElement.tagName!=='INPUT'){
             e.preventDefault();
@@ -1801,16 +1848,19 @@ window.addEventListener('DOMContentLoaded', () => {
         if(dy<-30&&!isBouncing&&!_bounceCooldown&&cy<hB&&cy>hB-350) triggerBounce();
     },{passive:true});
 
-    // ── Page Visibility：标签页隐藏时暂停 rAF
+    // ── Page Visibility：标签页隐藏时同时暂停 rAF 和天气定时器
     document.addEventListener('visibilitychange',()=>{
         _paused=document.hidden;
-        if(!_paused) scheduleUpdate();
+        if(!_paused) { scheduleUpdate(); _startWeatherTimers(); }
+        else         { _stopWeatherTimers(); }
     });
 
     // ── 定位 → 天气（失败时显示"上海（默认·点击重试）"）
     async function _doGeolocate() {
         DOM.seasonSyncTag.style.cursor='default';
         DOM.seasonSyncTag.innerText='正在定位…';
+        // 加载中：天气卡显示骨架屏
+        document.querySelector('.weather-card')?.classList.add('weather-loading');
         if (!navigator.geolocation) { _geoFallback(); return; }
         navigator.geolocation.getCurrentPosition(async pos=>{
             const {latitude:lat,longitude:lon}=pos.coords;
@@ -1835,9 +1885,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     _doGeolocate();
 
-    // ── 天气定时刷新（15分钟）+ AQI刷新（30分钟）+ 标签时间（1分钟）
-    setInterval(()=>{ if(_currentLat!==null){ updateWeather(_currentLat,_currentLon,_currentCity); fetchWaqi(_currentLat,_currentLon); } }, 900000);
-    setInterval(_updateSeasonTagTime, 60000);
+    // ── 天气定时刷新（15分钟）+ 标签时间（1分钟）：页面隐藏时暂停，避免浪费 API 配额
+    let _weatherTimer = null, _tagTimer = null;
+    function _startWeatherTimers() {
+        if (_weatherTimer) return;
+        _weatherTimer = setInterval(()=>{ if(_currentLat!==null){ updateWeather(_currentLat,_currentLon,_currentCity); fetchWaqi(_currentLat,_currentLon); } }, 900000);
+        _tagTimer     = setInterval(_updateSeasonTagTime, 60000);
+    }
+    function _stopWeatherTimers() {
+        clearInterval(_weatherTimer); _weatherTimer = null;
+        clearInterval(_tagTimer);     _tagTimer = null;
+    }
+    _startWeatherTimers();
 
     // ── 启动主循环
     scheduleUpdate();
