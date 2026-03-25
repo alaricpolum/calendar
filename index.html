@@ -118,6 +118,7 @@
     .status-card.scrolled { opacity: 0; box-shadow: none !important; pointer-events: none; transform: translateY(-16px); }
 
     .v-year-now  { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 0; letter-spacing: 2px; }
+    .v-title-main { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 0; letter-spacing: 4px; }
     .v-date-flat { font-size: 1.1rem; font-weight: bold; color: var(--accent); margin: 8px 0; display: inline-block; background: var(--muted); padding: 4px 16px; border-radius: 10px; border: 1px solid var(--border); }
     .main-clock  { font-size: 1.1rem; color: var(--accent); font-weight: bold; margin-bottom: 4px; opacity: .9; }
     .g-sub       { font-size: .85rem; color: #555; font-weight: 500; }
@@ -464,8 +465,8 @@
 <div class="hero-placeholder" id="heroPlaceholder"></div>
 
 <div class="status-card" id="statusCard">
-    <div id="topYear"       class="v-year-now">2025年 更替历</div>
-    <div id="vNowFlat"      class="v-date-flat">13月 27日</div>
+    <div class="v-title-main">更替历</div>
+    <div id="vNowFlat"      class="v-date-flat"><span id="topYear">2025年</span> 13月 27日</div>
     <div id="mainClock"     class="main-clock">18:25:35</div>
     <div id="gNow"          class="g-sub">公历 2026年3月18日</div>
     <div id="moonPhaseLabel" class="moon-phase-label">当前月相：新月（月龄 0.0）</div>
@@ -1277,8 +1278,8 @@ function update() {
     const vLabel = diffDays<364
         ? `${Math.floor(diffDays/28)+1}月 ${diffDays%28+1}日`
         : (total===365?"更替日 A":(diffDays===364?"更替日 B":"更替日 A"));
-    DOM.topYear.innerText  = `${astro.vYear}年 更替历`;
-    DOM.vNowFlat.innerText = vLabel;
+    DOM.topYear.innerText  = `${astro.vYear}年`;
+    DOM.vNowFlat.lastChild.nodeValue = ` ${vLabel}`;
     DOM.gNow.innerText     = `公历 ${sceneDate.getFullYear()}年${sceneDate.getMonth()+1}月${sceneDate.getDate()}日`;
 
     const eX = 400 + 340*Math.cos(astro.orbitAngle);
