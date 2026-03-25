@@ -17,6 +17,7 @@
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="zh_CN">
 <!-- PWA / iOS -->
+<link rel="manifest" href="https://alaricpolum.github.io/calendar/manifest.json">
 <meta name="theme-color" content="#2C3E50">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -59,6 +60,17 @@
   ㉙ yIn 补全 min/max 属性，移动端键盘提示输入范围
   ㉚ 天气卡加载中显示骨架屏脉冲动画，消除空白等待感
   ㉛ 天气定时器封装为 _startWeatherTimers/_stopWeatherTimers，页面隐藏时暂停
+  ─── UI & 代码修复（第四轮）──────────────────────────────────────
+  ㉜ 标题重构：固定"更替历"主标 + 年份内嵌日期 badge，语义分层清晰
+  ㉝ 悬浮轨道开关默认关闭（float 默认值从 true 改为 false）
+  ㉞ moonPhaseLabel / moonRiseSet 全部改为 DOM API，消除最后 innerHTML 残留
+  ㉟ _buildExtraBox 更替日格子改用 DOM API 构建，与主日历格风格统一
+  ㊱ 月出月落时区改用 getTimezoneOffset()，修复中国/印度等地最多±2h 偏差
+  ㊲ convIn 添加 400ms 防抖实时转换（input 事件），Enter 键仍即时执行
+  ㊳ yIn 改为 type="text" inputmode="numeric" + placeholder，修复 iOS 无确认按钮问题
+  ㊴ updateWeather 成功后移除 weather-loading，修复骨架屏动画不停止的 bug
+  ㊵ 删除无引用的 .v-year-now 死 CSS 类
+  ㊶ 补全 manifest.json PWA Web App Manifest，完善添加到主屏幕体验
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -117,7 +129,6 @@
     .status-card.is-observing { border: 1.5px solid var(--accent); background: #fffcf0; }
     .status-card.scrolled { opacity: 0; box-shadow: none !important; pointer-events: none; transform: translateY(-16px); }
 
-    .v-year-now  { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 0; letter-spacing: 2px; }
     .v-title-main { font-size: 1.8rem; font-weight: 800; color: var(--primary); margin: 0; letter-spacing: 4px; }
     .v-date-flat { font-size: 1.1rem; font-weight: bold; color: var(--accent); margin: 8px 0; display: inline-block; background: var(--muted); padding: 4px 16px; border-radius: 10px; border: 1px solid var(--border); }
     .main-clock  { font-size: 1.1rem; color: var(--accent); font-weight: bold; margin-bottom: 4px; opacity: .9; }
@@ -533,7 +544,7 @@
         <div class="glass-card">
             <div class="card-h">推演引擎</div>
             <div style="display:flex;gap:10px;margin-top:5px;">
-                <input type="number" id="yIn" min="1900" max="2200">
+                <input type="text" inputmode="numeric" id="yIn" min="1900" max="2200" placeholder="例：2026">
                 <button class="btn-act" id="btnRender" style="background:var(--accent);">更替历视图</button>
             </div>
             <p id="physInfo" style="font-size:.75rem;color:#7f8c8d;margin-top:8px;margin-bottom:0;">当前进度: --% | 年度天数: --天</p>
@@ -908,8 +919,8 @@ function _getMoonRiseSet(date, latDeg, lonDeg) {
     const result = tryCalc(midDate);
     if (!result) return null;
 
-    // 格式化为 HH:MM（当地时间 = UTC + lonDeg/15）
-    const tzOff = lonDeg / 15;
+    // ③ 时区用浏览器本地 getTimezoneOffset()，避免经度粗估误差（中国全区UTC+8等）
+    const tzOff = -date.getTimezoneOffset() / 60;
     function fmt(h) {
         const local = ((h + tzOff) % 24 + 24) % 24;
         const hh = Math.floor(local), mm = Math.round((local - hh) * 60);
@@ -976,6 +987,7 @@ async function updateWeather(lat, lon, cityName) {
         // AQI 由 fetchWaqi 独立维护，updateWeather 不覆盖已有值（避免闪烁）
         _weatherLastUpdate = new Date();
         _weatherOffline = false;
+        document.querySelector('.weather-card')?.classList.remove('weather-loading');
         _updateSeasonTagTime();
         _renderForecast(vd.days);
     } catch(e) {
@@ -1267,10 +1279,22 @@ function update() {
                 const daysTo = nextOff - passed;
                 const isMajor = ['春分','夏至','秋分','冬至'].includes(nextName);
                 const color = isMajor ? 'var(--accent)' : 'var(--v-blue)';
-                DOM.nextTermHint.innerHTML = `· 距 <span style="color:${color};font-weight:700;">${nextName}</span> 还有 <span style="color:${color};font-weight:700;">${daysTo}</span> 天`;
+                DOM.nextTermHint.textContent = '';
+                const _t1=document.createTextNode('· 距 ');
+                const _s1=document.createElement('span'); _s1.style.cssText=`color:${color};font-weight:700;`; _s1.textContent=nextName;
+                const _t2=document.createTextNode(' 还有 ');
+                const _s2=document.createElement('span'); _s2.style.cssText=`color:${color};font-weight:700;`; _s2.textContent=daysTo+'';
+                const _t3=document.createTextNode(' 天');
+                DOM.nextTermHint.append(_t1,_s1,_t2,_s2,_t3);
             } else {
                 const daysToNextEq = getDayDiff(_refDate, tNextEq);
-                DOM.nextTermHint.innerHTML = `· 距 <span style="color:var(--accent);font-weight:700;">春分</span> 还有 <span style="color:var(--accent);font-weight:700;">${daysToNextEq}</span> 天`;
+                DOM.nextTermHint.textContent = '';
+                const _t1=document.createTextNode('· 距 ');
+                const _s1=document.createElement('span'); _s1.style.cssText='color:var(--accent);font-weight:700;'; _s1.textContent='春分';
+                const _t2=document.createTextNode(' 还有 ');
+                const _s2=document.createElement('span'); _s2.style.cssText='color:var(--accent);font-weight:700;'; _s2.textContent=daysToNextEq+'';
+                const _t3=document.createTextNode(' 天');
+                DOM.nextTermHint.append(_t1,_s1,_t2,_s2,_t3);
             }
         }
     }
@@ -1309,14 +1333,28 @@ function update() {
     // 定位完成后才显示月亮亮面（定位前pa=0，亮面朝右不正确）
     if (_currentLat !== null) DOM.moonVisualPhase.style.opacity = '1';
     const moonName  = MOON_NAMES[Math.floor(((moon.normalized+.0625)%1)*8)];
-    DOM.moonPhaseLabel.innerHTML=`${viewDateOverride?'彼时月相':'当前月相'}：<span style="color:${moonPhaseColor(moon.normalized)}">${moonName}</span>（月龄 ${moon.age.toFixed(1)}）${viewDateOverride?' · 观测模式':''}`;
-    // 月出月落
+    // ① moonPhaseLabel 改用 DOM API，消除最后一处 innerHTML 写入计算值
+    (function() {
+        const lbl = DOM.moonPhaseLabel;
+        lbl.textContent = '';
+        const prefix = document.createTextNode((viewDateOverride?'彼时月相':'当前月相') + '：');
+        const nameSpan = document.createElement('span');
+        nameSpan.style.color = moonPhaseColor(moon.normalized);
+        nameSpan.textContent = moonName;
+        const suffix = document.createTextNode('（月龄 ' + moon.age.toFixed(1) + '）' + (viewDateOverride?' · 观测模式':''));
+        lbl.appendChild(prefix); lbl.appendChild(nameSpan); lbl.appendChild(suffix);
+    })();
+    // ② 月出月落改用 DOM API
     if (DOM.moonRiseSet) {
         const _mrs = _getMoonRiseSet(sceneDate, _currentLat, _currentLon);
         if (_mrs) {
-            DOM.moonRiseSet.innerHTML = `<span style="color:#B8860B">↑ ${_mrs.rise}</span>&nbsp;&nbsp;<span style="color:#708090">↓ ${_mrs.set}</span>`;
+            DOM.moonRiseSet.textContent = '';
+            const rSpan = document.createElement('span'); rSpan.style.color='#B8860B'; rSpan.textContent='↑ '+_mrs.rise;
+            const gap   = document.createTextNode('\u00a0\u00a0');
+            const sSpan = document.createElement('span'); sSpan.style.color='#708090'; sSpan.textContent='↓ '+_mrs.set;
+            DOM.moonRiseSet.appendChild(rSpan); DOM.moonRiseSet.appendChild(gap); DOM.moonRiseSet.appendChild(sSpan);
         } else {
-            DOM.moonRiseSet.innerText = '月出月落：待定位';
+            DOM.moonRiseSet.textContent = '月出月落：待定位';
         }
     }
 
@@ -1392,10 +1430,12 @@ function _buildCalendar(y) {
         const startOff=(m-1)*28, midOff=startOff+13;
         const card = document.createElement('div');
         card.className = `month-box ${getSeasonClass(midOff)}`;
-        const weekBar = WKS.map((w,i)=>`<div class="wk-day" style="color:${WK_COLORS[i]}">${w}</div>`).join('');
-        card.innerHTML = `<div class="m-title">${m} 月</div><div class="m-divider"></div>
-            <div class="week-bar">${weekBar}</div><div class="day-grid"></div>`;
-        const dayGrid = card.querySelector('.day-grid');
+        const mTitle   = document.createElement('div'); mTitle.className='m-title'; mTitle.textContent=m+' 月';
+        const mDivider = document.createElement('div'); mDivider.className='m-divider';
+        const weekBarEl= document.createElement('div'); weekBarEl.className='week-bar';
+        WKS.forEach((w,i)=>{ const d=document.createElement('div'); d.className='wk-day'; d.style.color=WK_COLORS[i]; d.textContent=w; weekBarEl.appendChild(d); });
+        const dayGrid  = document.createElement('div'); dayGrid.className='day-grid';
+        card.appendChild(mTitle); card.appendChild(mDivider); card.appendChild(weekBarEl); card.appendChild(dayGrid);
 
         for (let d=1; d<=28; d++) {
             const off = startOff+(d-1);
@@ -1456,10 +1496,10 @@ function _buildExtraBox(y, cEq, total, now, isFMfn) {
 
     const extra = document.createElement('div');
     extra.className = 'month-box extra-box';
-    extra.innerHTML = `<div class="m-title" style="color:var(--accent)">岁末更替期</div>
-        <div class="m-divider" style="border-color:var(--accent)"></div>
-        <div class="day-grid" style="grid-template-columns:repeat(2,1fr);"></div>`;
-    const dg = extra.querySelector('.day-grid');
+    const eTitle = document.createElement('div'); eTitle.className='m-title'; eTitle.style.color='var(--accent)'; eTitle.textContent='岁末更替期';
+    const eDivider = document.createElement('div'); eDivider.className='m-divider'; eDivider.style.borderColor='var(--accent)';
+    const dg = document.createElement('div'); dg.className='day-grid'; dg.style.gridTemplateColumns='repeat(2,1fr)';
+    extra.appendChild(eTitle); extra.appendChild(eDivider); extra.appendChild(dg);
 
     for (let i=0; i<total-364; i++) {
         const off  = 364+i;
@@ -1475,7 +1515,9 @@ function _buildExtraBox(y, cEq, total, now, isFMfn) {
         cell.setAttribute('tabindex','0');
         cell.setAttribute('aria-label', name);
         cell.dataset.tt = ttData;
-        cell.innerHTML = `<div class="v-num" style="color:var(--accent);font-weight:800;">${name}</div><div class="g-info">${gD.getMonth()+1}.${gD.getDate()}</div>`;
+        const numEl2 = document.createElement('div'); numEl2.className='v-num'; numEl2.style.cssText='color:var(--accent);font-weight:800;'; numEl2.textContent=name;
+        const gInfoEl2 = document.createElement('div'); gInfoEl2.className='g-info'; gInfoEl2.textContent=`${gD.getMonth()+1}.${gD.getDate()}`;
+        cell.appendChild(numEl2); cell.appendChild(gInfoEl2);
         dg.appendChild(cell);
         _extraCache[i] = cell;
     }
@@ -1789,6 +1831,7 @@ window.addEventListener('DOMContentLoaded', () => {
     // ── 输入框事件
     const convIn=DOM.convIn, yIn=DOM.yIn;
     convIn.addEventListener('keydown', e=>{if(e.key==='Enter') executeConvert();});
+    convIn.addEventListener('input', (()=>{ let t; return ()=>{ clearTimeout(t); t=setTimeout(()=>{ if(DOM.convIn.value.trim()) executeConvert(); }, 400); }; })());
     convIn.addEventListener('focus',   ()=>{hasFocusedInput=true;});
     convIn.addEventListener('blur',    ()=>{hasFocusedInput=false;});
     yIn.addEventListener('keydown', e=>{if(e.key==='Enter') render();});

@@ -1,0 +1,26 @@
+{
+  "name": "更替历 · 五色旗民国风",
+  "short_name": "更替历",
+  "description": "以春分为岁首、每月28天的天文历法，含节气、月相、天气与双历互转。",
+  "start_url": "/calendar/",
+  "scope": "/calendar/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5F2E9",
+  "theme_color": "#2C3E50",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "https://alaricpolum.github.io/calendar/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://alaricpolum.github.io/calendar/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
