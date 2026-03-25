@@ -173,11 +173,7 @@
 
     /* ── 天气卡 ──────────────────────────────────────────── */
     #seasonSyncTag { position: absolute; top: 15px; right: 15px; font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; transition: opacity .3s; }
-    /* 天气加载中：数值格显示脉冲骨架屏 */
-    .weather-loading .w-val { color: transparent !important; background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; border-radius: 4px; }
-    .weather-loading .w-temp-big { color: transparent !important; background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; border-radius: 6px; }
-    .weather-loading .w-desc-main { color: transparent !important; background: linear-gradient(90deg, var(--muted) 25%, var(--border) 50%, var(--muted) 75%); background-size: 200% 100%; animation: skeleton-pulse 1.4s ease-in-out infinite; border-radius: 4px; }
-    @keyframes skeleton-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
     .weather-card  { overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
     .weather-grid-main { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(3,1fr); gap: 6px; flex: 1; }
     .w-item        { display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--muted); border-radius: 8px; padding: 2px; border: 1px solid var(--border); }
@@ -222,6 +218,7 @@
     /* outline 不参与盒模型，不撑高格子；outline-offset:-2px 向内收避免超出边界 */
     .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; }
     .cell.is-today .v-num  { color: var(--accent) !important; }
+    .cell.is-today:focus { outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 0 2px var(--accent), 0 0 10px rgba(178,34,34,.2); animation: none; }
     @keyframes pulse-today { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 70% { box-shadow: 0 0 0 6px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
     @keyframes highlight-jump { 0% { box-shadow:0 0 0 0 rgba(47,79,79,.6); background:var(--muted); } 30% { box-shadow:0 0 0 6px rgba(47,79,79,.15); background:#e8f0e8; } 100% { box-shadow:0 0 0 0 rgba(47,79,79,0); background:transparent; } }
     .cell-highlight { animation: highlight-jump 1.8s ease-out forwards !important; }
@@ -248,6 +245,7 @@
     /* 春分节点 */
     @keyframes pulse-equinox { 0% { box-shadow:0 0 0 0 rgba(184,134,11,.9); } 70% { box-shadow:0 0 0 12px rgba(184,134,11,0); } 100% { box-shadow:0 0 0 0 rgba(184,134,11,0); } }
     .cell.is-equinox-today { background:#FFFDF7 !important; outline:2.5px solid #B8860B; outline-offset:-2px; animation:pulse-equinox 1.6s infinite ease-out !important; }
+    .cell.is-equinox-today:focus { outline:2.5px solid #B8860B; outline-offset:-2px; box-shadow: 0 0 0 2px #B8860B; animation: none; }
     .cell.is-equinox-today .v-num { color:#DF1B12 !important; }
     .equinox-rings { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; border-radius:8px; }
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
@@ -538,7 +536,7 @@
                 <button class="btn-act" id="btnRender" style="background:var(--accent);">更替历视图</button>
             </div>
             <p id="physInfo" style="font-size:.75rem;color:#7f8c8d;margin-top:8px;margin-bottom:0;">当前进度: --% | 年度天数: --天</p>
-            <p id="dayStatLine" style="font-size:.75rem;color:#7f8c8d;margin-top:6px;margin-bottom:0;flex:1;">已过 <span id="daysPassed" style="color:var(--primary);font-weight:700;">--</span> 天 · 剩余 <span id="daysLeft" style="color:var(--primary);font-weight:700;">--</span> 天</p>
+            <p id="dayStatLine" style="font-size:.75rem;color:#7f8c8d;margin-top:6px;margin-bottom:0;flex:1;">已过 <span id="daysPassed" style="color:var(--primary);font-weight:700;">--</span> 天 · 剩余 <span id="daysLeft" style="color:var(--primary);font-weight:700;">--</span> 天<span id="nextTermHint" style="margin-left:8px;opacity:.75;"></span></p>
             <hr style="border:none;border-top:1.5px dashed var(--border);margin:10px 0 10px;margin-top:auto;">
             <div id="forecastBrief" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;">
                 <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
@@ -605,7 +603,7 @@ function initDOMCache() {
      'earthNode','daySide','terminatorLine','earthAxis','moonNode','moonVisualPhase',
      'solidOrbitPath','seasonSyncTag',
      'wTemp','wDesc','wAppTemp','wHumi','wAqi','wUvi','wWind','wPres','wRise','wSet',
-     'forecastBrief','daysPassed','daysLeft','yIn',
+     'forecastBrief','daysPassed','daysLeft','yIn','nextTermHint',
      'statusCard','calView','vHomeYearBg','heroSpace','heroPlaceholder',
      'tooltip','convIn','convOut','modeToggle'
     ].forEach(id => { DOM[id] = document.getElementById(id); });
@@ -977,14 +975,12 @@ async function updateWeather(lat, lon, cityName) {
         // AQI 由 fetchWaqi 独立维护，updateWeather 不覆盖已有值（避免闪烁）
         _weatherLastUpdate = new Date();
         _weatherOffline = false;
-        document.querySelector('.weather-card')?.classList.remove('weather-loading');
         _updateSeasonTagTime();
         _renderForecast(vd.days);
     } catch(e) {
         clearTimeout(tid);
         // 离线时：保留已有数据，仅在标签上标注"离线"+ 上次更新时间，不清空数值
         _weatherOffline = true;
-        document.querySelector('.weather-card')?.classList.remove('weather-loading');
         _updateSeasonTagTime();
         console.warn('[Weather]', e.message);
     }
@@ -1255,9 +1251,27 @@ function update() {
         DOM.physInfo.style.color='#7f8c8d';
 
         // 已过/剩余天数（复用上方已计算的 tEq/tNextEq/tTotal）
-        const passed = now < tEq ? 0 : now >= tNextEq ? tTotal : Math.min(tTotal, getDayDiff(tEq, now));
+        const _refDate = viewDateOverride || now;
+        const passed = _refDate < tEq ? 0 : _refDate >= tNextEq ? tTotal : Math.min(tTotal, getDayDiff(tEq, _refDate));
         DOM.daysPassed.innerText = passed;
         DOM.daysLeft.innerText   = Math.max(0, tTotal - passed);
+
+        // 节气倒计时：与观测模式联动
+        if (DOM.nextTermHint) {
+            const tTerms = _calcTermOffsets(targetY);
+            const termEntries = Object.entries(tTerms).map(([o, n]) => [+o, n]).sort((a, b) => a[0] - b[0]);
+            const nextEntry = termEntries.find(([o]) => o > passed);
+            if (nextEntry) {
+                const [nextOff, nextName] = nextEntry;
+                const daysTo = nextOff - passed;
+                const isMajor = ['春分','夏至','秋分','冬至'].includes(nextName);
+                const color = isMajor ? 'var(--accent)' : 'var(--v-blue)';
+                DOM.nextTermHint.innerHTML = `· 距 <span style="color:${color};font-weight:700;">${nextName}</span> 还有 <span style="color:${color};font-weight:700;">${daysTo}</span> 天`;
+            } else {
+                const daysToNextEq = getDayDiff(_refDate, tNextEq);
+                DOM.nextTermHint.innerHTML = `· 距 <span style="color:var(--accent);font-weight:700;">春分</span> 还有 <span style="color:var(--accent);font-weight:700;">${daysToNextEq}</span> 天`;
+            }
+        }
     }
 
     const vLabel = diffDays<364
@@ -1851,8 +1865,6 @@ window.addEventListener('DOMContentLoaded', () => {
     async function _doGeolocate() {
         DOM.seasonSyncTag.style.cursor='default';
         DOM.seasonSyncTag.innerText='正在定位…';
-        // 加载中：天气卡显示骨架屏
-        document.querySelector('.weather-card')?.classList.add('weather-loading');
         if (!navigator.geolocation) { _geoFallback(); return; }
         navigator.geolocation.getCurrentPosition(async pos=>{
             const {latitude:lat,longitude:lon}=pos.coords;
