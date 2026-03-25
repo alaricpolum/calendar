@@ -499,7 +499,7 @@
                     </div>
                 </label>
                 <label class="ap-item" aria-label="切换悬浮模式">
-                    <input type="checkbox" id="togFloat" checked>
+                    <input type="checkbox" id="togFloat">
                     <div class="tog-track"><div class="tog-thumb"></div></div>
                     <div class="ap-text">
                         <span class="ap-label">悬浮轨道</span>
@@ -1751,9 +1751,9 @@ function applySettings() {
 
 function initSettings() {
     const s = loadSettings();
-    // serif 默认开，float 默认开
+    // serif 默认开，float 默认关
     const serifOn = s.serif !== false;
-    const floatOn = s.float !== false;
+    const floatOn = s.float === true;
     document.getElementById('togSerif').checked = serifOn;
     document.getElementById('togFloat').checked = floatOn;
     applySettings();
