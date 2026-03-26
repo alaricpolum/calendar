@@ -1838,6 +1838,7 @@ function _initCardDrag() {
 
     let _dragging = null;
 
+    // ── 桌面端：HTML5 Drag & Drop ────────────────────────────────
     grid.addEventListener('dragstart', e => {
         const card = e.target.closest('.glass-card');
         if (!card) return;
@@ -1860,7 +1861,6 @@ function _initCardDrag() {
         if (!over || over === _dragging) return;
         grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
         over.classList.add('drag-over');
-        // 判断插入位置：鼠标在目标卡左半侧则插前，右半侧则插后
         const rect = over.getBoundingClientRect();
         const after = e.clientX > rect.left + rect.width / 2;
         grid.insertBefore(_dragging, after ? over.nextSibling : over);
@@ -1874,10 +1874,118 @@ function _initCardDrag() {
         grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
     });
 
-    // 给每张卡设置 draggable
+    // 给每张卡设置 draggable（桌面端）
     grid.querySelectorAll('.glass-card').forEach(card => {
         card.setAttribute('draggable', 'true');
     });
+
+    // ── 移动端：Touch 拖拽排序 ───────────────────────────────────
+    let _touchCard = null;      // 正在拖动的卡片
+    let _touchClone = null;     // 跟随手指的幽灵副本
+    let _touchOffsetX = 0;      // 手指按下点相对于卡片左上角的偏移
+    let _touchOffsetY = 0;
+    let _longPressTimer = null; // 长按触发拖动的计时器
+    const LONG_PRESS_MS = 300;  // 长按阈值（ms）
+
+    function _touchGetCardAt(x, y) {
+        // 临时隐藏 clone，避免 elementFromPoint 命中它
+        if (_touchClone) _touchClone.style.display = 'none';
+        const el = document.elementFromPoint(x, y);
+        if (_touchClone) _touchClone.style.display = '';
+        return el ? el.closest('.glass-card') : null;
+    }
+
+    function _touchStartDrag(card, touch) {
+        _touchCard = card;
+        card.classList.add('dragging');
+
+        // 创建半透明跟随副本
+        const rect = card.getBoundingClientRect();
+        _touchOffsetX = touch.clientX - rect.left;
+        _touchOffsetY = touch.clientY - rect.top;
+
+        _touchClone = card.cloneNode(true);
+        Object.assign(_touchClone.style, {
+            position:       'fixed',
+            left:           rect.left + 'px',
+            top:            rect.top  + 'px',
+            width:          rect.width  + 'px',
+            height:         rect.height + 'px',
+            opacity:        '0.75',
+            pointerEvents:  'none',
+            zIndex:         '9999',
+            borderRadius:   '14px',
+            boxShadow:      '0 8px 30px rgba(0,0,0,0.18)',
+            transition:     'none',
+            margin:         '0',
+        });
+        document.body.appendChild(_touchClone);
+    }
+
+    function _touchMove(x, y) {
+        if (!_touchCard || !_touchClone) return;
+        // 移动幽灵副本跟随手指
+        _touchClone.style.left = (x - _touchOffsetX) + 'px';
+        _touchClone.style.top  = (y - _touchOffsetY) + 'px';
+
+        // 找到手指下方的目标卡
+        const over = _touchGetCardAt(x, y);
+        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+        if (over && over !== _touchCard) {
+            over.classList.add('drag-over');
+            const rect = over.getBoundingClientRect();
+            // 移动端单列布局：按 Y 轴上下判断；多列布局：按 X 轴左右判断
+            const isOneCol = grid.offsetWidth === over.offsetWidth;
+            const after = isOneCol
+                ? y > rect.top + rect.height / 2
+                : x > rect.left + rect.width  / 2;
+            grid.insertBefore(_touchCard, after ? over.nextSibling : over);
+        }
+    }
+
+    function _touchEnd() {
+        clearTimeout(_longPressTimer);
+        if (_touchClone) { _touchClone.remove(); _touchClone = null; }
+        if (_touchCard)  {
+            _touchCard.classList.remove('dragging');
+            grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+            _touchCard = null;
+            saveCardOrder();
+        }
+    }
+
+    grid.querySelectorAll('.glass-card').forEach(card => {
+        // 长按后才进入拖动模式，避免干扰普通滚动
+        card.addEventListener('touchstart', e => {
+            const touch = e.touches[0];
+            const startX = touch.clientX, startY = touch.clientY;
+
+            _longPressTimer = setTimeout(() => {
+                // 超过移动阈值则取消（用户在滚动）
+                _touchStartDrag(card, touch);
+            }, LONG_PRESS_MS);
+
+            // 手指微移超过 8px 即取消长按
+            const cancelOnMove = ev => {
+                const t = ev.touches[0];
+                if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
+                    clearTimeout(_longPressTimer);
+                    card.removeEventListener('touchmove', cancelOnMove);
+                }
+            };
+            card.addEventListener('touchmove', cancelOnMove, { passive: true });
+        }, { passive: true });
+    });
+
+    // touchmove / touchend 绑定在 document，防止手指滑出卡片丢失事件
+    document.addEventListener('touchmove', e => {
+        if (!_touchCard) return;
+        e.preventDefault(); // 阻止拖动时页面滚动
+        _touchMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+
+    document.addEventListener('touchend',    _touchEnd, { passive: true });
+    document.addEventListener('touchcancel', _touchEnd, { passive: true });
 }
 
 function loadSettings() {
