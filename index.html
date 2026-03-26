@@ -262,17 +262,18 @@
     .equinox-rings { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; border-radius:8px; }
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
 
-    /* 5天预报 */
-    .fc-day   { display:flex; align-items:center; justify-content:space-around; background:var(--muted); border-radius:8px; padding:8px 2px; border:1px solid var(--border); box-sizing:border-box; min-width:0; overflow:hidden; }
+    /* 7天预报 */
+    .fc-day   { display:flex; align-items:center; justify-content:space-around; background:var(--muted); border-radius:8px; padding:6px 1px; border:1px solid var(--border); box-sizing:border-box; min-width:0; overflow:hidden; height:52px; }
     .fc-day.fc-today { background:#FFFDF7; border:2px solid var(--accent); }
-    .fc-left  { display:flex; flex-direction:column; align-items:center; gap:2px; }
-    .fc-right { display:flex; flex-direction:column; align-items:center; gap:1px; }
-    .fc-divider { width:1px; height:28px; background:var(--border); margin:0 2px; }
-    .fc-label { font-size:.72rem; font-weight:700; color:var(--primary); line-height:1.2; white-space:nowrap; }
+    .fc-day.fc-same-wday { border:1.5px dashed var(--border); }
+    .fc-left  { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:0; }
+    .fc-right { display:flex; flex-direction:column; align-items:center; gap:1px; min-width:0; padding-right:3px; }
+    .fc-divider { width:1px; height:24px; background:var(--border); margin:0 2px; }
+    .fc-label { font-size:.68rem; font-weight:700; color:var(--primary); line-height:1.2; white-space:nowrap; }
     .fc-today .fc-label { color:var(--accent); }
-    .fc-max   { font-size:1rem; font-weight:800; color:var(--accent); line-height:1.2; }
-    .fc-min   { font-size:.78rem; font-weight:600; color:#7f8c8d; line-height:1.2; }
-    .fc-rain  { font-size:.78rem; font-weight:700; line-height:1.2; }
+    .fc-max   { font-size:.92rem; font-weight:800; color:var(--accent); line-height:1.2; }
+    .fc-min   { font-size:.73rem; font-weight:600; color:#7f8c8d; line-height:1.2; }
+    .fc-rain  { font-size:.70rem; font-weight:700; line-height:1.2; }
 
     /* Tooltip */
     @keyframes tt-appear { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:translateY(0);} }
@@ -542,15 +543,24 @@
         </div>
         <!-- 推演引擎 -->
         <div class="glass-card">
-            <div class="card-h">推演引擎</div>
+            <div class="card-h" style="display:flex;align-items:center;justify-content:space-between;">
+                <span>推演引擎</span>
+                <div id="citySearchWrap" style="display:flex;align-items:center;gap:5px;position:relative;">
+                    <input type="text" id="cityIn" placeholder="输入城市…" style="display:none;width:100px;padding:2px 8px;font-size:.72rem;height:22px;border-radius:6px;flex:none;">
+                    <div id="cityDropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:3000;min-width:160px;overflow:hidden;"></div>
+                    <button id="btnCitySearch" aria-label="手动查询城市天气" title="手动查询城市天气" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 7px;cursor:pointer;font-size:.72rem;color:var(--v-blue);font-family:inherit;line-height:1.6;white-space:nowrap;">⌖ 定位</button>
+                </div>
+            </div>
             <div style="display:flex;gap:10px;margin-top:5px;">
                 <input type="text" inputmode="numeric" id="yIn" min="1900" max="2200" placeholder="例：2026">
                 <button class="btn-act" id="btnRender" style="background:var(--accent);">更替历视图</button>
             </div>
             <p id="physInfo" style="font-size:.75rem;color:#7f8c8d;margin-top:8px;margin-bottom:0;">当前进度: --% | 年度天数: --天</p>
-            <p id="dayStatLine" style="font-size:.75rem;color:#7f8c8d;margin-top:6px;margin-bottom:0;flex:1;">已过 <span id="daysPassed" style="color:var(--primary);font-weight:700;">--</span> 天 · 剩余 <span id="daysLeft" style="color:var(--primary);font-weight:700;">--</span> 天<span id="nextTermHint" style="margin-left:8px;opacity:.75;"></span></p>
+            <p id="dayStatLine" style="font-size:.75rem;color:#7f8c8d;margin-top:6px;margin-bottom:0;flex:1;">已过 <span id="daysPassed" style="color:var(--primary);font-weight:700;">--</span> 天 · 剩余 <span id="daysLeft" style="color:var(--primary);font-weight:700;">--</span> 天<span id="prevTermHint" style="margin-left:8px;opacity:.75;"></span><span id="nextTermHint" style="margin-left:8px;opacity:.75;"></span></p>
             <hr style="border:none;border-top:1.5px dashed var(--border);margin:10px 0 10px;margin-top:auto;">
-            <div id="forecastBrief" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;">
+            <div id="forecastBrief" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;">
+                <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
+                <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
                 <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
                 <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
                 <div class="fc-day"><div class="fc-left"><span class="fc-label">--</span><span class="fc-rain">--%</span></div><div class="fc-divider"></div><div class="fc-right"><span class="fc-max">--°</span><span class="fc-min">--°</span></div></div>
@@ -615,7 +625,7 @@ function initDOMCache() {
      'earthNode','daySide','terminatorLine','earthAxis','moonNode','moonVisualPhase',
      'solidOrbitPath','seasonSyncTag',
      'wTemp','wDesc','wAppTemp','wHumi','wAqi','wUvi','wWind','wPres','wRise','wSet',
-     'forecastBrief','daysPassed','daysLeft','yIn','nextTermHint',
+     'forecastBrief','daysPassed','daysLeft','yIn','prevTermHint','nextTermHint',
      'statusCard','calView','vHomeYearBg','heroSpace','heroPlaceholder',
      'tooltip','convIn','convOut','modeToggle'
     ].forEach(id => { DOM[id] = document.getElementById(id); });
@@ -1045,9 +1055,10 @@ function _renderForecast(days) {
     if (!DOM.forecastBrief || !days) return;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    // 用 DOM API 构建，避免将 API 返回数据插入 innerHTML
+    // 今天公历星期几（0=周日…6=周六），转换为更替历星期索引（0=周一…6=周日）
+    const todayWkIdx = (now.getDay() + 6) % 7; // 公历今日对应更替历 WKS 的索引
     DOM.forecastBrief.textContent = '';
-    days.slice(0,5).forEach(d => {
+    days.slice(0,7).forEach(d => {
         const isToday = d.datetime===todayStr;
         const gD = new Date(d.datetime+'T12:00:00');
         let vY = gD.getFullYear(); if (gD < getShEq(vY)) vY--;
@@ -1055,10 +1066,13 @@ function _renderForecast(days) {
         const total  = isLeapYearV(vY);
         const precip = Math.round(d.precipprob??0);
         const isGengti = diff >= 364;
-        const label  = isGengti ? ((total===365 || diff===365) ? 'A' : (diff===364 ? 'B' : 'A')) : (isToday?'今天':WKS[diff%7]);
+        const wkIdx  = diff % 7; // 该格更替历星期索引
+        const label  = isGengti ? ((total===365 || diff===365) ? 'A' : (diff===364 ? 'B' : 'A')) : (isToday?'今天':WKS[wkIdx]);
+        // 虚线框：非今天、该格更替历星期索引（含更替日按其offset计算）与公历今日星期一致
+        const isSameWday = !isToday && (diff % 7) === todayWkIdx;
 
         const card = document.createElement('div');
-        card.className = 'fc-day' + (isToday?' fc-today':'');
+        card.className = 'fc-day' + (isToday?' fc-today':'') + (isSameWday?' fc-same-wday':'');
 
         const left = document.createElement('div'); left.className='fc-left';
         const lbl  = document.createElement('span'); lbl.className='fc-label'; lbl.textContent=label;
@@ -1274,6 +1288,29 @@ function update() {
             const tTerms = _calcTermOffsets(targetY);
             const termEntries = Object.entries(tTerms).map(([o, n]) => [+o, n]).sort((a, b) => a[0] - b[0]);
             const nextEntry = termEntries.find(([o]) => o > passed);
+            // 上一个节气（含春分 offset=0）
+            const prevEntry = [...termEntries].reverse().find(([o]) => o <= passed) || [0, '春分'];
+            const [prevOff, prevName] = prevEntry;
+            const daysSince = passed - prevOff;
+            const isPrevMajor = ['春分','夏至','秋分','冬至'].includes(prevName);
+            const prevColor = isPrevMajor ? 'var(--accent)' : 'var(--v-blue)';
+
+            // 渲染"XX 后第 N 天"
+            if (DOM.prevTermHint) {
+                DOM.prevTermHint.textContent = '';
+                if (daysSince === 0) {
+                    // 正好在节气当天，不显示"后第0天"
+                    DOM.prevTermHint.textContent = '';
+                } else {
+                    const _p1=document.createTextNode('· ');
+                    const _ps=document.createElement('span'); _ps.style.cssText=`color:${prevColor};font-weight:700;`; _ps.textContent=prevName;
+                    const _p2=document.createTextNode(' 后第 ');
+                    const _pn=document.createElement('span'); _pn.style.cssText=`color:${prevColor};font-weight:700;`; _pn.textContent=daysSince+'';
+                    const _p3=document.createTextNode(' 天');
+                    DOM.prevTermHint.append(_p1,_ps,_p2,_pn,_p3);
+                }
+            }
+
             if (nextEntry) {
                 const [nextOff, nextName] = nextEntry;
                 const daysTo = nextOff - passed;
@@ -1828,10 +1865,111 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnModeG').addEventListener('click',  ()=>setMode('G'));
     document.getElementById('btnModeV').addEventListener('click',  ()=>setMode('V'));
 
+    // ── 城市天气手动查询
+    (function() {
+        const btn      = document.getElementById('btnCitySearch');
+        const input    = document.getElementById('cityIn');
+        const dropdown = document.getElementById('cityDropdown');
+        let expanded = false;
+
+        // 统一收起函数，保证 expanded 与 DOM 始终同步
+        function _collapse() {
+            input.style.display='none'; input.value='';
+            dropdown.style.display='none'; dropdown.textContent='';
+            expanded=false; btn.textContent='⌖ 定位'; btn.disabled=false;
+        }
+
+        function _selectCity(lat, lon, displayName) {
+            updateWeather(lat, lon, displayName);
+            fetchWaqi(lat, lon);
+            _lastSecond=-1; update();
+            DOM.seasonSyncTag.innerText = `已切换至 ${displayName}`;
+            setTimeout(_updateSeasonTagTime, 3000);
+            _collapse();
+        }
+
+        async function _searchCity() {
+            const q = input.value.trim();
+            if (!q) { _collapse(); _doGeolocate(); return; }
+            btn.textContent = '…';
+            btn.disabled = true;
+            try {
+                const gc = new AbortController();
+                const gcTid = setTimeout(()=>gc.abort(), 8000);
+                // Nominatim：直接支持"山西大同"复合地名，返回经纬度
+                const r = await fetch(
+                    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&accept-language=zh&addressdetails=1`,
+                    { signal: gc.signal, headers: { 'Accept-Language': 'zh' } }
+                );
+                clearTimeout(gcTid);
+                const results = await r.json();
+
+                if (!results.length) {
+                    DOM.seasonSyncTag.innerText = '未找到该地址';
+                    _collapse(); return;
+                }
+
+                const res = results[0];
+                const lat = parseFloat(res.lat);
+                const lon = parseFloat(res.lon);
+                const addr = res.address || {};
+                // 按行政层级从小到大排列，取最小的两个有值字段
+                const adminLevels = [
+                    addr.hamlet, addr.village, addr.suburb, addr.neighbourhood,
+                    addr.quarter, addr.town, addr.city_district, addr.borough,
+                    addr.municipality, addr.city, addr.county, addr.district,
+                    addr.state_district, addr.state, addr.province
+                ].filter(Boolean);
+                const displayName = adminLevels.slice(0, 2).join('，') || res.name || q;
+
+                _selectCity(lat, lon, displayName);
+            } catch(e) {
+                DOM.seasonSyncTag.innerText = e.name==='AbortError' ? '查询超时，请重试' : '查询失败，请重试';
+                _collapse();
+            }
+        }
+
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!expanded) {
+                input.style.display = 'block';
+                input.focus();
+                expanded = true;
+                btn.textContent = '查询';
+            } else {
+                _searchCity();
+            }
+        });
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); _searchCity(); }
+            if (e.key === 'Escape') { _collapse(); }
+        });
+        // 点击卡片外部收起
+        document.body.addEventListener('click', e => {
+            if (expanded && !document.getElementById('citySearchWrap').contains(e.target)) {
+                _collapse();
+            }
+        });
+
+        // 暴露 expand 方法供 / 快捷键调用，保证 expanded 同步
+        window._citySearchExpand = function() {
+            if (!expanded) {
+                input.style.display='block'; input.focus(); expanded=true; btn.textContent='查询';
+            }
+        };
+    })();
+
     // ── 输入框事件
     const convIn=DOM.convIn, yIn=DOM.yIn;
-    convIn.addEventListener('keydown', e=>{if(e.key==='Enter') executeConvert();});
-    convIn.addEventListener('input', (()=>{ let t; return ()=>{ clearTimeout(t); t=setTimeout(()=>{ if(DOM.convIn.value.trim()) executeConvert(); }, 400); }; })());
+    // ④ 防抖计时器提升到外层，Enter 时先 clearTimeout 再立即执行，避免双触发
+    let _convDebounceT = null;
+    convIn.addEventListener('keydown', e=>{
+        if(e.key==='Enter'){ clearTimeout(_convDebounceT); executeConvert(); }
+    });
+    convIn.addEventListener('input', ()=>{
+        clearTimeout(_convDebounceT);
+        _convDebounceT = setTimeout(()=>{ if(DOM.convIn.value.trim()) executeConvert(); }, 400);
+    });
     convIn.addEventListener('focus',   ()=>{hasFocusedInput=true;});
     convIn.addEventListener('blur',    ()=>{hasFocusedInput=false;});
     yIn.addEventListener('keydown', e=>{if(e.key==='Enter') render();});
@@ -1853,13 +1991,19 @@ window.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', e=>{
         if(e.key==='Escape'){ hideTooltip(e); return; }
         if(e.key==='Home'){e.preventDefault();goHome();}
+        else if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=='INPUT'){
+            e.preventDefault();
+            window._citySearchExpand?.();
+        }
         else if((e.key==='ArrowUp'||e.key==='ArrowDown')&&document.activeElement.tagName!=='INPUT'){
             e.preventDefault();
-            yIn.value=parseInt(yIn.value)+(e.key==='ArrowUp'?1:-1); render();
+            const cur=parseInt(yIn.value); if(isNaN(cur)) return;
+            yIn.value=cur+(e.key==='ArrowUp'?1:-1); render();
         }
         else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&document.activeElement.tagName!=='INPUT'){
             e.preventDefault();
-            yIn.value=parseInt(yIn.value)+(e.key==='ArrowRight'?1:-1); render();
+            const cur=parseInt(yIn.value); if(isNaN(cur)) return;
+            yIn.value=cur+(e.key==='ArrowRight'?1:-1); render();
         }
         else if(e.key==='Tab'&&!e.ctrlKey&&!e.shiftKey){
             e.preventDefault();
@@ -1914,8 +2058,20 @@ window.addEventListener('DOMContentLoaded', () => {
             const {latitude:lat,longitude:lon}=pos.coords;
             let city=null;
             try {
-                const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&count=1&language=zh&format=json`);
-                const g=await r.json(); city=g.results?.[0]?.name||null;
+                // 反地理编码：Nominatim 坐标→城市名
+                const gc=new AbortController(); const gcTid=setTimeout(()=>gc.abort(),5000);
+                const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&format=json&accept-language=zh`,{signal:gc.signal,headers:{'Accept-Language':'zh'}});
+                clearTimeout(gcTid);
+                const g=await r.json();
+                const addr=g.address||{};
+                // 按行政层级从小到大排列，取最小的两个有值字段
+                const adminLevels=[
+                    addr.hamlet, addr.village, addr.suburb, addr.neighbourhood,
+                    addr.quarter, addr.town, addr.city_district, addr.borough,
+                    addr.municipality, addr.city, addr.county, addr.district,
+                    addr.state_district, addr.state, addr.province
+                ].filter(Boolean);
+                city = adminLevels.slice(0,2).join('，') || null;
             } catch(_){}
             updateWeather(lat,lon,city);
             fetchWaqi(lat,lon);
