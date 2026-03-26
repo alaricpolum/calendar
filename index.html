@@ -183,8 +183,16 @@
     }
     .ap-item input:checked ~ .tog-track .tog-thumb { transform: translateX(13px); }
 
+    /* ── 温度单位切换（标题点击） ──────────────────────────── */
+    #btnUnitToggle:hover #unitLabel { color: var(--v-blue); }
+
+    /* ── 拖拽排序 ────────────────────────────────────────────── */
+    .tool-grid { cursor: default; }
+    .glass-card.dragging { opacity: .4; box-shadow: none; }
+    .glass-card.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
+
     /* ── 天气卡 ──────────────────────────────────────────── */
-    #seasonSyncTag { position: absolute; top: 15px; right: 15px; font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; transition: opacity .3s; }
+    #seasonSyncTag { font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; transition: opacity .3s; flex-shrink: 0; }
 
     .weather-card  { overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
     .weather-grid-main { display: grid; grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(3,1fr); gap: 6px; flex: 1; }
@@ -488,7 +496,7 @@
 <div class="container">
     <div class="tool-grid">
         <!-- 双历转换 -->
-        <div class="glass-card">
+        <div class="glass-card" data-card-id="conv">
             <div class="card-h" style="margin-bottom:8px;">双历转换</div>
             <div id="modeToggle" class="mode-selector" style="margin-bottom:8px;">
                 <div class="slider"></div>
@@ -521,9 +529,14 @@
             </div>
         </div>
         <!-- 天气 -->
-        <div class="glass-card weather-card">
-            <span id="seasonSyncTag" style="color:#708090;border-color:#708090;">正在定位…</span>
-            <div class="card-h">环境感知</div>
+        <div class="glass-card weather-card" data-card-id="weather">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:8px;border-bottom:1.5px solid var(--muted);">
+                <button id="btnUnitToggle" aria-label="切换温度单位" style="background:none;border:none;padding:0;cursor:pointer;font-family:inherit;display:flex;align-items:baseline;gap:5px;">
+                    <span style="font-size:.78rem;font-weight:700;color:var(--v-blue);letter-spacing:2px;">环境感知</span>
+                    <span id="unitLabel" style="font-size:.62rem;font-weight:700;color:#aaa;letter-spacing:1px;">°C</span>
+                </button>
+                <span id="seasonSyncTag" style="color:#708090;border-color:#708090;position:static;">正在定位…</span>
+            </div>
             <div class="weather-grid-main">
                 <div class="w-item hero">
                     <div id="wTemp"  class="w-temp-big">--</div>
@@ -542,7 +555,7 @@
             </div>
         </div>
         <!-- 推演引擎 -->
-        <div class="glass-card">
+        <div class="glass-card" data-card-id="engine">
             <div class="card-h" style="display:flex;align-items:center;justify-content:space-between;">
                 <span>推演引擎</span>
                 <div id="citySearchWrap" style="display:flex;align-items:center;gap:5px;position:relative;">
@@ -598,6 +611,8 @@ const VC_COND_MAP = {
 //  状态变量
 // ═══════════════════════════════════════════════════════════════
 let currentMode     = 'G';
+let _tempUnit       = 'C';  // 'C' | 'F'
+let _lastForecastDays = null; // 缓存最近一次预报数据，单位切换时复用
 let hasFocusedInput = false;
 let viewDateOverride = null;
 let ORBIT_TOTAL_LEN  = 0;
@@ -982,8 +997,9 @@ async function updateWeather(lat, lon, cityName) {
         const vd  = await vcRes.json();
         const cur = vd.currentConditions, day = vd.days[0];
         DOM.wDesc.innerText    = VC_COND_MAP[cur.conditions||''] || cur.conditions || '时序安稳';
-        DOM.wTemp.innerText    = cur.temp.toFixed(1)+'°';
-        DOM.wAppTemp.innerText = cur.feelslike.toFixed(1)+'°';
+        const _toDisp = v => _tempUnit==='F' ? (v*9/5+32).toFixed(1) : v.toFixed(1);
+        DOM.wTemp.innerText    = _toDisp(cur.temp)+'°';
+        DOM.wAppTemp.innerText = _toDisp(cur.feelslike)+'°';
         DOM.wAppTemp.style.color = appTempColor(cur.feelslike);
         DOM.wHumi.innerText    = Math.round(cur.humidity)+'%';
         DOM.wHumi.style.color  = humiColor(Math.round(cur.humidity));
@@ -1000,6 +1016,7 @@ async function updateWeather(lat, lon, cityName) {
         _weatherOffline = false;
         document.querySelector('.weather-card')?.classList.remove('weather-loading');
         _updateSeasonTagTime();
+        _lastForecastDays = vd.days;
         _renderForecast(vd.days);
     } catch(e) {
         clearTimeout(tid);
@@ -1084,8 +1101,9 @@ function _renderForecast(days) {
         const div = document.createElement('div'); div.className='fc-divider';
 
         const right = document.createElement('div'); right.className='fc-right';
-        const tmax  = document.createElement('span'); tmax.className='fc-max'; tmax.textContent=Math.round(d.tempmax)+'°';
-        const tmin  = document.createElement('span'); tmin.className='fc-min'; tmin.textContent=Math.round(d.tempmin)+'°';
+        const _fc2disp = v => _tempUnit==='F' ? Math.round(v*9/5+32) : Math.round(v);
+        const tmax  = document.createElement('span'); tmax.className='fc-max'; tmax.textContent=_fc2disp(d.tempmax)+'°';
+        const tmin  = document.createElement('span'); tmin.className='fc-min'; tmin.textContent=_fc2disp(d.tempmin)+'°';
         right.appendChild(tmax); right.appendChild(tmin);
 
         card.appendChild(left); card.appendChild(div); card.appendChild(right);
@@ -1805,11 +1823,77 @@ function triggerBounce() {
 // ═══════════════════════════════════════════════════════════════
 const SETTINGS_KEY = 'gengtiCalSettings';
 
+// ── 卡片拖拽排序 ─────────────────────────────────────────────
+function _initCardDrag() {
+    const grid = document.querySelector('.tool-grid');
+    if (!grid) return;
+
+    // 恢复上次保存的顺序
+    const savedOrder = loadCardOrder();
+    if (savedOrder) {
+        const cards = {};
+        grid.querySelectorAll('.glass-card').forEach(c => { cards[c.dataset.cardId] = c; });
+        savedOrder.forEach(id => { if (cards[id]) grid.appendChild(cards[id]); });
+    }
+
+    let _dragging = null;
+
+    grid.addEventListener('dragstart', e => {
+        const card = e.target.closest('.glass-card');
+        if (!card) return;
+        _dragging = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    grid.addEventListener('dragend', e => {
+        const card = e.target.closest('.glass-card');
+        if (!card) return;
+        card.classList.remove('dragging');
+        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+        _dragging = null;
+        saveCardOrder();
+    });
+    grid.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const over = e.target.closest('.glass-card');
+        if (!over || over === _dragging) return;
+        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+        over.classList.add('drag-over');
+        // 判断插入位置：鼠标在目标卡左半侧则插前，右半侧则插后
+        const rect = over.getBoundingClientRect();
+        const after = e.clientX > rect.left + rect.width / 2;
+        grid.insertBefore(_dragging, after ? over.nextSibling : over);
+    });
+    grid.addEventListener('dragleave', e => {
+        const over = e.target.closest('.glass-card');
+        if (over) over.classList.remove('drag-over');
+    });
+    grid.addEventListener('drop', e => {
+        e.preventDefault();
+        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+    });
+
+    // 给每张卡设置 draggable
+    grid.querySelectorAll('.glass-card').forEach(card => {
+        card.setAttribute('draggable', 'true');
+    });
+}
+
 function loadSettings() {
     try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch(_) { return {}; }
 }
 function saveSettings(s) {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(_) {}
+}
+function saveCardOrder() {
+    try {
+        const ids = [...document.querySelectorAll('.tool-grid .glass-card')].map(c => c.dataset.cardId);
+        localStorage.setItem('gengtiCardOrder', JSON.stringify(ids));
+    } catch(_) {}
+}
+function loadCardOrder() {
+    try { return JSON.parse(localStorage.getItem('gengtiCardOrder')) || null; } catch(_) { return null; }
 }
 
 function applySettings() {
@@ -1839,6 +1923,28 @@ function initSettings() {
     applySettings();
     document.getElementById('togSerif').addEventListener('change', applySettings);
     document.getElementById('togFloat').addEventListener('change', applySettings);
+
+    // ── 温度单位切换
+    const s2 = loadSettings();
+    _tempUnit = s2.tempUnit || 'C';
+    _applyUnitBtns();
+    document.getElementById('btnUnitToggle').addEventListener('click', () => {
+        _tempUnit = _tempUnit === 'C' ? 'F' : 'C';
+        _applyUnitBtns(); _saveUnitPref(); updateWeather();
+        if (_lastForecastDays) _renderForecast(_lastForecastDays);
+    });
+}
+function _applyUnitBtns() {
+    const lbl = document.getElementById('unitLabel');
+    if (lbl) lbl.textContent = _tempUnit === 'C' ? '°C' : '°F';
+    const btn = document.getElementById('btnUnitToggle');
+    if (btn) btn.setAttribute('aria-label', _tempUnit === 'C' ? '当前°C，点击切换为°F' : '当前°F，点击切换为°C');
+}
+function _saveUnitPref() {
+    try {
+        const s = loadSettings(); s.tempUnit = _tempUnit;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    } catch(_) {}
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2040,6 +2146,9 @@ window.addEventListener('DOMContentLoaded', () => {
         const hB=hBottom?hBottom.offsetTop+hBottom.offsetHeight:430;
         if(dy<-30&&!isBouncing&&!_bounceCooldown&&cy<hB&&cy>hB-350) triggerBounce();
     },{passive:true});
+
+    // ── 卡片拖拽排序初始化
+    _initCardDrag();
 
     // ── Page Visibility：标签页隐藏时同时暂停 rAF 和天气定时器
     document.addEventListener('visibilitychange',()=>{
