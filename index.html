@@ -548,7 +548,7 @@
                 <div id="citySearchWrap" style="display:flex;align-items:center;gap:5px;position:relative;">
                     <input type="text" id="cityIn" placeholder="输入城市…" style="display:none;width:100px;padding:2px 8px;font-size:.72rem;height:22px;border-radius:6px;flex:none;">
                     <div id="cityDropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);z-index:3000;min-width:160px;overflow:hidden;"></div>
-                    <button id="btnCitySearch" aria-label="手动查询城市天气" title="手动查询城市天气" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 7px;cursor:pointer;font-size:.72rem;color:var(--v-blue);font-family:inherit;line-height:1.6;white-space:nowrap;">⌖ 定位</button>
+                    <button id="btnCitySearch" aria-label="手动查询城市天气" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 7px;cursor:pointer;font-size:.72rem;color:var(--v-blue);font-family:inherit;line-height:1.6;white-space:nowrap;">⌖ 定位</button>
                 </div>
             </div>
             <div style="display:flex;gap:10px;margin-top:5px;">
@@ -1912,15 +1912,14 @@ window.addEventListener('DOMContentLoaded', () => {
                 const res = results[0];
                 const lat = parseFloat(res.lat);
                 const lon = parseFloat(res.lon);
-                const addr = res.address || {};
-                // 按行政层级从小到大排列，取最小的两个有值字段
-                const adminLevels = [
-                    addr.hamlet, addr.village, addr.suburb, addr.neighbourhood,
-                    addr.quarter, addr.town, addr.city_district, addr.borough,
-                    addr.municipality, addr.city, addr.county, addr.district,
-                    addr.state_district, addr.state, addr.province
-                ].filter(Boolean);
-                const displayName = adminLevels.slice(0, 2).join('，') || res.name || q;
+                // 解析 display_name：只保留含行政级别关键词的段，取前两个
+                const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治州|地区|盟|地级|县级市|市辖区|自治县|旗|自治旗|街道|办事处|乡|镇|村|居委会|社区|县|区|市/;
+                const displayName = (res.display_name || res.name || q)
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => s && ADMIN_KEYWORDS.test(s))
+                    .slice(0, 2)
+                    .join('，') || res.name || q;
 
                 _selectCity(lat, lon, displayName);
             } catch(e) {
@@ -2063,15 +2062,16 @@ window.addEventListener('DOMContentLoaded', () => {
                 const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&format=json&accept-language=zh`,{signal:gc.signal,headers:{'Accept-Language':'zh'}});
                 clearTimeout(gcTid);
                 const g=await r.json();
-                const addr=g.address||{};
-                // 按行政层级从小到大排列，取最小的两个有值字段
-                const adminLevels=[
-                    addr.hamlet, addr.village, addr.suburb, addr.neighbourhood,
-                    addr.quarter, addr.town, addr.city_district, addr.borough,
-                    addr.municipality, addr.city, addr.county, addr.district,
-                    addr.state_district, addr.state, addr.province
-                ].filter(Boolean);
-                city = adminLevels.slice(0,2).join('，') || null;
+                // 解析 display_name：只保留含行政级别关键词的段，取前两个
+                const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治州|地区|盟|地级|县级市|市辖区|自治县|旗|自治旗|街道|办事处|乡|镇|村|居委会|社区|县|区|市/;
+                city = (g.display_name || g.name)
+                    ? (g.display_name || g.name)
+                        .split(',')
+                        .map(s => s.trim())
+                        .filter(s => s && ADMIN_KEYWORDS.test(s))
+                        .slice(0, 2)
+                        .join('，') || g.name || null
+                    : null;
             } catch(_){}
             updateWeather(lat,lon,city);
             fetchWaqi(lat,lon);
@@ -2084,7 +2084,7 @@ window.addEventListener('DOMContentLoaded', () => {
         _lastSecond=-1; update();
         // 提示用户可点击重试
         DOM.seasonSyncTag.style.cursor='pointer';
-        DOM.seasonSyncTag.title='点击重新定位';
+        DOM.seasonSyncTag.setAttribute('aria-label','点击重新定位');
         DOM.seasonSyncTag.onclick = () => { DOM.seasonSyncTag.onclick=null; _doGeolocate(); };
     }
     _doGeolocate();
