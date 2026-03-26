@@ -1027,7 +1027,7 @@ async function fetchWaqi(lat, lon) {
         if (!isFinite(aqi) || aqi < 0) throw new Error('invalid aqi');
         DOM.wAqi.innerText   = aqi;
         DOM.wAqi.style.color = aqiColor(aqi);
-        DOM.wAqi.title       = aqiLabel(aqi);
+        DOM.wAqi.setAttribute('aria-label', aqiLabel(aqi));
     } catch(e) {
         console.warn('[WAQI Worker]', e.message);
         DOM.wAqi.innerText   = '--';
