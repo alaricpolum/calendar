@@ -633,6 +633,7 @@ const MOON_PATH_TABLE = [];
 const ARC_TABLE_SIZE  = 2000;
 const ARC_TABLE       = new Float64Array(ARC_TABLE_SIZE + 1);
 const BASE_NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
+const _wangshuCache   = new Map();
 
 // DOM 缓存
 const DOM = {};
@@ -764,11 +765,149 @@ function getDayDiff(d1,d2) {
     const t2 = new Date(d2.getFullYear(),d2.getMonth(),d2.getDate()).getTime();
     return Math.floor((t2-t1)/86400000);
 }
+// ── Meeus《天文算法》第49章：精确月相时刻（TDT） ────────────────
+// phase: 0=新月, 0.25=上弦, 0.5=满月, 0.75=下弦
+// 返回值：UTC 毫秒时间戳，精度约 ±2 分钟
+function _meeusLunarPhaseUTC(k, phase) {
+    const kp  = k + phase;
+    const T   = kp / 1236.85;
+    const T2  = T  * T;
+    const T3  = T2 * T;
+    const T4  = T3 * T;
+    let JDE = 2451550.09766
+            + 29.530588861 * kp
+            + 0.00015437   * T2
+            - 0.000000150  * T3
+            + 0.00000000073* T4;
+    const r = x => x * Math.PI / 180;
+    const M  = r(((2.5534  + 29.10535670 * kp - 0.0000014 * T2 - 0.00000011 * T3) % 360 + 360) % 360);
+    const Mp = r(((201.5643 + 385.81693528* kp + 0.0107582 * T2 + 0.00001238* T3 - 0.000000058*T4) % 360 + 360) % 360);
+    const F  = r(((160.7108 + 390.67050284* kp - 0.0016118 * T2 - 0.00000227* T3 + 0.000000011*T4) % 360 + 360) % 360);
+    const Om = r(((124.7746 -  1.56375588 * kp + 0.0020672 * T2 + 0.00000215* T3) % 360 + 360) % 360);
+    const E  = 1 - 0.002516 * T - 0.0000074 * T2;
+    const E2 = E * E;
+    const newFull = (phase === 0 || phase === 0.5);
+    let corr = 0;
+    if (newFull) {
+        corr =
+            -0.40720        * Math.sin(Mp)
+            + 0.17241 * E   * Math.sin(M)
+            + 0.01608        * Math.sin(2*Mp)
+            + 0.01039        * Math.sin(2*F)
+            + 0.00739 * E   * Math.sin(Mp - M)
+            - 0.00514 * E   * Math.sin(Mp + M)
+            + 0.00208 * E2  * Math.sin(2*M)
+            - 0.00111        * Math.sin(Mp - 2*F)
+            - 0.00057        * Math.sin(Mp + 2*F)
+            + 0.00056 * E   * Math.sin(2*Mp + M)
+            - 0.00042        * Math.sin(3*Mp)
+            + 0.00042 * E   * Math.sin(M  + 2*F)
+            + 0.00038 * E   * Math.sin(M  - 2*F)
+            - 0.00024 * E   * Math.sin(2*Mp - M)
+            - 0.00017        * Math.sin(Om)
+            - 0.00007        * Math.sin(Mp + 2*M)
+            + 0.00004        * Math.sin(2*Mp - 2*F)
+            + 0.00004        * Math.sin(3*M)
+            + 0.00003        * Math.sin(Mp + M - 2*F)
+            + 0.00003        * Math.sin(2*Mp + 2*F)
+            - 0.00003        * Math.sin(Mp + M + 2*F)
+            + 0.00003        * Math.sin(Mp - M + 2*F)
+            - 0.00002        * Math.sin(Mp - M - 2*F)
+            - 0.00002        * Math.sin(3*Mp + M)
+            + 0.00002        * Math.sin(4*Mp);
+        if (phase === 0.5) {
+            corr +=
+                -0.00306
+                + 0.00038 * E * Math.cos(M)
+                - 0.00026       * Math.cos(Mp)
+                - 0.00002       * Math.cos(Mp - M)
+                + 0.00002       * Math.cos(Mp + M)
+                + 0.00002       * Math.cos(2*F);
+        }
+    } else {
+        corr =
+            -0.62801        * Math.sin(Mp)
+            + 0.17172 * E   * Math.sin(M)
+            - 0.01183 * E   * Math.sin(Mp + M)
+            + 0.00862        * Math.sin(2*Mp)
+            + 0.00804        * Math.sin(2*F)
+            + 0.00454 * E   * Math.sin(Mp - M)
+            + 0.00204 * E2  * Math.sin(2*M)
+            - 0.00180        * Math.sin(Mp - 2*F)
+            - 0.00070        * Math.sin(Mp + 2*F)
+            - 0.00040        * Math.sin(3*Mp)
+            - 0.00034 * E   * Math.sin(2*Mp - M)
+            + 0.00032 * E   * Math.sin(M  + 2*F)
+            + 0.00032 * E   * Math.sin(M  - 2*F)
+            - 0.00028 * E2  * Math.sin(Mp + 2*M)
+            + 0.00027 * E   * Math.sin(2*Mp + M)
+            - 0.00017        * Math.sin(Om)
+            - 0.00005        * Math.sin(Mp - M - 2*F)
+            + 0.00004        * Math.sin(2*Mp + 2*F)
+            - 0.00004        * Math.sin(Mp + M + 2*F)
+            + 0.00004        * Math.sin(Mp - 2*M)
+            + 0.00003        * Math.sin(Mp + M - 2*F)
+            + 0.00003        * Math.sin(3*M)
+            + 0.00002        * Math.sin(2*Mp - 2*F)
+            + 0.00002        * Math.sin(Mp - M + 2*F)
+            - 0.00002        * Math.sin(3*Mp + M);
+        const W = 0.00306
+                - 0.00038 * E * Math.cos(M)
+                + 0.00026      * Math.cos(Mp)
+                - 0.00002      * Math.cos(Mp - M)
+                + 0.00002      * Math.cos(Mp + M)
+                + 0.00002      * Math.cos(2*F);
+        corr += (phase === 0.25) ? W : -W;
+    }
+    const A = [
+        r((299.77 +  0.107408*kp - 0.009173*T2) % 360),
+        r((251.88 +  0.016321*kp)                % 360),
+        r((251.83 + 26.651886*kp)                % 360),
+        r((349.42 + 36.412478*kp)                % 360),
+        r(( 84.66 + 18.206239*kp)                % 360),
+        r((141.74 + 53.303771*kp)                % 360),
+        r((207.14 +  2.453732*kp)                % 360),
+        r((154.84 +  7.306860*kp)                % 360),
+        r(( 34.52 + 27.261239*kp)                % 360),
+        r((207.19 +  0.121824*kp)                % 360),
+        r((291.34 +  1.844379*kp)                % 360),
+        r((161.72 + 24.198154*kp)                % 360),
+        r((239.56 + 25.513099*kp)                % 360),
+        r((331.55 +  3.592518*kp)                % 360),
+    ];
+    const addCorr =
+          0.000325*Math.sin(A[0])  + 0.000165*Math.sin(A[1])
+        + 0.000164*Math.sin(A[2])  + 0.000126*Math.sin(A[3])
+        + 0.000110*Math.sin(A[4])  + 0.000062*Math.sin(A[5])
+        + 0.000060*Math.sin(A[6])  + 0.000056*Math.sin(A[7])
+        + 0.000047*Math.sin(A[8])  + 0.000042*Math.sin(A[9])
+        + 0.000040*Math.sin(A[10]) + 0.000037*Math.sin(A[11])
+        + 0.000035*Math.sin(A[12]) + 0.000023*Math.sin(A[13]);
+    const jdeTDT = JDE + corr + addCorr;
+    const approxYear = 2000 + kp / 12.3685;
+    const jdeUTC = jdeTDT - _getDeltaT(approxYear) / 86400;
+    return (jdeUTC - 2440587.5) * 86400000;
+}
+
+// ── 求"上一个新月"的朔望月序号 k
+function _prevNewMoonK(ms) {
+    const jde = ms / 86400000 + 2440587.5;
+    let k = Math.floor((jde - 2451550.09766) / 29.530588861);
+    let prevMs = _meeusLunarPhaseUTC(k, 0);
+    if (ms < prevMs) { k--; prevMs = _meeusLunarPhaseUTC(k, 0); }
+    const nextMs = _meeusLunarPhaseUTC(k + 1, 0);
+    if (ms >= nextMs) { k++; }
+    return k;
+}
+
+// getMoonPhase：基于 Meeus 精确新月时刻插值
 function getMoonPhase(date) {
-    const diffDays = (date.getTime() - BASE_NEW_MOON_MS) / 86400000;
-    let phase = (diffDays / 29.530588853) % 1;
-    if (phase < 0) phase += 1;
-    return { age: phase*29.530588853, normalized: phase };
+    const ms     = date.getTime();
+    const k0     = _prevNewMoonK(ms);
+    const prevMs = _meeusLunarPhaseUTC(k0,     0);
+    const nextMs = _meeusLunarPhaseUTC(k0 + 1, 0);
+    const phase  = (ms - prevMs) / (nextMs - prevMs);
+    return { age: phase * 29.530588853, normalized: Math.max(0, Math.min(0.9999999, phase)) };
 }
 function getAstronomyParams(date, forceYear) {
     const vYear    = forceYear;
@@ -1454,21 +1593,40 @@ function _calcYearData(y) {
         .filter(([,n])=>['春分','夏至','秋分','冬至'].includes(n)).map(([o])=>+o);
     const MAJOR_TERMS = new Set(majorOffsets);
 
-    const isFMfn = off => Math.abs(getMoonPhase(
-        new Date(new Date(cEq.getTime()+off*86400000).setHours(12,0,0,0))
-    ).normalized - 0.5) < 0.017;
+    // 精确满月判断：用 _meeusLunarPhaseUTC 计算年内所有满月的精确 UTC 时刻，
+    // 加上本地时区偏移后再 floor，确保满月日期以用户本地时区为准。
+    const _tzOffsetMs = -new Date().getTimezoneOffset() * 60000;
+    const _fullMoonOffsets = (function() {
+        const s = new Set();
+        const k_start = _prevNewMoonK(cEq.getTime());
+        for (let dk = -1; dk <= 14; dk++) {
+            const fmMs = _meeusLunarPhaseUTC(k_start + dk, 0.5);
+            const off  = Math.floor((fmMs + _tzOffsetMs - cEq.getTime()) / 86400000);
+            if (off >= 0 && off < total + 2) s.add(off);
+        }
+        return s;
+    })();
+    const isFMfn = off => _fullMoonOffsets.has(off);
+
     const autumnOff = +(Object.entries(TERMS).find(([,n])=>n==='秋分')?.[0] ?? 187);
 
+    // 望舒缓存：按年份缓存，避免每次遍历全年
     let wangshuOff = -1;
-    if (isFMfn(autumnOff)) {
-        wangshuOff = autumnOff;
+    if (_wangshuCache.has(y)) {
+        wangshuOff = _wangshuCache.get(y);
     } else {
-        let prevFM=-1, nextFM=-1;
-        for (let o=autumnOff-1; o>=0; o--)    { if(isFMfn(o)){prevFM=o;break;} }
-        for (let o=autumnOff+1; o<total; o++)  { if(isFMfn(o)){nextFM=o;break;} }
-        if      (prevFM===-1)  wangshuOff = nextFM;
-        else if (nextFM===-1)  wangshuOff = prevFM;
-        else { const dP=autumnOff-prevFM, dN=nextFM-autumnOff; wangshuOff = dP<=dN?prevFM:nextFM; }
+        if (isFMfn(autumnOff)) {
+            wangshuOff = autumnOff;
+        } else {
+            let prevFM=-1, nextFM=-1;
+            for (let o=autumnOff-1; o>=0; o--)    { if(isFMfn(o)){prevFM=o;break;} }
+            for (let o=autumnOff+1; o<total; o++)  { if(isFMfn(o)){nextFM=o;break;} }
+            if      (prevFM===-1)  wangshuOff = nextFM;
+            else if (nextFM===-1)  wangshuOff = prevFM;
+            else { const dP=autumnOff-prevFM, dN=nextFM-autumnOff; wangshuOff = dP<=dN?prevFM:nextFM; }
+        }
+        if (_wangshuCache.size >= 10) _wangshuCache.delete(_wangshuCache.keys().next().value);
+        _wangshuCache.set(y, wangshuOff);
     }
     return { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn };
 }
