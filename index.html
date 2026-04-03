@@ -900,14 +900,37 @@ function _prevNewMoonK(ms) {
     return k;
 }
 
-// getMoonPhase：基于 Meeus 精确新月时刻插值
+// getMoonPhase：基于 Meeus 精确新月时刻插值，与月相日历图表完全同源
+// 调用 _prevNewMoonK 保证与图表使用相同的朔望月边界
 function getMoonPhase(date) {
     const ms     = date.getTime();
     const k0     = _prevNewMoonK(ms);
     const prevMs = _meeusLunarPhaseUTC(k0,     0);
     const nextMs = _meeusLunarPhaseUTC(k0 + 1, 0);
+    const fullMs = _meeusLunarPhaseUTC(k0,   0.5);
+    const q1Ms   = _meeusLunarPhaseUTC(k0,  0.25);
+    const q3Ms   = _meeusLunarPhaseUTC(k0,  0.75);
+    // 线性 phase（用于月龄计算）
     const phase  = (ms - prevMs) / (nextMs - prevMs);
-    return { age: phase * 29.530588853, normalized: Math.max(0, Math.min(0.9999999, phase)) };
+    // 用 Meeus 精确四相位分段插值计算精确 n，与月相日历完全同源
+    // 分段：新月→上弦(0~0.25)、上弦→满月(0.25~0.5)、满月→下弦(0.5~0.75)、下弦→新月(0.75~1)
+    let n;
+    if (ms < q1Ms) {
+        n = 0.25 * (ms - prevMs) / (q1Ms - prevMs);
+    } else if (ms < fullMs) {
+        n = 0.25 + 0.25 * (ms - q1Ms) / (fullMs - q1Ms);
+    } else if (ms < q3Ms) {
+        n = 0.5  + 0.25 * (ms - fullMs) / (q3Ms - fullMs);
+    } else {
+        n = 0.75 + 0.25 * (ms - q3Ms)  / (nextMs - q3Ms);
+    }
+    n = Math.max(0, Math.min(0.9999999, n));
+    // 几何亮面比例：(1 - cos(2π·n)) / 2
+    // 新月=0%，上下弦=50%，满月=100%，与月相日历曲线完全一致
+    const illumination = (1 - Math.cos(2 * Math.PI * n)) / 2;
+    // 趋势：以精确满月时刻为分界，而非线性中点
+    const waxing = ms < fullMs;
+    return { age: phase * 29.530588853, normalized: n, illumination, waxing };
 }
 function getAstronomyParams(date, forceYear) {
     const vYear    = forceYear;
@@ -1308,7 +1331,7 @@ function showTooltip(e, data) {
         const wrap = document.createElement('div');
         wrap.style.cssText = 'padding:7px 12px 8px;display:flex;flex-direction:column;gap:4px;';
         wrap.appendChild(_makeTtRow('距今天数', dayGapStr));
-        wrap.appendChild(_makeTtRow('月相进度', (moon.normalized*100).toFixed(1)+'%'));
+        wrap.appendChild(_makeTtRow('月相进度', (moon.illumination * 100).toFixed(1) + '%' + (moon.waxing ? ' ↑' : ' ↓')));
         wrap.appendChild(_makeTtRow('岁律节点', daysStr, 'term-val'));
         wrap.appendChild(_makeTtRow('公历星期', WKS[data.realGDayWk]));
         return wrap;
@@ -1527,7 +1550,19 @@ function update() {
     DOM.moonVisualPhase.setAttribute('transform', _moonTransform);
     // 定位完成后才显示月亮亮面（定位前pa=0，亮面朝右不正确）
     if (_currentLat !== null) DOM.moonVisualPhase.style.opacity = '1';
-    const moonName  = MOON_NAMES[Math.floor(((moon.normalized+.0625)%1)*8)];
+    // 以几何亮面比例（illumination）为准判断月相名称
+    // illumination = (1-cos(2π·n))/2，新月=0%，上下弦=50%，满月=100%
+    // 上弦/下弦 illumination 相同（均为50%），用 normalized 区间精确区分，规避浮点误差
+    const illum  = moon.illumination;
+    const _n     = moon.normalized;
+    const waxing = moon.waxing;
+    let moonName;
+    if      (illum < 0.0625)               moonName = '新月';
+    else if (illum >= 0.9375)              moonName = '满月';
+    else if (_n >= 0.1875 && _n < 0.3125) moonName = '上弦月';
+    else if (_n >= 0.6875 && _n < 0.8125) moonName = '下弦月';
+    else if (waxing)                       moonName = illum < 0.5 ? '娥眉月' : '盈凸月';
+    else                                   moonName = illum > 0.5 ? '亏凸月' : '残月';
     // ① moonPhaseLabel 改用 DOM API，消除最后一处 innerHTML 写入计算值
     (function() {
         const lbl = DOM.moonPhaseLabel;
