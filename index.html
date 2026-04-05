@@ -627,11 +627,11 @@
     .cd-action-btn span  { font-size: .52rem; font-weight: 700; color: var(--v-blue); white-space: nowrap; }
     .cell.cd-range  { background: rgba(47,79,79,0.12) !important; }
     .cell.cd-target { background: rgba(47,79,79,0.25) !important; }
-    .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 3000; }
-    .qr-modal { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 280px; width: 90%; }
-    .qr-modal-title { font-size: .85rem; font-weight: 700; color: var(--primary); text-align: center; }
-    .qr-modal-url   { font-size: .6rem; color: #aaa; word-break: break-all; text-align: center; }
-    .qr-modal-close { font-size: .72rem; font-weight: 700; color: var(--v-blue); cursor: pointer; padding: 4px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); margin-top: 4px; }
+    .qr-overlay { position: fixed; inset: 0; background: rgba(28,22,14,0.55); display: flex; align-items: center; justify-content: center; z-index: 3000; }
+    .qr-modal { background: #F5F2E9; border-radius: 16px; border: 1.5px solid #6B1010; padding: 20px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 260px; width: 90%; font-family: 'Noto Serif SC',serif; }
+    .qr-modal-title { font-size: .88rem; font-weight: 700; color: #2C3E50; text-align: center; letter-spacing: 1px; }
+    .qr-modal-url   { font-size: .52rem; color: #aaa; word-break: break-all; text-align: center; line-height: 1.5; }
+    .qr-modal-close { font-size: .68rem; font-weight: 700; color: var(--v-blue); cursor: pointer; padding: 5px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); }
 
     /* ── 管理员创建倒计时弹窗 ─────────────────────────────────────── */
     .cd-admin-btn {
@@ -943,12 +943,30 @@ function _cdShowAdminModal() {
     f1.appendChild(l1); f1.appendChild(nameInput);
     modal.appendChild(f1);
 
-    // 日期输入
+    // 日期输入（文本框，格式 YYYY-MM-DD）
     const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
-    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '目标日期（公历）';
+    const l2wrap = document.createElement('div');
+    l2wrap.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label';
+    l2.style.marginBottom = '0';
+    l2.textContent = '目标日期（公历）';
+    const l2hint = document.createElement('span');
+    l2hint.style.cssText = 'font-size:.5rem;color:#aaa;';
+    l2hint.textContent = 'YYYY-MM-DD';
+    l2wrap.appendChild(l2); l2wrap.appendChild(l2hint);
     const dateInput = document.createElement('input');
-    dateInput.className = 'cd-admin-input'; dateInput.type = 'date';
-    f2.appendChild(l2); f2.appendChild(dateInput);
+    dateInput.className = 'cd-admin-input'; dateInput.type = 'text';
+    dateInput.placeholder = '例：2026-08-01';
+    dateInput.maxLength = 10;
+    dateInput.addEventListener('input', () => {
+        // 自动插入连字符
+        let v = dateInput.value.replace(/[^\d]/g, '');
+        if (v.length > 4) v = v.slice(0,4) + '-' + v.slice(4);
+        if (v.length > 7) v = v.slice(0,7) + '-' + v.slice(7);
+        dateInput.value = v.slice(0, 10);
+        dateInput.style.borderColor = '';
+    });
+    f2.appendChild(l2wrap); f2.appendChild(dateInput);
     modal.appendChild(f2);
 
     // 结果展示区
@@ -1055,6 +1073,7 @@ function _cdVDate(gDate) {
 function _cdMakeUrl(list) {
     const u = new URL(window.location.href);
     u.searchParams.set('cd', _cdEncode(list));
+    u.searchParams.delete('admin'); // 邀请链接不携带管理员口令
     return u.toString();
 }
 
@@ -1096,9 +1115,21 @@ function _buildCdCard() {
 
     // 无条目时（仅管理员可见）
     if (!list.length) {
+        card.style.alignSelf = 'start'; // 不被 grid 拉伸至月份卡片高度
         const empty = document.createElement('div');
-        empty.style.cssText = 'font-size:.62rem;color:#aaa;text-align:center;padding:12px 0;';
-        empty.textContent = '暂无倒计时，点击「新建」创建';
+        empty.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0 4px;';
+        const icon = document.createElement('div');
+        icon.style.cssText = 'font-size:1.4rem;opacity:.18;color:#6B1010;line-height:1;';
+        icon.textContent = '⏳';
+        const txt = document.createElement('div');
+        txt.style.cssText = 'font-size:.6rem;color:#aaa;text-align:center;line-height:1.6;';
+        txt.textContent = '暂无倒计时';
+        const sub = document.createElement('div');
+        sub.style.cssText = 'font-size:.54rem;color:#ccc;text-align:center;';
+        sub.textContent = '点击右上角「新建」创建';
+        empty.appendChild(icon);
+        empty.appendChild(txt);
+        empty.appendChild(sub);
         card.appendChild(empty);
         view.appendChild(card);
         return;
@@ -1308,37 +1339,69 @@ function _cdApplyCellColor() {
 
 // ── 二维码弹窗（使用 QR Server API）────────────────────────────
 function _cdShowQr(url, name) {
+    document.querySelectorAll('.qr-overlay').forEach(el => el.remove());
+
     const overlay = document.createElement('div');
     overlay.className = 'qr-overlay';
 
     const modal = document.createElement('div');
     modal.className = 'qr-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
 
+    // 标题
     const title = document.createElement('div');
     title.className = 'qr-modal-title';
     title.textContent = name;
+    modal.appendChild(title);
 
+    // 分隔线
+    const divider = document.createElement('div');
+    divider.style.cssText = 'width:100%;height:1px;background:var(--muted);';
+    modal.appendChild(divider);
+
+    // 二维码图片
+    const imgWrap = document.createElement('div');
+    imgWrap.style.cssText = 'background:#FFFDF7;border-radius:10px;border:1px solid var(--border);padding:10px;';
     const img = document.createElement('img');
-    img.width = 180; img.height = 180;
-    img.style.cssText = 'border-radius:8px;border:1px solid var(--border);';
-    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
+    img.width = 160; img.height = 160;
+    img.style.cssText = 'display:block;border-radius:4px;';
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=2C3E50&bgcolor=FFFDF5&data=${encodeURIComponent(url)}`;
     img.alt = '二维码';
+    imgWrap.appendChild(img);
+    modal.appendChild(imgWrap);
 
+    // URL 展示
     const urlDiv = document.createElement('div');
     urlDiv.className = 'qr-modal-url';
-    urlDiv.textContent = url.length > 60 ? url.slice(0, 60) + '…' : url;
+    urlDiv.textContent = url.length > 55 ? url.slice(0, 55) + '…' : url;
+    modal.appendChild(urlDiv);
 
-    const closeBtn = document.createElement('div');
-    closeBtn.className = 'qr-modal-close';
+    // 按钮行
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;width:100%;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'cd-admin-submit';
+    copyBtn.style.cssText = 'flex:1;padding:7px;font-size:.68rem;';
+    copyBtn.textContent = '复制链接';
+    copyBtn.addEventListener('click', () => {
+        navigator.clipboard?.writeText(url).catch(() => {});
+        copyBtn.textContent = '已复制！';
+        setTimeout(() => { copyBtn.textContent = '复制链接'; }, 2000);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'cd-admin-cancel';
+    closeBtn.style.cssText = 'padding:7px 14px;font-size:.68rem;';
     closeBtn.textContent = '关闭';
     closeBtn.addEventListener('click', () => overlay.remove());
 
-    modal.appendChild(title);
-    modal.appendChild(img);
-    modal.appendChild(urlDiv);
-    modal.appendChild(closeBtn);
+    btnRow.appendChild(copyBtn);
+    btnRow.appendChild(closeBtn);
+    modal.appendChild(btnRow);
+
     overlay.appendChild(modal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('click', () => overlay.remove());
     document.body.appendChild(overlay);
 }
 
