@@ -585,6 +585,127 @@
         .month-box { padding: 6px 3px; }
     }
 
+    /* ── 倒计时卡片 ──────────────────────────────────────────────── */
+    .cd-card {
+        background: var(--surface); border-radius: 14px;
+        border: 1.5px solid #6B1010; padding: 10px 12px 12px;
+        display: flex; flex-direction: column; box-sizing: border-box;
+    }
+    .cd-card-h {
+        font-size: .65rem; font-weight: 700; color: #6B1010;
+        letter-spacing: 2px; border-bottom: 1.5px solid var(--muted);
+        padding-bottom: 6px; margin-bottom: 8px;
+    }
+    .cd-list-item {
+        display: flex; align-items: center; gap: 8px;
+        padding: 5px 6px; border-radius: 7px; cursor: pointer;
+        transition: background .15s;
+    }
+    .cd-list-item:hover { background: var(--muted); }
+    .cd-list-item.cd-active { background: rgba(107,16,16,0.06); }
+    .cd-accent-bar { width: 3px; border-radius: 2px; flex-shrink: 0; align-self: stretch; min-height: 28px; }
+    .cd-list-name { font-size: .68rem; font-weight: 700; color: var(--text); }
+    .cd-list-name.cd-ended { color: #aaa; }
+    .cd-list-sub  { font-size: .52rem; color: #aaa; }
+    .cd-ended-badge { font-size: .44rem; color: #888; background: var(--muted); border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
+    .cd-list-days { font-size: .65rem; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+    .cd-divider   { height: .5px; background: var(--muted); margin: 3px 0; }
+    .cd-expand { background: rgba(107,16,16,0.04); border-radius: 7px; padding: 8px 9px; margin: 4px 0 2px; }
+    .cd-expand-name  { font-size: .82rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .cd-expand-days  { display: flex; align-items: baseline; gap: 3px; margin-bottom: 1px; }
+    .cd-expand-num   { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+    .cd-expand-unit  { font-size: .6rem; font-weight: 700; }
+    .cd-expand-weeks { font-size: .56rem; color: #888; margin-bottom: 6px; }
+    .cd-prog-track   { height: 3px; background: var(--muted); border-radius: 2px; margin-bottom: 6px; overflow: hidden; }
+    .cd-prog-fill    { height: 100%; border-radius: 2px; transition: width .4s; }
+    .cd-date-row     { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+    .cd-date-lbl     { font-size: .48rem; color: #aaa; font-weight: 600; letter-spacing: 1px; }
+    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); }
+    .cd-action-row   { display: flex; gap: 5px; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--muted); }
+    .cd-action-btn   { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 4px; background: var(--bg); cursor: pointer; transition: background .15s; }
+    .cd-action-btn:hover { background: var(--muted); }
+    .cd-action-btn span  { font-size: .52rem; font-weight: 700; color: var(--v-blue); white-space: nowrap; }
+    .cell.cd-range  { background: rgba(47,79,79,0.12) !important; }
+    .cell.cd-target { background: rgba(47,79,79,0.25) !important; }
+    .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 3000; }
+    .qr-modal { background: var(--surface); border-radius: 16px; border: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 280px; width: 90%; }
+    .qr-modal-title { font-size: .85rem; font-weight: 700; color: var(--primary); text-align: center; }
+    .qr-modal-url   { font-size: .6rem; color: #aaa; word-break: break-all; text-align: center; }
+    .qr-modal-close { font-size: .72rem; font-weight: 700; color: var(--v-blue); cursor: pointer; padding: 4px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); margin-top: 4px; }
+
+    /* ── 管理员创建倒计时弹窗 ─────────────────────────────────────── */
+    .cd-admin-btn {
+        display: flex; align-items: center; gap: 4px;
+        font-size: .55rem; font-weight: 700; color: #6B1010;
+        cursor: pointer; padding: 2px 6px; border-radius: 5px;
+        border: 1px solid rgba(107,16,16,0.3); background: rgba(107,16,16,0.04);
+        transition: background .15s; margin-left: auto;
+    }
+    .cd-admin-btn:hover { background: rgba(107,16,16,0.10); }
+    .cd-admin-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+        display: flex; align-items: center; justify-content: center; z-index: 3000;
+    }
+    .cd-admin-modal {
+        background: var(--surface); border-radius: 16px;
+        border: 1.5px solid #6B1010; padding: 20px 22px 18px;
+        width: 320px; max-width: 92vw; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 0;
+    }
+    .cd-admin-modal-h {
+        font-size: .75rem; font-weight: 700; color: #6B1010;
+        letter-spacing: 2px; border-bottom: 1px solid var(--muted);
+        padding-bottom: 8px; margin-bottom: 12px;
+    }
+    .cd-admin-field { margin-bottom: 10px; }
+    .cd-admin-label { font-size: .58rem; font-weight: 700; color: var(--primary); letter-spacing: 1px; margin-bottom: 4px; display: block; }
+    .cd-admin-input {
+        width: 100%; padding: 7px 10px; border: 1px solid var(--border);
+        border-radius: 8px; font-size: .8rem; background: var(--bg);
+        color: var(--text); font-family: inherit; box-sizing: border-box;
+        outline: none; transition: border .2s;
+    }
+    .cd-admin-input:focus { border-color: #6B1010; }
+    .cd-admin-existing { margin-bottom: 12px; }
+    .cd-admin-existing-h { font-size: .54rem; color: #aaa; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px; }
+    .cd-admin-existing-item {
+        display: flex; align-items: center; gap: 6px;
+        padding: 4px 6px; border-radius: 6px; background: var(--muted);
+        margin-bottom: 3px;
+    }
+    .cd-admin-existing-name { font-size: .65rem; font-weight: 700; color: var(--text); flex: 1; }
+    .cd-admin-existing-date { font-size: .58rem; color: #888; }
+    .cd-admin-del {
+        font-size: .6rem; color: #aaa; cursor: pointer; padding: 1px 5px;
+        border-radius: 4px; border: 1px solid var(--border); background: var(--bg);
+        transition: color .15s;
+    }
+    .cd-admin-del:hover { color: #B22222; border-color: #B22222; }
+    .cd-admin-btns { display: flex; gap: 8px; margin-top: 4px; }
+    .cd-admin-submit {
+        flex: 1; padding: 8px; background: #6B1010; color: #fff;
+        border: none; border-radius: 8px; font-size: .72rem; font-weight: 700;
+        cursor: pointer; font-family: inherit; transition: opacity .2s;
+    }
+    .cd-admin-submit:hover { opacity: .85; }
+    .cd-admin-cancel {
+        padding: 8px 14px; background: var(--muted); color: var(--primary);
+        border: 1px solid var(--border); border-radius: 8px; font-size: .72rem;
+        font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .cd-admin-result {
+        margin-top: 10px; padding: 8px 10px; background: var(--muted);
+        border-radius: 8px; font-size: .58rem; color: var(--primary);
+        word-break: break-all; line-height: 1.5; border: 1px solid var(--border);
+    }
+    .cd-admin-copy {
+        display: block; margin-top: 6px; text-align: center;
+        font-size: .62rem; font-weight: 700; color: #6B1010; cursor: pointer;
+        padding: 4px; border-radius: 6px; border: 1px solid rgba(107,16,16,0.3);
+        background: rgba(107,16,16,0.04); transition: background .15s;
+    }
+    .cd-admin-copy:hover { background: rgba(107,16,16,0.10); }
+
 </style>
 </head>
 
@@ -751,6 +872,476 @@ const WK_COLORS  = ['#DF1B12','#FFC600','#02639D','#708090','#6B4E9B','#2F4F4F',
 const MOON_NAMES = ["新月","娥眉月","上弦月","盈凸月","满月","亏凸月","下弦月","残月"];
 const SEASON_COLORS = { spring:'#5F9EA0', summer:'#CD5C5C', autumn:'#B8860B', winter:'#708090' };
 const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治州|地区|盟|地级|县级市|市辖区|自治县|旗|自治旗|街道|办事处|乡|镇|村|居委会|社区|县|区|市/;
+
+// ═══════════════════════════════════════════════════════════════
+//  管理员入口（?admin=9596931 解锁）
+// ═══════════════════════════════════════════════════════════════
+const CD_ADMIN_TOKEN = '9596931';
+
+function _cdIsAdmin() {
+    return new URLSearchParams(window.location.search).get('admin') === CD_ADMIN_TOKEN;
+}
+
+// ── 显示创建弹窗 ──────────────────────────────────────────────
+function _cdShowAdminModal() {
+    document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    // 标题
+    const hdr = document.createElement('div');
+    hdr.className = 'cd-admin-modal-h';
+    hdr.textContent = '新建倒计时';
+    modal.appendChild(hdr);
+
+    // 当前已有条目列表
+    const currentList = _cdLoad();
+    if (currentList.length) {
+        const existWrap = document.createElement('div');
+        existWrap.className = 'cd-admin-existing';
+        const existH = document.createElement('div');
+        existH.className = 'cd-admin-existing-h';
+        existH.textContent = '当前条目';
+        existWrap.appendChild(existH);
+
+        currentList.forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'cd-admin-existing-item';
+            const nm = document.createElement('span');
+            nm.className = 'cd-admin-existing-name';
+            nm.textContent = item.name;
+            const dt = document.createElement('span');
+            dt.className = 'cd-admin-existing-date';
+            dt.textContent = item.date;
+            const del = document.createElement('button');
+            del.className = 'cd-admin-del';
+            del.textContent = '删除';
+            del.addEventListener('click', () => {
+                currentList.splice(idx, 1);
+                const newUrl = _cdMakeUrl(currentList);
+                history.replaceState(null, '', newUrl);
+                _buildCdCard(); _cdApplyCellColor();
+                _cdShowAdminModal();
+            });
+            row.appendChild(nm); row.appendChild(dt); row.appendChild(del);
+            existWrap.appendChild(row);
+        });
+        modal.appendChild(existWrap);
+    }
+
+    // 名称输入
+    const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+    const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '目标名称';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'cd-admin-input'; nameInput.type = 'text';
+    nameInput.placeholder = '例：Q2版本交付';
+    f1.appendChild(l1); f1.appendChild(nameInput);
+    modal.appendChild(f1);
+
+    // 日期输入
+    const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '目标日期（公历）';
+    const dateInput = document.createElement('input');
+    dateInput.className = 'cd-admin-input'; dateInput.type = 'date';
+    f2.appendChild(l2); f2.appendChild(dateInput);
+    modal.appendChild(f2);
+
+    // 结果展示区
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'cd-admin-result';
+    resultDiv.style.display = 'none';
+    modal.appendChild(resultDiv);
+
+    // 按钮行
+    const btnRow = document.createElement('div');
+    btnRow.className = 'cd-admin-btns';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cd-admin-cancel';
+    cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'cd-admin-submit';
+    submitBtn.textContent = '生成链接';
+    submitBtn.addEventListener('click', () => {
+        const name = nameInput.value.trim();
+        const date = dateInput.value;
+        if (!name || !date) {
+            nameInput.style.borderColor = name ? '' : '#B22222';
+            dateInput.style.borderColor = date ? '' : '#B22222';
+            return;
+        }
+        // 追加到现有列表
+        const newList = [...currentList, { name, date }];
+        const newUrl = _cdMakeUrl(newList);
+
+        // 更新页面 URL 并刷新日历
+        history.replaceState(null, '', newUrl);
+        _buildCdCard(); _cdApplyCellColor();
+
+        // 显示结果
+        resultDiv.style.display = 'block';
+        resultDiv.textContent = newUrl;
+        const copyBtn = document.createElement('span');
+        copyBtn.className = 'cd-admin-copy';
+        copyBtn.textContent = '复制邀请链接';
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard?.writeText(newUrl).catch(() => {});
+            copyBtn.textContent = '已复制！';
+            setTimeout(() => { copyBtn.textContent = '复制邀请链接'; }, 2000);
+        });
+        resultDiv.appendChild(copyBtn);
+        navigator.clipboard?.writeText(newUrl).catch(() => {});
+
+        // 清空输入，准备继续添加
+        nameInput.value = ''; dateInput.value = '';
+        submitBtn.textContent = '继续添加';
+    });
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(submitBtn);
+    modal.appendChild(btnRow);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+    nameInput.focus();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  集体倒计时（URL token 方案）
+// ═══════════════════════════════════════════════════════════════
+const CD_COLORS = ['#6B1010','#2F4F4F','#02639D','#6B4E9B','#854F0B','#0F6E56','#993556'];
+
+// ── token 编解码（Base64 JSON，支持多个）─────────────────────────
+function _cdEncode(list) {
+    try { return btoa(unescape(encodeURIComponent(JSON.stringify(list)))); } catch(_) { return ''; }
+}
+function _cdDecode(str) {
+    try { return JSON.parse(decodeURIComponent(escape(atob(str)))); } catch(_) { return []; }
+}
+
+// ── 从 URL 读取倒计时列表 ────────────────────────────────────────
+function _cdLoad() {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('cd');
+    if (!raw) return [];
+    const list = _cdDecode(raw);
+    if (!Array.isArray(list)) return [];
+    return list.filter(item => item && item.name && item.date);
+}
+
+// ── 更替历日期文字（给定公历 Date → 更替历年/月/日/星期）───────────
+function _cdVDate(gDate) {
+    const gY  = gDate.getFullYear();
+    const vY  = gDate < getShEq(gY) ? gY - 1 : gY;
+    const cEq = getShEq(vY);
+    const off = Math.round((new Date(gDate.getFullYear(), gDate.getMonth(), gDate.getDate()) - cEq) / 86400000);
+    if (off < 0) return null;
+    const m = Math.floor(off / 28) + 1;
+    const d = (off % 28) + 1;
+    const wkIdx = (gDate.getDay() + 6) % 7; // 0=周一
+    return { vY, m, d, wk: WKS[wkIdx], off };
+}
+
+// ── 生成邀请链接（在当前 URL 上替换/添加 cd 参数）───────────────
+function _cdMakeUrl(list) {
+    const u = new URL(window.location.href);
+    u.searchParams.set('cd', _cdEncode(list));
+    return u.toString();
+}
+
+// ── 当前展开的倒计时索引 ──────────────────────────────────────────
+let _cdActiveIdx = 0;
+
+// ── 渲染倒计时卡片（专注模式下，追加到 calView 之后）─────────────
+function _buildCdCard() {
+    const view = DOM.calView;
+    view.querySelectorAll('.cd-card').forEach(el => el.remove());
+
+    const list = _cdLoad();
+    const isAdmin = _cdIsAdmin();
+    if (!list.length && !isAdmin) return;
+    if (!document.body.classList.contains('focus-mode')) return;
+
+    const now = new Date();
+    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    const card = document.createElement('div');
+    card.className = 'cd-card';
+
+    // 标题行：管理员模式下右侧显示 "+ 新建" 按钮
+    const hdrWrap = document.createElement('div');
+    hdrWrap.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;border-bottom:1.5px solid var(--muted);padding-bottom:6px;';
+    const hdr = document.createElement('div');
+    hdr.className = 'cd-card-h';
+    hdr.style.cssText = 'margin-bottom:0;border-bottom:none;padding-bottom:0;flex:1;';
+    hdr.textContent = '倒计时';
+    hdrWrap.appendChild(hdr);
+    if (isAdmin) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'cd-admin-btn';
+        addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
+        addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminModal(); });
+        hdrWrap.appendChild(addBtn);
+    }
+    card.appendChild(hdrWrap);
+
+    // 无条目时（仅管理员可见）
+    if (!list.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'font-size:.62rem;color:#aaa;text-align:center;padding:12px 0;';
+        empty.textContent = '暂无倒计时，点击「新建」创建';
+        card.appendChild(empty);
+        view.appendChild(card);
+        return;
+    }
+
+    list.forEach((item, idx) => {
+        const targetMs = new Date(item.date).getTime();
+        const diffDays = Math.round((targetMs - todayMs) / 86400000);
+        const ended    = diffDays < 0;
+        const color    = CD_COLORS[idx % CD_COLORS.length];
+
+        if (idx > 0) {
+            const div = document.createElement('div');
+            div.className = 'cd-divider';
+            card.appendChild(div);
+        }
+
+        // 列表行
+        const row = document.createElement('div');
+        row.className = 'cd-list-item' + (idx === _cdActiveIdx ? ' cd-active' : '');
+        row.dataset.cdIdx = idx;
+
+        const bar = document.createElement('div');
+        bar.className = 'cd-accent-bar';
+        bar.style.background = ended ? '#ccc' : color;
+
+        const info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        const nm = document.createElement('div');
+        nm.className = 'cd-list-name' + (ended ? ' cd-ended' : '');
+        nm.textContent = item.name;
+        const sub = document.createElement('div');
+        sub.className = 'cd-list-sub';
+        if (ended) {
+            sub.textContent = '已结束';
+        } else {
+            const weeks = Math.floor(diffDays / 7), days = diffDays % 7;
+            sub.textContent = weeks > 0 ? `${weeks} 周${days > 0 ? ' ' + days + ' 天' : ''}整` : `${days} 天`;
+        }
+        info.appendChild(nm);
+        info.appendChild(sub);
+
+        const right = document.createElement('div');
+        if (ended) {
+            const badge = document.createElement('div');
+            badge.className = 'cd-ended-badge';
+            badge.textContent = '已结束';
+            right.appendChild(badge);
+        } else {
+            const dspan = document.createElement('div');
+            dspan.className = 'cd-list-days';
+            dspan.style.color = color;
+            dspan.textContent = diffDays + '天';
+            right.appendChild(dspan);
+        }
+
+        row.appendChild(bar);
+        row.appendChild(info);
+        row.appendChild(right);
+        card.appendChild(row);
+
+        // 展开详情（仅当前激活项）
+        if (idx === _cdActiveIdx && !ended) {
+            const exp = document.createElement('div');
+            exp.className = 'cd-expand';
+
+            const eName = document.createElement('div');
+            eName.className = 'cd-expand-name';
+            eName.textContent = item.name;
+
+            const eDays = document.createElement('div');
+            eDays.className = 'cd-expand-days';
+            const eNum = document.createElement('span');
+            eNum.className = 'cd-expand-num';
+            eNum.style.color = color;
+            eNum.textContent = diffDays;
+            const eUnit = document.createElement('span');
+            eUnit.className = 'cd-expand-unit';
+            eUnit.style.color = color;
+            eUnit.textContent = '天';
+            eDays.appendChild(eNum);
+            eDays.appendChild(eUnit);
+
+            const weeks = Math.floor(diffDays / 7), days2 = diffDays % 7;
+            const eWeeks = document.createElement('div');
+            eWeeks.className = 'cd-expand-weeks';
+            eWeeks.textContent = weeks > 0 ? `${weeks} 周${days2 > 0 ? ' ' + days2 + ' 天' : ''}整` : `${days2} 天`;
+
+            // 进度条（今天到目标，今天=0%）
+            const totalDays = Math.round((targetMs - todayMs) / 86400000);
+            const pct = 0; // 从今天算起，刚开始就是0%
+            const track = document.createElement('div');
+            track.className = 'cd-prog-track';
+            const fill = document.createElement('div');
+            fill.className = 'cd-prog-fill';
+            fill.style.background = color;
+            fill.style.width = Math.max(2, 100 - Math.round(diffDays / totalDays * 100)) + '%';
+            track.appendChild(fill);
+
+            // 双历日期
+            const dateWrap = document.createElement('div');
+            dateWrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:2px;';
+            const tDate = new Date(item.date);
+            const vd = _cdVDate(tDate);
+            if (vd) {
+                const r1 = document.createElement('div'); r1.className = 'cd-date-row';
+                const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
+                const v1 = document.createElement('span'); v1.className = 'cd-date-val';
+                v1.textContent = `${vd.vY}年 ${vd.m}月${vd.d}日 ${vd.wk}`;
+                r1.appendChild(l1); r1.appendChild(v1);
+                dateWrap.appendChild(r1);
+            }
+            const r2 = document.createElement('div'); r2.className = 'cd-date-row';
+            const l2 = document.createElement('span'); l2.className = 'cd-date-lbl'; l2.textContent = '公历';
+            const v2 = document.createElement('span'); v2.className = 'cd-date-val';
+            v2.style.color = '#888';
+            const gWk = WKS[(tDate.getDay() + 6) % 7];
+            v2.textContent = `${tDate.getFullYear()}年${tDate.getMonth()+1}月${tDate.getDate()}日 ${gWk}`;
+            r2.appendChild(l2); r2.appendChild(v2);
+            dateWrap.appendChild(r2);
+
+            // 操作按钮
+            const actRow = document.createElement('div');
+            actRow.className = 'cd-action-row';
+
+            const btnLink = document.createElement('button');
+            btnLink.className = 'cd-action-btn';
+            btnLink.style.flex = '2';
+            btnLink.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2l4 4-4 4M14 6H6a4 4 0 000 8h1" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg>';
+            const lSpan = document.createElement('span');
+            lSpan.style.color = '#6B1010';
+            lSpan.textContent = '邀请链接';
+            btnLink.appendChild(lSpan);
+            btnLink.addEventListener('click', e => {
+                e.stopPropagation();
+                const url = _cdMakeUrl(list);
+                navigator.clipboard?.writeText(url).catch(()=>{});
+                lSpan.textContent = '已复制！';
+                setTimeout(() => { lSpan.textContent = '邀请链接'; }, 2000);
+            });
+
+            const btnQr = document.createElement('button');
+            btnQr.className = 'cd-action-btn';
+            const qSpan = document.createElement('span');
+            qSpan.textContent = '二维码';
+            btnQr.appendChild(qSpan);
+            btnQr.addEventListener('click', e => {
+                e.stopPropagation();
+                _cdShowQr(_cdMakeUrl(list), item.name);
+            });
+
+            actRow.appendChild(btnLink);
+            actRow.appendChild(btnQr);
+
+            exp.appendChild(eName);
+            exp.appendChild(eDays);
+            exp.appendChild(eWeeks);
+            exp.appendChild(track);
+            exp.appendChild(dateWrap);
+            exp.appendChild(actRow);
+            card.appendChild(exp);
+        }
+
+        // 点击切换激活
+        row.addEventListener('click', e => {
+            e.stopPropagation();
+            _cdActiveIdx = idx;
+            _buildCdCard();
+            _cdApplyCellColor();
+        });
+    });
+
+    view.appendChild(card);
+}
+
+// ── 日历格染色（跟随当前激活的倒计时）───────────────────────────
+function _cdApplyCellColor() {
+    // 先清除所有旧染色
+    DOM.calView.querySelectorAll('.cell').forEach(c => {
+        c.classList.remove('cd-range', 'cd-target');
+    });
+
+    const list = _cdLoad();
+    if (!list.length) return;
+    const item = list[_cdActiveIdx];
+    if (!item) return;
+
+    const now = new Date();
+    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const targetMs = new Date(item.date).getTime();
+    if (targetMs <= todayMs) return;
+
+    const allCells = DOM.calView.querySelectorAll('.cell');
+    allCells.forEach(cell => {
+        const tt = cell.dataset.tt;
+        if (!tt) return;
+        try {
+            const { gStr } = JSON.parse(tt);
+            const nums = gStr.match(/\d+/g);
+            if (!nums) return;
+            const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
+            if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
+            else if (cellMs === targetMs) cell.classList.add('cd-target');
+        } catch(_) {}
+    });
+}
+
+// ── 二维码弹窗（使用 QR Server API）────────────────────────────
+function _cdShowQr(url, name) {
+    const overlay = document.createElement('div');
+    overlay.className = 'qr-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'qr-modal';
+
+    const title = document.createElement('div');
+    title.className = 'qr-modal-title';
+    title.textContent = name;
+
+    const img = document.createElement('img');
+    img.width = 180; img.height = 180;
+    img.style.cssText = 'border-radius:8px;border:1px solid var(--border);';
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(url)}`;
+    img.alt = '二维码';
+
+    const urlDiv = document.createElement('div');
+    urlDiv.className = 'qr-modal-url';
+    urlDiv.textContent = url.length > 60 ? url.slice(0, 60) + '…' : url;
+
+    const closeBtn = document.createElement('div');
+    closeBtn.className = 'qr-modal-close';
+    closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', () => overlay.remove());
+
+    modal.appendChild(title);
+    modal.appendChild(img);
+    modal.appendChild(urlDiv);
+    modal.appendChild(closeBtn);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
 const NOMINATIM_HEADERS = { 'Accept-Language': 'zh', 'User-Agent': 'GengTiLi-Calendar/1.0 (https://alaricpolum.github.io/calendar/)' };
 const VC_COND_MAP = {
     'Clear':'晴朗','Partially cloudy':'晴间多云','Overcast':'阴天','Cloudy':'多云',
@@ -2231,8 +2822,10 @@ function _doRender() {
         const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
         _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn);
     }
-    // 渲染完成后重绘专注标记
+    // 渲染完成后重绘专注标记 + 倒计时卡片 + 染色
     _applyFocusMarks();
+    _buildCdCard();
+    _cdApplyCellColor();
 }
 
 // ── 专注模式：保存标记到 localStorage ──────────────────────────────
@@ -2795,6 +3388,8 @@ window.addEventListener('DOMContentLoaded', () => {
     initMoonTable();
     // buildArcTable 异步执行，不阻塞首帧
     setTimeout(buildArcTable, 0);
+    // focusMode 必须在 goHome()/render 之前恢复，_buildCdCard 依赖此状态
+    if (localStorage.getItem('focusMode') === '1') document.body.classList.add('focus-mode');
     setMode('G'); goHome();
 
     // ── 外观设置（读取偏好 + 绑定开关）
@@ -3015,9 +3610,7 @@ window.addEventListener('DOMContentLoaded', () => {
     (function() {
         const titleEl = document.getElementById('engineCardTitle');
         if (!titleEl) return;
-        // 从 localStorage 恢复状态（跨会话保持）
-        let focusOn = localStorage.getItem('focusMode') === '1';
-        if (focusOn) document.body.classList.add('focus-mode');
+        // focusMode 已在初始化开头恢复，此处仅读取当前状态
 
         titleEl.addEventListener('click', e => {
             e.stopPropagation();
@@ -3025,6 +3618,7 @@ window.addEventListener('DOMContentLoaded', () => {
             document.body.classList.toggle('focus-mode', focusOn);
             localStorage.setItem('focusMode', focusOn ? '1' : '0');
             hideTooltip(); // 模式切换时关闭已打开的弹窗
+            _buildCdCard(); _cdApplyCellColor();
             if (focusOn) window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     })();
@@ -3101,6 +3695,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── 启动主循环
     scheduleUpdate();
+
+
 });
 </script>
 </body>
