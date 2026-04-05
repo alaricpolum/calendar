@@ -191,6 +191,46 @@
     .glass-card.dragging { opacity: .4; box-shadow: none; }
     .glass-card.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; }
 
+    /* ── 专注模式（今日隐藏） ─────────────────────────────────── */
+    .focus-mode .hero-space,
+    .focus-mode .hero-placeholder,
+    .focus-mode .status-card,
+    .focus-mode .tool-grid {
+        display: none !important;
+    }
+    .focus-mode .container {
+        padding-top: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        box-sizing: border-box;
+    }
+    .focus-mode #calView {
+        width: 100%;
+    }
+    /* 推演引擎标题点击态 */
+    #engineCardTitle {
+        cursor: pointer;
+        user-select: none;
+        transition: color .2s, opacity .2s;
+        position: relative;
+    }
+    #engineCardTitle:hover { color: var(--accent); }
+    #engineCardTitle::after {
+        content: '☽';
+        font-size: .6rem;
+        margin-left: 5px;
+        opacity: .4;
+        transition: opacity .2s;
+        vertical-align: middle;
+    }
+    #engineCardTitle:hover::after { opacity: 1; }
+    /* 专注模式时标题样式变化 */
+    .focus-mode #engineCardTitle { color: var(--accent); }
+    .focus-mode #engineCardTitle::after { content: '☀'; opacity: .8; }
+
     /* ── 天气卡 ──────────────────────────────────────────── */
     #seasonSyncTag { font-size: .65rem; padding: 2px 8px; letter-spacing: 1px; border-radius: 6px; border: 1px solid var(--border); color: var(--v-blue); background: #FFFDF7; font-weight: bold; white-space: nowrap; transition: opacity .3s; flex-shrink: 0; }
 
@@ -232,8 +272,11 @@
     .day-grid  { display: grid; grid-template-columns: repeat(7,1fr); row-gap: 2px; column-gap: 4px; }
 
     /* 日历格 */
-    .cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px 0; position: relative; transition: all .2s; min-height: 36px; border-radius: 8px; cursor: pointer; overflow: visible; }
+    .cell { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1px 0; position: relative; transition: all .2s; min-height: 36px; border-radius: 8px; cursor: pointer; overflow: visible; user-select: none; -webkit-user-select: none; }
     .cell:hover { background: var(--muted); }
+    .cell.range-start:hover, .cell.range-end:hover { background: rgba(47,79,79,0.25) !important; }
+    .cell.range-highlight:hover { background: rgba(47,79,79,0.12) !important; }
+    .cell.range-preview:hover { background: rgba(47,79,79,0.07) !important; }
     .cell:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     /* outline 不参与盒模型，不撑高格子；outline-offset:-2px 向内收避免超出边界 */
     .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; }
@@ -308,7 +351,118 @@
     .v-year-bg   { position:absolute; font-size:1.1rem; font-weight:900; color:var(--primary); opacity:.1; top:55%; left:50%; transform:translate(-50%,-50%) rotate(-15deg); letter-spacing:-.5px; pointer-events:none; z-index:1; font-family:'Arial Black',sans-serif; transition:.3s; }
     .back-to-today:hover .v-year-bg { color:#fff; opacity:.25; transform:translate(-50%,-50%) rotate(0deg) scale(1.1); }
 
-    /* 五色旗星期着色 */
+    /* ── 功能8：色点标记 ─────────────────────────────────────── */
+    .cell-dot {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 7px; height: 7px; border-radius: 50%;
+        z-index: 10; pointer-events: none;
+    }
+    .cell-dot-red   { background: #B22222; }
+    .cell-dot-blue  { background: #02639D; }
+    .cell-dot-green { background: #4A5D23; }
+
+    /* ── 功能9：区间高亮 ─────────────────────────────────────── */
+    .cell.range-highlight {
+        background: rgba(47,79,79,0.12) !important;
+        outline: none;
+    }
+    .cell.range-start, .cell.range-end {
+        background: rgba(47,79,79,0.25) !important;
+        outline: 2px solid var(--v-blue);
+        outline-offset: -2px;
+    }
+    /* 悬停预览（selecting 状态下鼠标扫过） */
+    .cell.range-preview {
+        background: rgba(47,79,79,0.07) !important;
+        outline: 1px dashed var(--v-blue);
+        outline-offset: -2px;
+    }
+    /* selecting 状态：整个日历格光标变十字 */
+    .range-selecting .cell { cursor: crosshair; }
+    /* 终点天数：显示在格子内数字正上方，居中 */
+    .cell.range-end[data-range-days]::after {
+        content: attr(data-range-days);
+        position: absolute;
+        top: 1px; left: 50%; transform: translateX(-50%);
+        font-size: .44rem; font-weight: 700;
+        color: var(--v-blue);
+        pointer-events: none;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    /* 长按涟漪动画 */
+    @keyframes range-longpress {
+        0%   { box-shadow: 0 0 0 0   rgba(47,79,79,.6); }
+        100% { box-shadow: 0 0 0 10px rgba(47,79,79,0); }
+    }
+    .cell.range-longpress-active {
+        animation: range-longpress 0.45s ease-out forwards !important;
+    }
+
+    /* ── 功能10：五角星 + 倒计时 ─────────────────────────────── */
+    .cell-star {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 2rem; opacity: .15;
+        z-index: 0; pointer-events: none;
+        line-height: 1; color: #B22222;
+    }
+    .cell-countdown {
+        position: absolute;
+        top: 1px; left: 50%; transform: translateX(-50%);
+        font-size: .44rem; font-weight: 700; color: #B22222;
+        pointer-events: none; line-height: 1; white-space: nowrap;
+        z-index: 10;
+    }
+
+    /* ── 弹窗底部操作栏（专注模式） ──────────────────────────── */
+    .tt-focus-bar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 6px 12px 8px; border-top: 1.5px solid var(--muted);
+        gap: 8px;
+    }
+    .tt-dot-btns { display: flex; gap: 6px; align-items: center; }
+    .tt-dot-btns-label {
+        font-size: .62rem; font-weight: 600; color: #aaa;
+        margin-right: 2px; letter-spacing: .5px;
+    }
+    .tt-dot-btn {
+        width: 13px; height: 13px; border-radius: 50%; border: 2px solid transparent;
+        cursor: pointer; transition: transform .15s, border-color .15s, box-shadow .15s;
+        flex-shrink: 0;
+    }
+    .tt-dot-btn:hover { transform: scale(1.2); box-shadow: 0 0 0 2px rgba(0,0,0,.1); }
+    .tt-dot-btn.active { border-color: var(--primary); }
+    .tt-dot-btn-red   { background: #B22222; }
+    .tt-dot-btn-blue  { background: #02639D; }
+    .tt-dot-btn-green { background: #4A5D23; }
+    .tt-star-btn {
+        background: none; border: none; cursor: pointer;
+        font-size: 1.4rem; opacity: .35; transition: opacity .15s, transform .15s;
+        padding: 0; line-height: 1; color: #B22222;
+    }
+    .tt-star-btn:hover { opacity: .85; transform: scale(1.1); }
+    .tt-star-btn.active { opacity: 1; }
+
+    /* 专注模式时「今」按钮加退出提示 */
+    .focus-mode .back-to-today {
+        border-color: var(--v-blue);
+        opacity: 1;
+    }
+    .focus-mode .back-to-today::after {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 1.5px dashed var(--v-blue);
+        opacity: .4;
+        animation: focus-ring-pulse 2s infinite ease-in-out;
+    }
+    @keyframes focus-ring-pulse {
+        0%, 100% { opacity: .4; transform: scale(1); }
+        50%       { opacity: .8; transform: scale(1.06); }
+    }
     .wk-day-0{color:#DF1B12;} .wk-day-1{color:#FFC600;} .wk-day-2{color:#02639D;}
     .wk-day-3{color:#708090;} .wk-day-4{color:#000000;} .wk-day-5{color:#2F4F4F;} .wk-day-6{color:#B22222;}
 
@@ -557,14 +711,14 @@
         <!-- 推演引擎 -->
         <div class="glass-card" data-card-id="engine">
             <div class="card-h" style="display:flex;align-items:center;justify-content:space-between;">
-                <span>推演引擎</span>
+                <span id="engineCardTitle">推演引擎</span>
                 <div id="citySearchWrap" style="display:flex;align-items:center;gap:5px;position:relative;">
                     <input type="text" id="cityIn" placeholder="输入城市…" style="display:none;width:100px;padding:2px 8px;font-size:.72rem;height:22px;border-radius:6px;flex:none;">
                     <button id="btnCitySearch" aria-label="手动查询城市天气" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 7px;cursor:pointer;font-size:.72rem;color:var(--v-blue);font-family:inherit;line-height:1.6;white-space:nowrap;">⌖ 定位</button>
                 </div>
             </div>
             <div style="display:flex;gap:10px;margin-top:5px;">
-                <input type="text" inputmode="numeric" id="yIn" min="1900" max="2200" placeholder="例：2026">
+                <input type="text" inputmode="numeric" id="yIn" min="1900" max="2200" placeholder="例：2026" autocomplete="off">
                 <button class="btn-act" id="btnRender" style="background:var(--accent);">更替历视图</button>
             </div>
             <p id="physInfo" style="font-size:.75rem;color:#7f8c8d;margin-top:8px;margin-bottom:0;">当前进度: --% | 年度天数: --天</p>
@@ -628,6 +782,13 @@ let _weatherLastUpdate = null;
 let _weatherOffline = false;   // 天气离线标志
 let _cachedRenderYear = null;  // 推演年份缓存，避免 update() 每帧读取 DOM
 let _currentLat = null, _currentLon = null, _currentCity = null;
+
+// ── 专注模式数据 ──────────────────────────────────────────────────
+// _focusMarks: { "2026年4月1日": { dot: 'red'|'blue'|'green', star: true } }
+let _focusMarks = {};
+try { _focusMarks = JSON.parse(localStorage.getItem('focusMarks') || '{}'); } catch(_) {}
+// _rangeStart/_rangeEnd: 区间高亮的起止格子 offset（基于当前渲染年份）
+let _rangeStart = null, _rangeEnd = null;
 
 const MOON_PATH_TABLE = [];
 const ARC_TABLE_SIZE  = 2000;
@@ -984,7 +1145,6 @@ function initMoonTable() {
     }
 }
 
-
 // ═══════════════════════════════════════════════════════════════
 //  月相视位置角（Parallactic Angle）
 //  根据观测者经纬度 + UTC时刻，计算地面观测者看到的月亮亮面旋转角
@@ -1063,7 +1223,6 @@ function getMoonParallacticAngle(date, latDeg, lonDeg) {
     );
     return q * 180/Math.PI;
 }
-
 
 // ── 月出月落计算 ─────────────────────────────────────────────
 // 算法：用月亮时角求升落时刻，精度约 ±5 分钟
@@ -1278,6 +1437,7 @@ function _renderForecast(days) {
 // ═══════════════════════════════════════════════════════════════
 function showTooltip(e, data) {
     e.stopPropagation();
+    const isFocus = document.body.classList.contains('focus-mode');
     const tt  = DOM.tooltip;
     const now = new Date();
     const cellId = data.gStr+'_'+data.offset;
@@ -1396,22 +1556,77 @@ function showTooltip(e, data) {
         if (termName) { const _dn=document.createElement('div'); _dn.style.cssText='font-size:.65rem;color:#7f8c8d;font-weight:700;margin-top:2px;letter-spacing:1px;'; _dn.textContent=termName; _d1.appendChild(_dn); }
         tt.appendChild(_d1); tt.appendChild(_makeTtRows());
     }
-    requestAnimationFrame(() => {
-        tt.style.animation='tt-appear .15s ease-out both';
-        tt.style.display='block';
-        // 向上翻转时用真实高度修正 top（之前用估算值 ttH 会有偏差）
-        if (flipY) {
-            const realH = tt.offsetHeight;
-            tt.style.top = Math.max(8, cell.top - realH - GAP) + 'px';
-        }
-    });
-    viewDateOverride = targetDate;
-    DOM.statusCard.classList.add('is-observing');
-    update();
+    // 专注模式下追加操作栏
+    if (isFocus) {
+        const gKey = data.gStr;
+        const bar = document.createElement('div');
+        bar.className = 'tt-focus-bar';
+
+        // 色点按钮组
+        const dotWrap = document.createElement('div');
+        dotWrap.className = 'tt-dot-btns';
+
+        const currentDot = _focusMarks[gKey]?.dot || null;
+        ['red','blue','green'].forEach(color => {
+            const btn = document.createElement('div');
+            btn.className = `tt-dot-btn tt-dot-btn-${color}${currentDot===color?' active':''}`;
+
+            btn.addEventListener('click', e => {
+                e.stopPropagation();
+                if (!_focusMarks[gKey]) _focusMarks[gKey] = {};
+                if (_focusMarks[gKey].dot === color) {
+                    delete _focusMarks[gKey].dot;
+                } else {
+                    _focusMarks[gKey].dot = color;
+                }
+                _saveFocusMarks();
+                _applyFocusMarks();
+                hideTooltip(e);
+            });
+            dotWrap.appendChild(btn);
+        });
+
+        // 五角星按钮
+        const starBtn = document.createElement('button');
+        starBtn.className = 'tt-star-btn' + (_focusMarks[gKey]?.star ? ' active' : '');
+        starBtn.textContent = '★';
+
+        starBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            if (!_focusMarks[gKey]) _focusMarks[gKey] = {};
+            _focusMarks[gKey].star = !_focusMarks[gKey].star;
+            if (!_focusMarks[gKey].star) delete _focusMarks[gKey].star;
+            _saveFocusMarks();
+            _applyFocusMarks();
+            hideTooltip(e);
+        });
+
+        bar.appendChild(dotWrap);
+        bar.appendChild(starBtn);
+        tt.appendChild(bar);
+    }
+    tt.style.animation='tt-appear .15s ease-out both';
+    tt.style.display='block';
+    // 向上翻转时用真实高度修正 top
+    if (flipY) {
+        const realH = tt.offsetHeight;
+        tt.style.top = Math.max(8, cell.top - realH - GAP) + 'px';
+    }
+    if (!isFocus) {
+        viewDateOverride = targetDate;
+        DOM.statusCard.classList.add('is-observing');
+        update();
+    }
 }
 function hideTooltip(e) {
     const tt = DOM.tooltip;
-    if (tt?.style.display==='block') { tt.style.display='none'; tt.setAttribute('data-active-cell',''); }
+    if (tt?.style.display==='block') {
+        tt.style.display='none';
+        tt.setAttribute('data-active-cell','');
+        // 同时退出观测模式（普通模式下弹窗会设置 viewDateOverride）
+        viewDateOverride = null;
+        DOM.statusCard?.classList.remove('is-observing');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1690,6 +1905,7 @@ function _buildCalendar(y) {
             const off = startOff+(d-1);
             const gD  = new Date(cEq.getTime()+off*86400000);
             const cell = document.createElement('div');
+            cell.className = 'cell';
             cell.setAttribute('role','button');
             cell.setAttribute('tabindex','0');
 
@@ -1719,11 +1935,160 @@ function _buildCalendar(y) {
     _lastTotal = total;
     _calBuilt  = true;
 
-    // 事件委托只绑定一次
-    view.addEventListener('click', e=>{
-        const cell=e.target.closest('.cell');
-        if(cell?.dataset.tt){e.stopPropagation();showTooltip(e,JSON.parse(cell.dataset.tt));}
+    // ── 日历格事件委托（只绑定一次）─────────────────────────────────
+    // 桌面端：mousedown 记录起点格，mousemove 超过阈值才激活拖拽
+    //         拖拽期间动态挂载 document.mousemove/mouseup，用完即卸载
+    //         未超阈值的 mouseup 视为纯点击，弹窗正常弹出
+    // 移动端：touchstart 长按计时 → 达阈值激活起点 → touchend 设终点
+
+    let _mouseDownCell = null;
+    const DRAG_THRESHOLD = 4; // px，小于此距离视为点击
+
+    // 拖拽期间的 document 级处理（动态挂载，不常驻）
+    function _onDragMove(e) {
+        if (!_rangeDragActive || _rangeStart === null || _rangeEnd !== null) return;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const cell = el?.closest('.cell');
+        if (!cell || !cell.dataset.tt) { _clearRangePreview(); return; }
+        _applyRangePreview(JSON.parse(cell.dataset.tt).offset);
+    }
+    function _onDragUp(e) {
+        document.removeEventListener('mousemove', _onDragMove);
+        document.removeEventListener('mouseup',   _onDragUp);
+        if (!_rangeDragActive) return;
+        _rangeDragActive = false;
+        _justDragged = true;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const cell = el?.closest('.cell');
+        if (!cell || !cell.dataset.tt) return;
+        const { offset } = JSON.parse(cell.dataset.tt);
+        if (offset !== _rangeStart) _rangeSetEnd(offset);
+    }
+
+    view.addEventListener('mousedown', e => {
+        if (!document.body.classList.contains('focus-mode')) return;
+        const cell = e.target.closest('.cell');
+        if (!cell || !cell.dataset.tt) return;
+        if (_rangeStart !== null && _rangeEnd === null) return;
+        _mouseDownCell = cell;
+        const startX = e.clientX, startY = e.clientY;
+        e.preventDefault();
+
+        function _onPreMove(ev) {
+            const dx = ev.clientX - startX, dy = ev.clientY - startY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if (dist < DRAG_THRESHOLD) return;
+            document.removeEventListener('mousemove', _onPreMove);
+            document.removeEventListener('mouseup',   _onPreCancel);
+            hideTooltip();
+            document.activeElement?.blur();
+            _rangeSetStart(JSON.parse(_mouseDownCell.dataset.tt).offset);
+            _rangeDragActive = true;
+            document.addEventListener('mousemove', _onDragMove);
+            document.addEventListener('mouseup',   _onDragUp);
+        }
+        function _onPreCancel() {
+            document.removeEventListener('mousemove', _onPreMove);
+            document.removeEventListener('mouseup',   _onPreCancel);
+            _mouseDownCell = null;
+        }
+        document.addEventListener('mousemove', _onPreMove);
+        document.addEventListener('mouseup',   _onPreCancel);
     });
+
+    // selecting 状态下鼠标悬停预览（非拖拽时）
+    view.addEventListener('dragstart', e => {
+    });
+    view.addEventListener('mouseover', e => {
+        if (!document.body.classList.contains('focus-mode')) return;
+        if (_rangeDragActive || _rangeStart === null || _rangeEnd !== null) return;
+        const cell = e.target.closest('.cell');
+        if (!cell || !cell.dataset.tt) { _clearRangePreview(); return; }
+        _applyRangePreview(JSON.parse(cell.dataset.tt).offset);
+    });
+    view.addEventListener('mouseleave', () => _clearRangePreview());
+
+    // click：纯点击（未达拖拽阈值）时处理 selecting 终点 / 弹窗
+    view.addEventListener('click', e => {
+        if (_justDragged) { _justDragged = false; e.stopPropagation(); return; }
+        const cell = e.target.closest('.cell');
+        if (!cell) return;
+        const isFocus = document.body.classList.contains('focus-mode');
+        if (isFocus) {
+            if (_rangeStart !== null && _rangeEnd === null) {
+                _handleSelectingClick(cell);
+                e.stopPropagation();
+                return; // selecting 状态：只设终点，不弹窗
+            }
+        }
+        if (cell.dataset.tt) {
+            e.stopPropagation();
+            cell.focus(); // 恢复红框：preventDefault 阻止了自动 focus，手动补回
+            showTooltip(e, JSON.parse(cell.dataset.tt));
+        }
+    });
+
+    // 移动端：touchstart → 开始长按计时
+    view.addEventListener('touchstart', e => {
+        if (!document.body.classList.contains('focus-mode')) return;
+        const cell = e.target.closest('.cell');
+        if (!cell || !cell.dataset.tt) return;
+        const { offset } = JSON.parse(cell.dataset.tt);
+
+        // 若已处于 selecting 状态，touchstart 不启动长按（由 touchend/click 处理终点）
+        if (_rangeStart !== null && _rangeEnd === null) return;
+
+        // active 状态：立即作为新起点（不等长按）
+        if (_rangeEnd !== null) {
+            _rangeSetStart(offset);
+            // 添加长按涟漪反馈
+            cell.classList.add('range-longpress-active');
+            setTimeout(() => cell.classList.remove('range-longpress-active'), 500);
+            return;
+        }
+
+        // idle：长按计时
+        cell.classList.add('range-longpress-active');
+        _rangeLongPressTimer = setTimeout(() => {
+            _rangeLongPressTimer = null;
+            hideTooltip();
+            document.activeElement?.blur();
+            _rangeSetStart(offset);
+            // 轻震动反馈（若设备支持）
+            try { navigator.vibrate?.(30); } catch(_) {}
+        }, RANGE_LONG_PRESS_MS);
+    }, { passive: true });
+
+    // 移动端：touchend → 取消长按计时 / selecting 状态设终点
+    view.addEventListener('touchend', e => {
+        if (_rangeLongPressTimer) {
+            clearTimeout(_rangeLongPressTimer);
+            _rangeLongPressTimer = null;
+        }
+        const cell = e.target.closest('.cell') || e.changedTouches && document.elementFromPoint(
+            e.changedTouches[0].clientX, e.changedTouches[0].clientY
+        )?.closest('.cell');
+        cell?.classList.remove('range-longpress-active');
+
+        if (!document.body.classList.contains('focus-mode')) return;
+        if (_rangeStart !== null && _rangeEnd === null && cell && cell.dataset.tt) {
+            const { offset } = JSON.parse(cell.dataset.tt);
+            if (offset !== _rangeStart) {
+                _rangeSetEnd(offset);
+                e.preventDefault(); // 阻止后续 click 事件（避免弹窗意外触发）
+            }
+        }
+    }, { passive: false });
+
+    // 移动端：touchmove → 取消长按（手指移动说明用户在滚动）
+    view.addEventListener('touchmove', () => {
+        if (_rangeLongPressTimer) {
+            clearTimeout(_rangeLongPressTimer);
+            _rangeLongPressTimer = null;
+        }
+        DOM.calView.querySelectorAll('.range-longpress-active').forEach(c => c.classList.remove('range-longpress-active'));
+    }, { passive: true });
+
     view.addEventListener('keydown', e=>{
         if(e.key==='Enter'||e.key===' '){
             const cell=e.target.closest('.cell');
@@ -1790,8 +2155,12 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
         const isEqToday= isT && off===0;
         const isWang   = off===wangshuOff;
 
-        // className
-        cell.className = `cell ${isEqToday?'is-equinox-today':(isT?'is-today':'')} ${isFM?'is-full-moon':''} ${isWang?'is-wangshu':''}`.trim();
+        // className：精确 add/remove，不覆盖整个 className 以保留 range-* 等运行时 class
+        cell.classList.remove('is-equinox-today','is-today','is-full-moon','is-wangshu');
+        if (isEqToday) cell.classList.add('is-equinox-today');
+        else if (isT)  cell.classList.add('is-today');
+        if (isFM)      cell.classList.add('is-full-moon');
+        if (isWang)    cell.classList.add('is-wangshu');
         cell.setAttribute('aria-label', `${gD.getMonth()+1}月${gD.getDate()}日`);
         cell.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang});
 
@@ -1833,7 +2202,9 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
             const isFM = isFMfn(off);
             const ec  = _extraCache[i];
             if (!ec) continue;
-            ec.className = `cell ${isT?'is-today':''} ${isFM?'is-full-moon':''}`.trim();
+            ec.classList.remove('is-today','is-full-moon');
+            if (isT)  ec.classList.add('is-today');
+            if (isFM) ec.classList.add('is-full-moon');
             ec.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1});
             ec.querySelector('.g-info').textContent = `${gD.getMonth()+1}.${gD.getDate()}`;
         }
@@ -1860,6 +2231,175 @@ function _doRender() {
         const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
         _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn);
     }
+    // 渲染完成后重绘专注标记
+    _applyFocusMarks();
+}
+
+// ── 专注模式：保存标记到 localStorage ──────────────────────────────
+function _saveFocusMarks() {
+    // 清理空对象
+    Object.keys(_focusMarks).forEach(k => {
+        if (!_focusMarks[k].dot && !_focusMarks[k].star) delete _focusMarks[k];
+    });
+    try { localStorage.setItem('focusMarks', JSON.stringify(_focusMarks)); } catch(_) {}
+}
+
+// ── 专注模式：将标记渲染到格子上 ────────────────────────────────────
+function _applyFocusMarks() {
+    if (!_calBuilt) return;
+    const now = new Date();
+    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    // 遍历所有格子，先清除旧标记元素，再按数据重建
+    const allCells = DOM.calView.querySelectorAll('.cell');
+    allCells.forEach(cell => {
+        cell.querySelectorAll('.cell-dot,.cell-star,.cell-countdown').forEach(el => el.remove());
+    });
+
+    Object.entries(_focusMarks).forEach(([gStr, mark]) => {
+        // 找到对应格子：从 dataset.tt 中匹配 gStr
+        const cell = Array.from(allCells).find(c => {
+            try { return JSON.parse(c.dataset.tt||'{}').gStr === gStr; } catch(_) { return false; }
+        });
+        if (!cell) return;
+
+        // 色点
+        if (mark.dot) {
+            const dot = document.createElement('div');
+            dot.className = `cell-dot cell-dot-${mark.dot}`;
+            cell.appendChild(dot);
+        }
+
+        // 五角星 + 倒计时
+        if (mark.star) {
+            const star = document.createElement('div');
+            star.className = 'cell-star';
+            star.textContent = '★';
+            cell.appendChild(star);
+
+            // 计算倒计时
+            const nums = gStr.match(/\d+/g);
+            if (nums) {
+                const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
+                const diffDays = Math.round((cellMs - todayMs) / 86400000);
+                if (diffDays > 0) {
+                    const cd = document.createElement('div');
+                    cd.className = 'cell-countdown';
+                    cd.textContent = `${diffDays}`;
+                    cell.appendChild(cd);
+                } // diffDays===0 时不显示"今日"文字，今日格已有红框标识
+            }
+        }
+    });
+
+    // 刷新区间高亮
+    _applyRangeHighlight();
+}
+
+// ── 专注模式：区间高亮渲染 ───────────────────────────────────────────
+function _applyRangeHighlight() {
+    if (!_calBuilt) return;
+    const allCells = DOM.calView.querySelectorAll('.cell');
+    allCells.forEach(cell => {
+        cell.classList.remove('range-highlight','range-start','range-end');
+        cell.removeAttribute('data-range-days');
+    });
+    if (_rangeStart === null) return;
+    const lo = Math.min(_rangeStart, _rangeEnd ?? _rangeStart);
+    const hi = Math.max(_rangeStart, _rangeEnd ?? _rangeStart);
+    const days = hi - lo + 1;
+    _cellCache.forEach(({ cell }, off) => {
+        if (off === lo && lo === hi) {
+            cell.classList.add('range-start');
+        } else if (off === lo) {
+            cell.classList.add('range-start');
+        } else if (off === hi) {
+            cell.classList.add('range-end');
+            if (_rangeEnd !== null) cell.setAttribute('data-range-days', days);
+        } else if (off > lo && off < hi) {
+            cell.classList.add('range-highlight');
+        }
+    });
+}
+
+// ── 专注模式：区间高亮触发方式 ──────────────────────────────────────
+// 桌面端：鼠标按住格子拖动 → 起点→终点，松开确认
+// 移动端：长按格子（≥400ms）→ 激活起点，再点击另一格设为终点
+// 状态机（两态）：
+//   _rangeStart === null               → idle（无选中）
+//   _rangeStart !== null, _rangeEnd === null → selecting（起点亮，等待终点）
+//   _rangeStart !== null, _rangeEnd !== null → active（区间高亮）
+// 取消：Esc 键 / 点击格子外空白区
+let _rangeDragActive = false; // 是否正处于鼠标拖拽选择中
+let _justDragged    = false;       // 拖拽刚结束，屏蔽紧随其后的 click 事件
+let _rangeLongPressTimer = null; // 长按计时器句柄
+const RANGE_LONG_PRESS_MS = 400; // 长按触发阈值（ms）
+
+// ── 专注模式：激活起点 ──────────────────────────────────────────────
+function _rangeSetStart(offset) {
+    _rangeStart = offset;
+    _rangeEnd   = null;
+    DOM.calView.classList.add('range-selecting');
+    _applyRangeHighlight();
+}
+
+// ── 专注模式：激活终点 ──────────────────────────────────────────────
+function _rangeSetEnd(offset) {
+    if (offset === _rangeStart) return;
+    _rangeEnd = offset;
+    DOM.calView.classList.remove('range-selecting');
+    _clearRangePreview();
+    _applyRangeHighlight();
+    // 验证 DOM 是否真的被修改
+    const lo = Math.min(_rangeStart, _rangeEnd);
+    const hi = Math.max(_rangeStart, _rangeEnd);
+    const startCell = _cellCache[lo]?.cell;
+    const endCell   = _cellCache[hi]?.cell;
+}
+
+// ── 专注模式：重置区间 ──────────────────────────────────────────────
+function _rangeClear() {
+    _rangeStart = null;
+    _rangeEnd   = null;
+    DOM.calView.classList.remove('range-selecting');
+    _clearRangePreview();
+    _applyRangeHighlight();
+}
+
+// ── 专注模式：清除 hover 预览 ────────────────────────────────────────
+function _clearRangePreview() {
+    DOM.calView.querySelectorAll('.range-preview').forEach(c => c.classList.remove('range-preview'));
+}
+
+// ── 专注模式：在 selecting 状态下渲染 hover 预览 ─────────────────────
+function _applyRangePreview(hoverOffset) {
+    const allCells = DOM.calView.querySelectorAll('.cell');
+    allCells.forEach(cell => cell.classList.remove('range-preview'));
+    if (_rangeStart === null || _rangeEnd !== null) return;
+    const lo = Math.min(_rangeStart, hoverOffset);
+    const hi = Math.max(_rangeStart, hoverOffset);
+    _cellCache.forEach(({ cell }, off) => {
+        if (off > lo && off < hi) cell.classList.add('range-preview');
+    });
+}
+
+// ── 专注模式：selecting 状态下点击另一格设为终点 ─────────────────────
+function _handleSelectingClick(cell) {
+    const tt = cell.dataset.tt; if (!tt) return;
+    const { offset } = JSON.parse(tt);
+    if (offset === _rangeStart) {
+        // 再次点击起点 → 取消
+        _rangeClear();
+    } else {
+        _rangeSetEnd(offset);
+    }
+}
+
+// ── 专注模式：active 状态下点击格子（重新选择起点）─────────────────
+function _handleActiveClick(cell) {
+    const tt = cell.dataset.tt; if (!tt) return;
+    const { offset } = JSON.parse(tt);
+    _rangeSetStart(offset);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1882,7 +2422,6 @@ function goHome() {
     DOM.yIn.value=y; _doRender(); update();
     setTimeout(()=>{ _scrollToCell(document.querySelector('.is-today')); }, 50);
 }
-
 
 // ── 滚动到格子并播放高亮（goHome 和 _jumpToCalCell 共用）────────
 function _scrollToCell(el) {
@@ -2266,7 +2805,16 @@ window.addEventListener('DOMContentLoaded', () => {
     new ResizeObserver(_syncHeroPlaceholder).observe(DOM.heroSpace);
 
     // ── 按钮事件（消除内联 onclick）
-    document.getElementById('btnHome').addEventListener('click',  e=>{e.stopPropagation();goHome();});
+    document.getElementById('btnHome').addEventListener('click',  e=>{
+        e.stopPropagation();
+        hideTooltip();
+        if (document.body.classList.contains('focus-mode')) {
+            document.body.classList.remove('focus-mode');
+            localStorage.setItem('focusMode','0');
+            _rangeClear();
+        }
+        goHome();
+    });
     document.getElementById('btnHome').addEventListener('keydown', e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();goHome();}});
     document.getElementById('btnConv').addEventListener('click',   executeConvert);
     document.getElementById('btnRender').addEventListener('click', render);
@@ -2395,7 +2943,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── 键盘快捷键
     window.addEventListener('keydown', e=>{
-        if(e.key==='Escape'){ hideTooltip(e); return; }
+        if(e.key==='Escape'){
+            if (document.body.classList.contains('focus-mode')) {
+                if (_rangeStart !== null) {
+                    // 先退出区间选择，再按一次才退出专注模式
+                    _rangeClear();
+                } else {
+                    document.body.classList.remove('focus-mode');
+                    localStorage.setItem('focusMode','0');
+                    hideTooltip();
+                }
+            }
+            hideTooltip(e); return;
+        }
         if(e.key==='Home'){e.preventDefault();goHome();}
         else if(e.key==='/'&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=='INPUT'){
             e.preventDefault();
@@ -2450,6 +3010,34 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // ── 卡片拖拽排序初始化
     _initCardDrag();
+
+    // ── 专注模式：点击推演引擎标题，今日隐藏 hero / status / tool-grid，仅保留日历
+    (function() {
+        const titleEl = document.getElementById('engineCardTitle');
+        if (!titleEl) return;
+        // 从 localStorage 恢复状态（跨会话保持）
+        let focusOn = localStorage.getItem('focusMode') === '1';
+        if (focusOn) document.body.classList.add('focus-mode');
+
+        titleEl.addEventListener('click', e => {
+            e.stopPropagation();
+            const focusOn = !document.body.classList.contains('focus-mode');
+            document.body.classList.toggle('focus-mode', focusOn);
+            localStorage.setItem('focusMode', focusOn ? '1' : '0');
+            hideTooltip(); // 模式切换时关闭已打开的弹窗
+            if (focusOn) window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    })();
+
+    // ── 专注模式：点击单元格之外的任意区域取消区间高亮
+    document.addEventListener('click', e => {
+        if (!document.body.classList.contains('focus-mode')) return;
+        if (!e.target.closest('.cell')) {
+            if (_rangeStart !== null || _rangeEnd !== null) {
+                _rangeClear();
+            }
+        }
+    });
 
     // ── Page Visibility：标签页隐藏时同时暂停 rAF 和天气定时器
     document.addEventListener('visibilitychange',()=>{
