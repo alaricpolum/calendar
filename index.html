@@ -591,6 +591,7 @@
         border: 1.5px solid #6B1010; padding: 10px 12px 12px;
         display: flex; flex-direction: column; box-sizing: border-box;
     }
+    .cd-card::-webkit-scrollbar { display: none; }
     .cd-card-h {
         font-size: .65rem; font-weight: 700; color: #6B1010;
         letter-spacing: 2px; border-bottom: 1.5px solid var(--muted);
@@ -618,15 +619,25 @@
     .cd-expand-weeks { font-size: .56rem; color: #888; margin-bottom: 6px; }
     .cd-prog-track   { height: 3px; background: var(--muted); border-radius: 2px; margin-bottom: 6px; overflow: hidden; }
     .cd-prog-fill    { height: 100%; border-radius: 2px; transition: width .4s; }
-    .cd-date-row     { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+    .cd-date-row     { display: contents; }
     .cd-date-lbl     { font-size: .48rem; color: #aaa; font-weight: 600; letter-spacing: 1px; }
-    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); }
+    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); text-align: right; }
     .cd-action-row   { display: flex; gap: 5px; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--muted); }
     .cd-action-btn   { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 4px; background: var(--bg); cursor: pointer; transition: background .15s; }
     .cd-action-btn:hover { background: var(--muted); }
     .cd-action-btn span  { font-size: .52rem; font-weight: 700; color: var(--v-blue); white-space: nowrap; }
     .cell.cd-range  { background: rgba(47,79,79,0.12) !important; }
-    .cell.cd-target { background: rgba(47,79,79,0.25) !important; }
+    .cell.cd-target { background: rgba(47,79,79,0.25) !important; outline: 2px solid var(--v-blue); outline-offset: -2px; }
+    .cell.cd-target[data-cd-days]::after {
+        content: attr(data-cd-days);
+        position: absolute;
+        top: 1px; left: 50%; transform: translateX(-50%);
+        font-size: .44rem; font-weight: 700;
+        color: var(--v-blue);
+        pointer-events: none;
+        line-height: 1;
+        white-space: nowrap;
+    }
     .qr-overlay { position: fixed; inset: 0; background: rgba(28,22,14,0.55); display: flex; align-items: center; justify-content: center; z-index: 3000; }
     .qr-modal { background: #F5F2E9; border-radius: 16px; border: 1.5px solid #6B1010; padding: 20px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 260px; width: 90%; font-family: 'Noto Serif SC',serif; }
     .qr-modal-title { font-size: .88rem; font-weight: 700; color: #2C3E50; text-align: center; letter-spacing: 1px; }
@@ -874,189 +885,79 @@ const SEASON_COLORS = { spring:'#5F9EA0', summer:'#CD5C5C', autumn:'#B8860B', wi
 const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治州|地区|盟|地级|县级市|市辖区|自治县|旗|自治旗|街道|办事处|乡|镇|村|居委会|社区|县|区|市/;
 
 // ═══════════════════════════════════════════════════════════════
-//  管理员入口（?admin=9596931 解锁）
+//  倒计时系统 v2 — 服务器存储版
+//  权限：superadmin / admin / viewer（三级）
+//  数据：存储在 Cloudflare KV，通过 Worker API 读写
+//  身份：token 存在 localStorage，首次使用邀请码兑换
 // ═══════════════════════════════════════════════════════════════
-const CD_ADMIN_TOKEN = '9596931';
 
-function _cdIsAdmin() {
-    return new URLSearchParams(window.location.search).get('admin') === CD_ADMIN_TOKEN;
-}
+// ── API 入口（复用已有的 WORKER_BASE 常量）──────────────────────
+const CD_API = WORKER_BASE;
 
-// ── 显示创建弹窗 ──────────────────────────────────────────────
-function _cdShowAdminModal() {
-    document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
-
-    const overlay = document.createElement('div');
-    overlay.className = 'cd-admin-overlay';
-
-    const modal = document.createElement('div');
-    modal.className = 'cd-admin-modal';
-    modal.addEventListener('click', e => e.stopPropagation());
-
-    // 标题
-    const hdr = document.createElement('div');
-    hdr.className = 'cd-admin-modal-h';
-    hdr.textContent = '新建倒计时';
-    modal.appendChild(hdr);
-
-    // 当前已有条目列表
-    const currentList = _cdLoad();
-    if (currentList.length) {
-        const existWrap = document.createElement('div');
-        existWrap.className = 'cd-admin-existing';
-        const existH = document.createElement('div');
-        existH.className = 'cd-admin-existing-h';
-        existH.textContent = '当前条目';
-        existWrap.appendChild(existH);
-
-        currentList.forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.className = 'cd-admin-existing-item';
-            const nm = document.createElement('span');
-            nm.className = 'cd-admin-existing-name';
-            nm.textContent = item.name;
-            const dt = document.createElement('span');
-            dt.className = 'cd-admin-existing-date';
-            dt.textContent = item.date;
-            const del = document.createElement('button');
-            del.className = 'cd-admin-del';
-            del.textContent = '删除';
-            del.addEventListener('click', () => {
-                currentList.splice(idx, 1);
-                const newUrl = _cdMakeUrl(currentList);
-                history.replaceState(null, '', newUrl);
-                _buildCdCard(); _cdApplyCellColor();
-                _cdShowAdminModal();
-            });
-            row.appendChild(nm); row.appendChild(dt); row.appendChild(del);
-            existWrap.appendChild(row);
-        });
-        modal.appendChild(existWrap);
-    }
-
-    // 名称输入
-    const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
-    const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '目标名称';
-    const nameInput = document.createElement('input');
-    nameInput.className = 'cd-admin-input'; nameInput.type = 'text';
-    nameInput.placeholder = '例：Q2版本交付';
-    f1.appendChild(l1); f1.appendChild(nameInput);
-    modal.appendChild(f1);
-
-    // 日期输入（文本框，格式 YYYY-MM-DD）
-    const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
-    const l2wrap = document.createElement('div');
-    l2wrap.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;';
-    const l2 = document.createElement('label'); l2.className = 'cd-admin-label';
-    l2.style.marginBottom = '0';
-    l2.textContent = '目标日期（公历）';
-    const l2hint = document.createElement('span');
-    l2hint.style.cssText = 'font-size:.5rem;color:#aaa;';
-    l2hint.textContent = 'YYYY-MM-DD';
-    l2wrap.appendChild(l2); l2wrap.appendChild(l2hint);
-    const dateInput = document.createElement('input');
-    dateInput.className = 'cd-admin-input'; dateInput.type = 'text';
-    dateInput.placeholder = '例：2026-08-01';
-    dateInput.maxLength = 10;
-    dateInput.addEventListener('input', () => {
-        // 自动插入连字符
-        let v = dateInput.value.replace(/[^\d]/g, '');
-        if (v.length > 4) v = v.slice(0,4) + '-' + v.slice(4);
-        if (v.length > 7) v = v.slice(0,7) + '-' + v.slice(7);
-        dateInput.value = v.slice(0, 10);
-        dateInput.style.borderColor = '';
-    });
-    f2.appendChild(l2wrap); f2.appendChild(dateInput);
-    modal.appendChild(f2);
-
-    // 结果展示区
-    const resultDiv = document.createElement('div');
-    resultDiv.className = 'cd-admin-result';
-    resultDiv.style.display = 'none';
-    modal.appendChild(resultDiv);
-
-    // 按钮行
-    const btnRow = document.createElement('div');
-    btnRow.className = 'cd-admin-btns';
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'cd-admin-cancel';
-    cancelBtn.textContent = '取消';
-    cancelBtn.addEventListener('click', () => overlay.remove());
-
-    const submitBtn = document.createElement('button');
-    submitBtn.className = 'cd-admin-submit';
-    submitBtn.textContent = '生成链接';
-    submitBtn.addEventListener('click', () => {
-        const name = nameInput.value.trim();
-        const date = dateInput.value;
-        if (!name || !date) {
-            nameInput.style.borderColor = name ? '' : '#B22222';
-            dateInput.style.borderColor = date ? '' : '#B22222';
-            return;
-        }
-        // 追加到现有列表
-        const newList = [...currentList, { name, date }];
-        const newUrl = _cdMakeUrl(newList);
-
-        // 更新页面 URL 并刷新日历
-        history.replaceState(null, '', newUrl);
-        _buildCdCard(); _cdApplyCellColor();
-
-        // 显示结果
-        resultDiv.style.display = 'block';
-        resultDiv.textContent = newUrl;
-        const copyBtn = document.createElement('span');
-        copyBtn.className = 'cd-admin-copy';
-        copyBtn.textContent = '复制邀请链接';
-        copyBtn.addEventListener('click', () => {
-            navigator.clipboard?.writeText(newUrl).catch(() => {});
-            copyBtn.textContent = '已复制！';
-            setTimeout(() => { copyBtn.textContent = '复制邀请链接'; }, 2000);
-        });
-        resultDiv.appendChild(copyBtn);
-        navigator.clipboard?.writeText(newUrl).catch(() => {});
-
-        // 清空输入，准备继续添加
-        nameInput.value = ''; dateInput.value = '';
-        submitBtn.textContent = '继续添加';
-    });
-
-    btnRow.appendChild(cancelBtn);
-    btnRow.appendChild(submitBtn);
-    modal.appendChild(btnRow);
-
-    overlay.appendChild(modal);
-    overlay.addEventListener('click', () => overlay.remove());
-    document.body.appendChild(overlay);
-    nameInput.focus();
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-//  集体倒计时（URL token 方案）
-// ═══════════════════════════════════════════════════════════════
+// ── 颜色池 ──────────────────────────────────────────────────────
 const CD_COLORS = ['#6B1010','#2F4F4F','#02639D','#6B4E9B','#854F0B','#0F6E56','#993556'];
 
-// ── token 编解码（Base64 JSON，支持多个）─────────────────────────
-function _cdEncode(list) {
-    try { return btoa(unescape(encodeURIComponent(JSON.stringify(list)))); } catch(_) { return ''; }
-}
-function _cdDecode(str) {
-    try { return JSON.parse(decodeURIComponent(escape(atob(str)))); } catch(_) { return []; }
+// ── 本地状态 ────────────────────────────────────────────────────
+let _cdUser      = null;   // { token, role, name, tags }
+let _cdTasks     = [];     // 从服务器拉取的任务列表
+let _cdActiveIdx = 0;      // 当前显示的任务索引
+
+// ── token 读写 ──────────────────────────────────────────────────
+function _cdGetToken()       { try { return localStorage.getItem('cdToken') || null; } catch(_) { return null; } }
+function _cdSaveToken(tk)    { try { localStorage.setItem('cdToken', tk); } catch(_) {} }
+function _cdClearToken()     { try { localStorage.removeItem('cdToken'); } catch(_) {} }
+
+// ── 图钉置顶 ───────────────────────────────────────────────────
+function _cdGetPinned()      { try { return localStorage.getItem('cdPinned') || null; } catch(_) { return null; } }
+function _cdSetPinned(name)  { try { if(name) localStorage.setItem('cdPinned', name); else localStorage.removeItem('cdPinned'); } catch(_) {} }
+
+// ── 带 token 的 fetch 封装 ──────────────────────────────────────
+async function _cdFetch(path, options = {}) {
+    const token = _cdGetToken();
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(CD_API + path, { ...options, headers });
+    return res;
 }
 
-// ── 从 URL 读取倒计时列表 ────────────────────────────────────────
-function _cdLoad() {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get('cd');
-    if (!raw) return [];
-    const list = _cdDecode(raw);
-    if (!Array.isArray(list)) return [];
-    return list.filter(item => item && item.name && item.date);
+// ── 初始化：验证本地 token，拉取身份和任务 ───────────────────────
+async function _cdInit() {
+    const token = _cdGetToken();
+    if (!token) { _cdUser = null; _cdTasks = []; return; }
+    try {
+        const res = await _cdFetch('/cd/token/info');
+        if (!res.ok) { _cdUser = null; _cdClearToken(); return; }
+        const data = await res.json();
+        _cdUser = { token, role: data.role, name: data.name, tags: data.tags };
+        await _cdFetchTasks();
+    } catch(_) {
+        _cdUser = null;
+    }
 }
 
-// ── 更替历日期文字（给定公历 Date → 更替历年/月/日/星期）───────────
+// ── 拉取任务列表 ────────────────────────────────────────────────
+async function _cdFetchTasks() {
+    if (!_cdUser) return;
+    try {
+        const res = await _cdFetch('/cd/tasks');
+        if (!res.ok) return;
+        const data = await res.json();
+        _cdTasks = data.tasks || [];
+    } catch(_) {}
+}
+
+// ── 置顶排序 ────────────────────────────────────────────────────
+function _cdSortedTasks() {
+    const pinned = _cdGetPinned();
+    if (!pinned || !_cdTasks.length) return _cdTasks;
+    const idx = _cdTasks.findIndex(t => t.name === pinned);
+    if (idx <= 0) return _cdTasks;
+    const sorted = [..._cdTasks];
+    sorted.unshift(sorted.splice(idx, 1)[0]);
+    return sorted;
+}
+
+// ── 更替历日期文字 ──────────────────────────────────────────────
 function _cdVDate(gDate) {
     const gY  = gDate.getFullYear();
     const vY  = gDate < getShEq(gY) ? gY - 1 : gY;
@@ -1065,346 +966,664 @@ function _cdVDate(gDate) {
     if (off < 0) return null;
     const m = Math.floor(off / 28) + 1;
     const d = (off % 28) + 1;
-    const wkIdx = (gDate.getDay() + 6) % 7; // 0=周一
+    const wkIdx = (gDate.getDay() + 6) % 7;
     return { vY, m, d, wk: WKS[wkIdx], off };
 }
 
-// ── 生成邀请链接（在当前 URL 上替换/添加 cd 参数）───────────────
-function _cdMakeUrl(list) {
-    const u = new URL(window.location.href);
-    u.searchParams.set('cd', _cdEncode(list));
-    u.searchParams.delete('admin'); // 邀请链接不携带管理员口令
-    return u.toString();
+// ═══════════════════════════════════════════════════════════════
+//  弹窗：兑换邀请码（首次使用）
+// ═══════════════════════════════════════════════════════════════
+function _cdShowRedeemModal() {
+    document.querySelectorAll('.cd-redeem-overlay').forEach(el => el.remove());
+
+    // 从 URL 读取邀请码（?invite=xxx）
+    const urlInvite = new URLSearchParams(window.location.search).get('invite') || '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay cd-redeem-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    const hdr = document.createElement('div');
+    hdr.className = 'cd-admin-modal-h';
+    hdr.textContent = '加入倒计时';
+    modal.appendChild(hdr);
+
+    // 邀请码输入
+    const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+    const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '邀请码';
+    const codeInput = document.createElement('input');
+    codeInput.className = 'cd-admin-input'; codeInput.type = 'text';
+    codeInput.placeholder = '粘贴邀请码';
+    codeInput.value = urlInvite;
+    f1.appendChild(l1); f1.appendChild(codeInput);
+    modal.appendChild(f1);
+
+    // 名称输入
+    const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '你的名字';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'cd-admin-input'; nameInput.type = 'text';
+    nameInput.placeholder = '例：张三';
+    f2.appendChild(l2); f2.appendChild(nameInput);
+    modal.appendChild(f2);
+
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;margin-bottom:4px;';
+    modal.appendChild(errDiv);
+
+    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '加入';
+    submitBtn.addEventListener('click', async () => {
+        const code = codeInput.value.trim();
+        const name = nameInput.value.trim();
+        if (!code || !name) { errDiv.textContent = '邀请码和名字均为必填'; return; }
+        submitBtn.disabled = true; submitBtn.textContent = '验证中…';
+        try {
+            const res = await fetch(CD_API + '/cd/invite/redeem', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, name }),
+            });
+            const data = await res.json();
+            if (!res.ok) { errDiv.textContent = data.error || '邀请码无效'; submitBtn.disabled = false; submitBtn.textContent = '加入'; return; }
+            _cdSaveToken(data.token);
+            _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
+            // 清除 URL 中的 invite 参数
+            const u = new URL(window.location.href);
+            u.searchParams.delete('invite');
+            history.replaceState(null, '', u.toString());
+            overlay.remove();
+            await _cdFetchTasks();
+            _buildCdCard(); _cdApplyCellColor();
+        } catch(_) {
+            errDiv.textContent = '网络错误，请重试';
+            submitBtn.disabled = false; submitBtn.textContent = '加入';
+        }
+    });
+
+    btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+    modal.appendChild(btnRow);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    (urlInvite ? nameInput : codeInput).focus();
 }
 
-// ── 当前展开的倒计时索引 ──────────────────────────────────────────
-let _cdActiveIdx = 0;
+// ═══════════════════════════════════════════════════════════════
+//  弹窗：新建倒计时任务（admin / superadmin）
+// ═══════════════════════════════════════════════════════════════
+function _parseDateInput(raw) {
+    if (!raw.trim()) return null;
+    const nums = raw.match(/\d+/g);
+    if (!nums) return null;
+    const p = [];
+    nums.forEach(n => n.length === 8 ? p.push(n.slice(0,4), n.slice(4,6), n.slice(6,8)) : p.push(n));
+    if (p.length < 3) return null;
+    const y = +p[0], mo = +p[1], d = +p[2];
+    if (y < 1900 || y > 2200 || mo < 1 || mo > 12) return null;
+    const dim = new Date(y, mo, 0).getDate();
+    if (d < 1 || d > dim) return null;
+    return { y, mo, d, iso: `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}` };
+}
 
-// ── 渲染倒计时卡片（专注模式下，追加到 calView 之后）─────────────
+async function _cdShowAddTaskModal() {
+    if (!_cdUser || _cdUser.role === 'viewer') return;
+    document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
+
+    // 拉取可用标签
+    let availTags = [];
+    try {
+        const res = await _cdFetch('/cd/tags');
+        if (res.ok) { const d = await res.json(); availTags = d.tags || []; }
+    } catch(_) {}
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '新建倒计时';
+    modal.appendChild(hdr);
+
+    // 名称
+    const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+    const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '目标名称';
+    const nameInput = document.createElement('input'); nameInput.className = 'cd-admin-input'; nameInput.type = 'text'; nameInput.placeholder = '例：Q2版本交付';
+    f1.appendChild(l1); f1.appendChild(nameInput); modal.appendChild(f1);
+
+    // 日期
+    const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
+    const l2wrap = document.createElement('div'); l2wrap.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.style.marginBottom = '0'; l2.textContent = '目标日期（公历）';
+    const l2hint = document.createElement('span'); l2hint.style.cssText = 'font-size:.5rem;color:#aaa;'; l2hint.textContent = '支持 20260801 / 2026年8月1日';
+    l2wrap.appendChild(l2); l2wrap.appendChild(l2hint);
+    const dateInput = document.createElement('input'); dateInput.className = 'cd-admin-input'; dateInput.type = 'text'; dateInput.placeholder = '例：20260801';
+    const dateHint = document.createElement('div'); dateHint.style.cssText = 'font-size:.52rem;color:#aaa;margin-top:3px;min-height:1em;';
+    dateInput.addEventListener('input', () => {
+        const parsed = _parseDateInput(dateInput.value);
+        if (!dateInput.value.trim()) dateHint.textContent = '';
+        else if (parsed) { dateHint.style.color = '#4A5D23'; dateHint.textContent = `✓ ${parsed.y}年${parsed.mo}月${parsed.d}日`; }
+        else { dateHint.style.color = '#aaa'; dateHint.textContent = '继续输入…'; }
+    });
+    f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint); modal.appendChild(f2);
+
+    // 标签多选
+    if (availTags.length > 0) {
+        const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
+        const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（至少选一个）';
+        f3.appendChild(l3);
+        const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
+        availTags.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.style.cssText = 'font-size:.62rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;transition:all .15s;color:var(--primary);';
+            btn.textContent = tag;
+            btn.dataset.selected = '0';
+            btn.addEventListener('click', () => {
+                const sel = btn.dataset.selected === '1';
+                btn.dataset.selected = sel ? '0' : '1';
+                btn.style.background = sel ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
+                btn.style.borderColor = sel ? 'var(--border)' : '#6B1010';
+                btn.style.color = sel ? 'var(--primary)' : '#6B1010';
+            });
+            tagWrap.appendChild(btn);
+        });
+        f3.appendChild(tagWrap); modal.appendChild(f3);
+    }
+
+    const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
+    modal.appendChild(errDiv);
+
+    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => { overlay.remove(); });
+    const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '确定';
+    submitBtn.addEventListener('click', async () => {
+        const name = nameInput.value.trim();
+        const parsedDate = _parseDateInput(dateInput.value);
+        const selectedTags = availTags.length > 0
+            ? [...modal.querySelectorAll('[data-selected="1"]')].map(b => b.textContent)
+            : [];
+        if (!name) { errDiv.textContent = '请填写目标名称'; nameInput.style.borderColor = '#B22222'; return; }
+        if (!parsedDate) { errDiv.textContent = '请填写有效的目标日期'; dateInput.style.borderColor = '#B22222'; return; }
+        if (availTags.length > 0 && selectedTags.length === 0) { errDiv.textContent = '请至少选择一个标签'; return; }
+        // 若无可用标签（superadmin 还没建标签），暂时用空数组，Worker 会报错
+        submitBtn.disabled = true; submitBtn.textContent = '保存中…';
+        try {
+            const res = await _cdFetch('/cd/tasks/add', {
+                method: 'POST',
+                body: JSON.stringify({ name, date: parsedDate.iso, tags: selectedTags }),
+            });
+            const data = await res.json();
+            if (!res.ok) { errDiv.textContent = data.error || '保存失败'; submitBtn.disabled = false; submitBtn.textContent = '确定'; return; }
+            await _cdFetchTasks();
+            overlay.remove();
+            _buildCdCard(); _cdApplyCellColor();
+        } catch(_) {
+            errDiv.textContent = '网络错误，请重试';
+            submitBtn.disabled = false; submitBtn.textContent = '确定';
+        }
+    });
+    btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+    modal.appendChild(btnRow);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    nameInput.focus();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  弹窗：管理面板（superadmin 专用）
+//  包含：管理标签、生成邀请码
+// ═══════════════════════════════════════════════════════════════
+async function _cdShowAdminPanel() {
+    document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.style.maxHeight = '80vh';
+    modal.style.overflowY = 'auto';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理面板';
+    modal.appendChild(hdr);
+
+    // ── 标签管理 ──────────────────────────────────────────────
+    const tagSec = document.createElement('div'); tagSec.style.marginBottom = '14px';
+    const tagH = document.createElement('div'); tagH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; tagH.textContent = '标签管理';
+    tagSec.appendChild(tagH);
+
+    // 已有标签列表
+    const tagListWrap = document.createElement('div'); tagListWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;';
+    async function _refreshTagList() {
+        tagListWrap.textContent = '';
+        try {
+            const res = await _cdFetch('/cd/tags');
+            if (!res.ok) return;
+            const { tags } = await res.json();
+            if (!tags.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.58rem;color:#ccc;'; e.textContent = '暂无标签'; tagListWrap.appendChild(e); return; }
+            tags.forEach(tag => {
+                const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:3px;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;';
+                const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--primary);'; lbl.textContent = tag;
+                const del = document.createElement('button'); del.style.cssText = 'font-size:.55rem;color:#aaa;cursor:pointer;border:none;background:none;padding:0 0 0 2px;line-height:1;'; del.textContent = '×';
+                del.addEventListener('click', async () => {
+                    if (!confirm(`删除标签"${tag}"？已分配此标签的用户将无法看到相关任务。`)) return;
+                    await _cdFetch('/cd/tags/delete', { method: 'POST', body: JSON.stringify({ tag }) });
+                    _refreshTagList();
+                });
+                wrap.appendChild(lbl); wrap.appendChild(del); tagListWrap.appendChild(wrap);
+            });
+        } catch(_) {}
+    }
+    await _refreshTagList();
+    tagSec.appendChild(tagListWrap);
+
+    // 新增标签
+    const newTagRow = document.createElement('div'); newTagRow.style.cssText = 'display:flex;gap:6px;';
+    const newTagInput = document.createElement('input'); newTagInput.className = 'cd-admin-input'; newTagInput.type = 'text'; newTagInput.placeholder = '新标签名'; newTagInput.style.cssText += 'flex:1;height:30px;padding:4px 8px;font-size:.72rem;';
+    const addTagBtn = document.createElement('button'); addTagBtn.className = 'cd-admin-submit'; addTagBtn.style.cssText = 'padding:4px 10px;font-size:.68rem;flex-shrink:0;'; addTagBtn.textContent = '添加';
+    addTagBtn.addEventListener('click', async () => {
+        const tag = newTagInput.value.trim();
+        if (!tag) return;
+        const res = await _cdFetch('/cd/tags/add', { method: 'POST', body: JSON.stringify({ tag }) });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error); return; }
+        newTagInput.value = '';
+        _refreshTagList();
+    });
+    newTagInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTagBtn.click(); });
+    newTagRow.appendChild(newTagInput); newTagRow.appendChild(addTagBtn);
+    tagSec.appendChild(newTagRow);
+    modal.appendChild(tagSec);
+
+    // ── 分隔线 ──────────────────────────────────────────────
+    const div1 = document.createElement('div'); div1.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div1);
+
+    // ── 邀请码生成 ─────────────────────────────────────────
+    const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
+    const invH = document.createElement('div'); invH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:8px;'; invH.textContent = '生成邀请码';
+    invSec.appendChild(invH);
+
+    // 角色选择
+    const roleRow = document.createElement('div'); roleRow.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
+    let _selRole = 'viewer';
+    ['viewer','admin'].forEach(r => {
+        const btn = document.createElement('button');
+        btn.style.cssText = `flex:1;padding:5px;border-radius:8px;font-size:.65rem;font-weight:700;cursor:pointer;transition:all .15s;border:1px solid ${r==='viewer'?'#6B1010':'var(--border)'};background:${r==='viewer'?'rgba(107,16,16,0.08)':'var(--muted)'};color:${r==='viewer'?'#6B1010':'var(--primary)'};`;
+        btn.textContent = r === 'viewer' ? '只读 viewer' : '管理员 admin';
+        btn.dataset.role = r;
+        btn.addEventListener('click', () => {
+            _selRole = r;
+            roleRow.querySelectorAll('button').forEach(b => {
+                const active = b.dataset.role === r;
+                b.style.borderColor = active ? '#6B1010' : 'var(--border)';
+                b.style.background  = active ? 'rgba(107,16,16,0.08)' : 'var(--muted)';
+                b.style.color       = active ? '#6B1010' : 'var(--primary)';
+            });
+        });
+        roleRow.appendChild(btn);
+    });
+    invSec.appendChild(roleRow);
+
+    // 标签多选（从已有标签里选）
+    const invTagLabel = document.createElement('div'); invTagLabel.style.cssText = 'font-size:.56rem;color:#888;margin-bottom:5px;font-weight:600;letter-spacing:.5px;'; invTagLabel.textContent = '分配标签（可见范围）';
+    invSec.appendChild(invTagLabel);
+    const invTagWrap = document.createElement('div'); invTagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;min-height:24px;';
+    async function _loadInvTags() {
+        invTagWrap.textContent = '';
+        try {
+            const res = await _cdFetch('/cd/tags');
+            if (!res.ok) return;
+            const { tags } = await res.json();
+            if (!tags.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '请先添加标签'; invTagWrap.appendChild(e); return; }
+            tags.forEach(tag => {
+                const btn = document.createElement('button');
+                btn.style.cssText = 'font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;color:var(--primary);transition:all .15s;';
+                btn.textContent = tag; btn.dataset.selected = '0';
+                btn.addEventListener('click', () => {
+                    const s = btn.dataset.selected === '1';
+                    btn.dataset.selected = s ? '0' : '1';
+                    btn.style.background  = s ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
+                    btn.style.borderColor = s ? 'var(--border)' : '#6B1010';
+                    btn.style.color       = s ? 'var(--primary)' : '#6B1010';
+                });
+                invTagWrap.appendChild(btn);
+            });
+        } catch(_) {}
+    }
+    await _loadInvTags();
+    invSec.appendChild(invTagWrap);
+
+    const invResultDiv = document.createElement('div'); invResultDiv.className = 'cd-admin-result'; invResultDiv.style.display = 'none';
+    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-bottom:6px;'; genBtn.textContent = '生成邀请码';
+    genBtn.addEventListener('click', async () => {
+        const selectedTags = [...invTagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
+        if (!selectedTags.length) { alert('请至少选择一个标签'); return; }
+        genBtn.disabled = true; genBtn.textContent = '生成中…';
+        try {
+            const res = await _cdFetch('/cd/invite/create', {
+                method: 'POST',
+                body: JSON.stringify({ role: _selRole, tags: selectedTags }),
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.error); genBtn.disabled = false; genBtn.textContent = '生成邀请码'; return; }
+            // 生成邀请链接（含邀请码）
+            const u = new URL(window.location.href);
+            u.searchParams.set('invite', data.code);
+            const inviteUrl = u.toString();
+            invResultDiv.style.display = 'block';
+            invResultDiv.textContent = '';
+            const urlSpan = document.createElement('span'); urlSpan.style.cssText = 'word-break:break-all;font-size:.54rem;color:var(--primary);display:block;margin-bottom:5px;'; urlSpan.textContent = inviteUrl;
+            const copyBtn = document.createElement('button'); copyBtn.className = 'cd-admin-copy'; copyBtn.style.marginTop = '4px'; copyBtn.textContent = '点击复制链接';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard?.writeText(inviteUrl).catch(() => {});
+                copyBtn.textContent = '已复制！';
+                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
+            });
+            const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.5rem;color:#aaa;margin-top:4px;'; expNote.textContent = '邀请码 24 小时内有效，用完即失效';
+            invResultDiv.appendChild(urlSpan); invResultDiv.appendChild(copyBtn); invResultDiv.appendChild(expNote);
+        } catch(_) {
+            alert('网络错误');
+        }
+        genBtn.disabled = false; genBtn.textContent = '生成邀请码';
+    });
+    invSec.appendChild(genBtn);
+    invSec.appendChild(invResultDiv);
+    modal.appendChild(invSec);
+
+    // ── 关闭按钮 ──────────────────────────────────────────
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'cd-admin-cancel'; closeBtn.style.cssText = 'width:100%;margin-top:6px;';
+    closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    modal.appendChild(closeBtn);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  渲染倒计时卡片
+// ═══════════════════════════════════════════════════════════════
 function _buildCdCard() {
     const view = DOM.calView;
     view.querySelectorAll('.cd-card').forEach(el => el.remove());
 
-    const list = _cdLoad();
-    const isAdmin = _cdIsAdmin();
-    if (!list.length && !isAdmin) return;
+    // 专注模式才渲染
     if (!document.body.classList.contains('focus-mode')) return;
+    // 未登录 且 没有任务 → 不渲染（避免空卡）
+    if (!_cdUser && !_cdTasks.length) return;
 
-    const now = new Date();
+    const list  = _cdSortedTasks();
+    const total = list.length;
+    const isAdmin = _cdUser && (_cdUser.role === 'admin' || _cdUser.role === 'superadmin');
+    const isSA    = _cdUser && _cdUser.role === 'superadmin';
+
+    const now     = new Date();
     const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
     const card = document.createElement('div');
     card.className = 'cd-card';
 
-    // 标题行：管理员模式下右侧显示 "+ 新建" 按钮
+    // ── 标题行 ──────────────────────────────────────────────────
     const hdrWrap = document.createElement('div');
-    hdrWrap.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;border-bottom:1.5px solid var(--muted);padding-bottom:6px;';
+    hdrWrap.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;border-bottom:1.5px solid var(--muted);padding-bottom:6px;gap:5px;';
     const hdr = document.createElement('div');
     hdr.className = 'cd-card-h';
     hdr.style.cssText = 'margin-bottom:0;border-bottom:none;padding-bottom:0;flex:1;';
     hdr.textContent = '倒计时';
     hdrWrap.appendChild(hdr);
+
+    // 未登录提示按钮
+    if (!_cdUser) {
+        const loginBtn = document.createElement('button');
+        loginBtn.className = 'cd-admin-btn';
+        loginBtn.textContent = '用邀请码加入';
+        loginBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowRedeemModal(); });
+        hdrWrap.appendChild(loginBtn);
+        card.appendChild(hdrWrap);
+        const tip = document.createElement('div');
+        tip.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#ccc;padding:20px 0;';
+        tip.textContent = '使用邀请码加入后可查看倒计时';
+        card.appendChild(tip);
+        view.appendChild(card);
+        _applyCardHeight(card, view);
+        return;
+    }
+
+    // admin / SA 操作按钮
     if (isAdmin) {
         const addBtn = document.createElement('button');
         addBtn.className = 'cd-admin-btn';
         addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
-        addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminModal(); });
+        addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAddTaskModal(); });
         hdrWrap.appendChild(addBtn);
+    }
+    if (isSA) {
+        const mgBtn = document.createElement('button');
+        mgBtn.className = 'cd-admin-btn';
+        mgBtn.style.marginLeft = '0';
+        mgBtn.textContent = '管理';
+        mgBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminPanel(); });
+        hdrWrap.appendChild(mgBtn);
     }
     card.appendChild(hdrWrap);
 
-    // 无条目时（仅管理员可见）
-    if (!list.length) {
-        card.style.alignSelf = 'start'; // 不被 grid 拉伸至月份卡片高度
+    // ── 无任务空状态 ─────────────────────────────────────────────
+    if (!total) {
         const empty = document.createElement('div');
-        empty.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0 4px;';
-        const icon = document.createElement('div');
-        icon.style.cssText = 'font-size:1.4rem;opacity:.18;color:#6B1010;line-height:1;';
-        icon.textContent = '⏳';
-        const txt = document.createElement('div');
-        txt.style.cssText = 'font-size:.6rem;color:#aaa;text-align:center;line-height:1.6;';
-        txt.textContent = '暂无倒计时';
-        const sub = document.createElement('div');
-        sub.style.cssText = 'font-size:.54rem;color:#ccc;text-align:center;';
-        sub.textContent = '点击右上角「新建」创建';
-        empty.appendChild(icon);
-        empty.appendChild(txt);
-        empty.appendChild(sub);
+        empty.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:16px 0;';
+        const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#6B1010;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
+        const txt = document.createElement('div'); txt.style.cssText = 'font-size:.6rem;color:#aaa;text-align:center;margin-bottom:4px;'; txt.textContent = '暂无倒计时';
+        const sub = document.createElement('div'); sub.style.cssText = 'font-size:.54rem;color:#ccc;text-align:center;'; sub.textContent = isAdmin ? '点击右上角「新建」创建' : '管理员尚未添加任务';
+        empty.appendChild(icon); empty.appendChild(txt); empty.appendChild(sub);
         card.appendChild(empty);
         view.appendChild(card);
+        _applyCardHeight(card, view);
         return;
     }
 
-    list.forEach((item, idx) => {
-        const targetMs = new Date(item.date).getTime();
-        const diffDays = Math.round((targetMs - todayMs) / 86400000);
-        const ended    = diffDays < 0;
-        const color    = CD_COLORS[idx % CD_COLORS.length];
+    // ── 边界保护 ─────────────────────────────────────────────────
+    if (_cdActiveIdx >= total) _cdActiveIdx = 0;
+    const item    = list[_cdActiveIdx];
+    const color   = CD_COLORS[_cdActiveIdx % CD_COLORS.length];
+    const _dp2    = item.date.split('-').map(Number);
+    const targetMs = new Date(_dp2[0], _dp2[1]-1, _dp2[2]).getTime();
+    const diffDays = Math.round((targetMs - todayMs) / 86400000);
+    const ended    = diffDays < 0;
+    const isPinned = _cdGetPinned() === item.name;
 
-        if (idx > 0) {
-            const div = document.createElement('div');
-            div.className = 'cd-divider';
-            card.appendChild(div);
+    // ── 导航行（箭头 + 名称 + 图钉）────────────────────────────
+    const navRow = document.createElement('div');
+    navRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:8px;';
+    const btnPrev = document.createElement('button');
+    btnPrev.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;opacity:${total>1?1:.25};`;
+    btnPrev.innerHTML = '<svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M5 1.5L2.5 4 5 6.5" stroke="#2C3E50" stroke-width="1.3" stroke-linecap="round"/></svg>';
+    btnPrev.disabled = total <= 1;
+    btnPrev.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = (_cdActiveIdx - 1 + total) % total; _buildCdCard(); _cdApplyCellColor(); });
+    const navName = document.createElement('div');
+    navName.style.cssText = 'flex:1;text-align:center;font-size:.82rem;font-weight:700;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    navName.textContent = item.name;
+    const pinBtn = document.createElement('button');
+    pinBtn.title = isPinned ? '取消置顶' : '置顶';
+    pinBtn.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid ${isPinned?'#6B1010':'var(--border)'};background:${isPinned?'rgba(107,16,16,0.08)':'var(--muted)'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;`;
+    pinBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M9.5 1.5L14.5 6.5L11 10L9 8L5.5 11.5L4.5 10.5L8 7L6 5L9.5 1.5Z" fill="${isPinned?'#6B1010':'#aaa'}"/><path d="M1.5 14.5L5.5 10.5" stroke="${isPinned?'#6B1010':'#aaa'}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    pinBtn.addEventListener('click', e => { e.stopPropagation(); _cdSetPinned(isPinned ? null : item.name); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor(); });
+    const btnNext = document.createElement('button');
+    btnNext.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;opacity:${total>1?1:.25};`;
+    btnNext.innerHTML = '<svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M3 1.5L5.5 4 3 6.5" stroke="#2C3E50" stroke-width="1.3" stroke-linecap="round"/></svg>';
+    btnNext.disabled = total <= 1;
+    btnNext.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = (_cdActiveIdx + 1) % total; _buildCdCard(); _cdApplyCellColor(); });
+    navRow.appendChild(btnPrev); navRow.appendChild(navName); navRow.appendChild(pinBtn); navRow.appendChild(btnNext);
+    card.appendChild(navRow);
+
+    // 圆点指示器
+    if (total > 1) {
+        const dots = document.createElement('div'); dots.style.cssText = 'display:flex;gap:5px;justify-content:center;margin-bottom:8px;';
+        for (let i = 0; i < total; i++) {
+            const dot = document.createElement('div');
+            const isActive = i === _cdActiveIdx;
+            dot.style.cssText = `width:${isActive?14:5}px;height:5px;border-radius:3px;background:${isActive?color:'#DCD3BC'};cursor:pointer;transition:all .25s;`;
+            dot.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = i; _buildCdCard(); _cdApplyCellColor(); });
+            dots.appendChild(dot);
         }
+        card.appendChild(dots);
+    }
 
-        // 列表行
-        const row = document.createElement('div');
-        row.className = 'cd-list-item' + (idx === _cdActiveIdx ? ' cd-active' : '');
-        row.dataset.cdIdx = idx;
-
-        const bar = document.createElement('div');
-        bar.className = 'cd-accent-bar';
-        bar.style.background = ended ? '#ccc' : color;
-
-        const info = document.createElement('div');
-        info.style.cssText = 'flex:1;min-width:0;';
-        const nm = document.createElement('div');
-        nm.className = 'cd-list-name' + (ended ? ' cd-ended' : '');
-        nm.textContent = item.name;
-        const sub = document.createElement('div');
-        sub.className = 'cd-list-sub';
-        if (ended) {
-            sub.textContent = '已结束';
-        } else {
-            const weeks = Math.floor(diffDays / 7), days = diffDays % 7;
-            sub.textContent = weeks > 0 ? `${weeks} 周${days > 0 ? ' ' + days + ' 天' : ''}整` : `${days} 天`;
-        }
-        info.appendChild(nm);
-        info.appendChild(sub);
-
-        const right = document.createElement('div');
-        if (ended) {
-            const badge = document.createElement('div');
-            badge.className = 'cd-ended-badge';
-            badge.textContent = '已结束';
-            right.appendChild(badge);
-        } else {
-            const dspan = document.createElement('div');
-            dspan.className = 'cd-list-days';
-            dspan.style.color = color;
-            dspan.textContent = diffDays + '天';
-            right.appendChild(dspan);
-        }
-
-        row.appendChild(bar);
-        row.appendChild(info);
-        row.appendChild(right);
-        card.appendChild(row);
-
-        // 展开详情（仅当前激活项）
-        if (idx === _cdActiveIdx && !ended) {
-            const exp = document.createElement('div');
-            exp.className = 'cd-expand';
-
-            const eName = document.createElement('div');
-            eName.className = 'cd-expand-name';
-            eName.textContent = item.name;
-
-            const eDays = document.createElement('div');
-            eDays.className = 'cd-expand-days';
-            const eNum = document.createElement('span');
-            eNum.className = 'cd-expand-num';
-            eNum.style.color = color;
-            eNum.textContent = diffDays;
-            const eUnit = document.createElement('span');
-            eUnit.className = 'cd-expand-unit';
-            eUnit.style.color = color;
-            eUnit.textContent = '天';
-            eDays.appendChild(eNum);
-            eDays.appendChild(eUnit);
-
-            const weeks = Math.floor(diffDays / 7), days2 = diffDays % 7;
-            const eWeeks = document.createElement('div');
-            eWeeks.className = 'cd-expand-weeks';
-            eWeeks.textContent = weeks > 0 ? `${weeks} 周${days2 > 0 ? ' ' + days2 + ' 天' : ''}整` : `${days2} 天`;
-
-            // 进度条（今天到目标，今天=0%）
-            const totalDays = Math.round((targetMs - todayMs) / 86400000);
-            const pct = 0; // 从今天算起，刚开始就是0%
-            const track = document.createElement('div');
-            track.className = 'cd-prog-track';
-            const fill = document.createElement('div');
-            fill.className = 'cd-prog-fill';
-            fill.style.background = color;
-            fill.style.width = Math.max(2, 100 - Math.round(diffDays / totalDays * 100)) + '%';
-            track.appendChild(fill);
-
-            // 双历日期
-            const dateWrap = document.createElement('div');
-            dateWrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:2px;';
-            const tDate = new Date(item.date);
-            const vd = _cdVDate(tDate);
-            if (vd) {
-                const r1 = document.createElement('div'); r1.className = 'cd-date-row';
-                const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
-                const v1 = document.createElement('span'); v1.className = 'cd-date-val';
-                v1.textContent = `${vd.vY}年 ${vd.m}月${vd.d}日 ${vd.wk}`;
-                r1.appendChild(l1); r1.appendChild(v1);
-                dateWrap.appendChild(r1);
-            }
-            const r2 = document.createElement('div'); r2.className = 'cd-date-row';
-            const l2 = document.createElement('span'); l2.className = 'cd-date-lbl'; l2.textContent = '公历';
-            const v2 = document.createElement('span'); v2.className = 'cd-date-val';
-            v2.style.color = '#888';
-            const gWk = WKS[(tDate.getDay() + 6) % 7];
-            v2.textContent = `${tDate.getFullYear()}年${tDate.getMonth()+1}月${tDate.getDate()}日 ${gWk}`;
-            r2.appendChild(l2); r2.appendChild(v2);
-            dateWrap.appendChild(r2);
-
-            // 操作按钮
-            const actRow = document.createElement('div');
-            actRow.className = 'cd-action-row';
-
-            const btnLink = document.createElement('button');
-            btnLink.className = 'cd-action-btn';
-            btnLink.style.flex = '2';
-            btnLink.innerHTML = '<svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M10 2l4 4-4 4M14 6H6a4 4 0 000 8h1" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg>';
-            const lSpan = document.createElement('span');
-            lSpan.style.color = '#6B1010';
-            lSpan.textContent = '邀请链接';
-            btnLink.appendChild(lSpan);
-            btnLink.addEventListener('click', e => {
+    // 已结束
+    if (ended) {
+        const endedDiv = document.createElement('div');
+        endedDiv.style.cssText = 'text-align:center;padding:16px 0 8px;font-size:.72rem;color:#aaa;font-weight:700;letter-spacing:1px;';
+        endedDiv.textContent = '已结束';
+        // admin 可删除
+        if (isAdmin) {
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:3px 10px;background:var(--muted);';
+            delBtn.textContent = '删除此项';
+            delBtn.addEventListener('click', async e => {
                 e.stopPropagation();
-                const url = _cdMakeUrl(list);
-                navigator.clipboard?.writeText(url).catch(()=>{});
-                lSpan.textContent = '已复制！';
-                setTimeout(() => { lSpan.textContent = '邀请链接'; }, 2000);
+                if (!confirm(`删除"${item.name}"？`)) return;
+                await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
+                await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
             });
-
-            const btnQr = document.createElement('button');
-            btnQr.className = 'cd-action-btn';
-            const qSpan = document.createElement('span');
-            qSpan.textContent = '二维码';
-            btnQr.appendChild(qSpan);
-            btnQr.addEventListener('click', e => {
-                e.stopPropagation();
-                _cdShowQr(_cdMakeUrl(list), item.name);
-            });
-
-            actRow.appendChild(btnLink);
-            actRow.appendChild(btnQr);
-
-            exp.appendChild(eName);
-            exp.appendChild(eDays);
-            exp.appendChild(eWeeks);
-            exp.appendChild(track);
-            exp.appendChild(dateWrap);
-            exp.appendChild(actRow);
-            card.appendChild(exp);
+            endedDiv.appendChild(delBtn);
         }
+        card.appendChild(endedDiv);
+        view.appendChild(card);
+        _applyCardHeight(card, view);
+        return;
+    }
 
-        // 点击切换激活
-        row.addEventListener('click', e => {
-            e.stopPropagation();
-            _cdActiveIdx = idx;
-            _buildCdCard();
-            _cdApplyCellColor();
+    // ── 双指标：剩余天数 + 剩余完整周 ──────────────────────────
+    const weeks = Math.floor(diffDays / 7), days2 = diffDays % 7;
+    const metricGrid = document.createElement('div');
+    metricGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px;';
+    const mLeft = document.createElement('div'); mLeft.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
+    const mLeftLbl = document.createElement('div'); mLeftLbl.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mLeftLbl.textContent = '剩余天数';
+    const mLeftVal = document.createElement('div'); mLeftVal.style.cssText = `font-size:1.5rem;font-weight:800;line-height:1.1;color:${color};`; mLeftVal.textContent = diffDays;
+    mLeft.appendChild(mLeftLbl); mLeft.appendChild(mLeftVal);
+    const mRight = document.createElement('div'); mRight.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
+    const mRightLbl = document.createElement('div'); mRightLbl.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mRightLbl.textContent = '剩余完整周';
+    const mRightVal = document.createElement('div'); mRightVal.style.cssText = 'font-size:1.1rem;font-weight:800;line-height:1.2;color:var(--primary);'; mRightVal.textContent = weeks > 0 ? `${weeks} 周${days2 > 0 ? ' ' + days2 + ' 天' : ''}` : `${days2} 天`;
+    mRight.appendChild(mRightLbl); mRight.appendChild(mRightVal);
+    metricGrid.appendChild(mLeft); metricGrid.appendChild(mRight);
+    card.appendChild(metricGrid);
+
+    // ── 进度条 ──────────────────────────────────────────────────
+    const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
+    let totalDays = parseInt(localStorage.getItem(_cdKey) || '0');
+    if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
+    const passedDays = totalDays - diffDays;
+    const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
+    const progWrap = document.createElement('div'); progWrap.style.cssText = 'margin-bottom:7px;';
+    const progLabels = document.createElement('div'); progLabels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
+    const progL = document.createElement('span'); progL.textContent = `已过 ${passedDays} 天`;
+    const progR = document.createElement('span'); progR.textContent = `共 ${totalDays} 天`;
+    progLabels.appendChild(progL); progLabels.appendChild(progR);
+    const track = document.createElement('div'); track.className = 'cd-prog-track';
+    const fill = document.createElement('div'); fill.className = 'cd-prog-fill'; fill.style.background = color; fill.style.width = pct + '%';
+    track.appendChild(fill); progWrap.appendChild(progLabels); progWrap.appendChild(track);
+    card.appendChild(progWrap);
+
+    // ── 双历日期 ────────────────────────────────────────────────
+    const dateWrap = document.createElement('div');
+    dateWrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:3em 1fr;row-gap:2px;align-items:baseline;';
+    const tDate = new Date(item.date + 'T12:00:00');
+    const vd = _cdVDate(tDate);
+    if (vd) {
+        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
+        const l1e = document.createElement('span'); l1e.className = 'cd-date-lbl'; l1e.textContent = '更替历';
+        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${vd.m}月${vd.d}日 ${vd.wk}`;
+        r1.appendChild(l1e); r1.appendChild(v1); dateWrap.appendChild(r1);
+    }
+    const r2 = document.createElement('div'); r2.className = 'cd-date-row';
+    const l2el = document.createElement('span'); l2el.className = 'cd-date-lbl'; l2el.textContent = '公历';
+    const v2 = document.createElement('span'); v2.className = 'cd-date-val';
+    const gWk = WKS[(tDate.getDay() + 6) % 7];
+    v2.textContent = `${tDate.getFullYear()}年${tDate.getMonth()+1}月${tDate.getDate()}日 ${gWk}`;
+    r2.appendChild(l2el); r2.appendChild(v2); dateWrap.appendChild(r2);
+    card.appendChild(dateWrap);
+
+    // ── 操作行：标签显示 + 删除（admin） ────────────────────────
+    const actRow = document.createElement('div');
+    actRow.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:4px;border-top:1px solid var(--muted);padding-top:6px;margin-top:0;';
+    if (Array.isArray(item.tags) && item.tags.length) {
+        item.tags.forEach(tag => {
+            const t = document.createElement('span');
+            t.style.cssText = 'font-size:.5rem;color:#7f8c8d;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;';
+            t.textContent = tag; actRow.appendChild(t);
         });
-    });
+    }
+    if (isAdmin) {
+        const delBtn = document.createElement('button');
+        delBtn.style.cssText = 'margin-left:auto;font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;';
+        delBtn.textContent = '删除';
+        delBtn.addEventListener('click', async e => {
+            e.stopPropagation();
+            if (!confirm(`删除"${item.name}"？`)) return;
+            await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
+            await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+        });
+        actRow.appendChild(delBtn);
+    }
+    card.appendChild(actRow);
 
     view.appendChild(card);
+    _applyCardHeight(card, view);
 }
 
-// ── 日历格染色（跟随当前激活的倒计时）───────────────────────────
-function _cdApplyCellColor() {
-    // 先清除所有旧染色
-    DOM.calView.querySelectorAll('.cell').forEach(c => {
-        c.classList.remove('cd-range', 'cd-target');
-    });
+// ── 倒计时卡高度同步 ────────────────────────────────────────────
+let _cdResizeObserver = null;
+function _applyCardHeight(card, view) {
+    const _sync = () => { card.style.maxHeight = ''; card.style.alignSelf = ''; };
+    requestAnimationFrame(_sync);
+    if (_cdResizeObserver) { _cdResizeObserver.disconnect(); _cdResizeObserver = null; }
+    if (window.ResizeObserver) {
+        _cdResizeObserver = new ResizeObserver(_sync);
+        const allBoxes = [...view.querySelectorAll('.month-box')];
+        const ref = allBoxes[allBoxes.length - 1];
+        if (ref) _cdResizeObserver.observe(ref);
+    }
+}
 
-    const list = _cdLoad();
+// ── 日历格染色（跟随当前激活的倒计时）──────────────────────────
+function _cdApplyCellColor() {
+    DOM.calView.querySelectorAll('.cell').forEach(c => {
+        c.classList.remove('cd-range', 'cd-target'); delete c.dataset.cdDays;
+    });
+    const list = _cdSortedTasks();
     if (!list.length) return;
     const item = list[_cdActiveIdx];
     if (!item) return;
-
     const now = new Date();
     const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const targetMs = new Date(item.date).getTime();
+    const _dp = item.date.split('-').map(Number);
+    const targetMs = new Date(_dp[0], _dp[1]-1, _dp[2]).getTime();
     if (targetMs <= todayMs) return;
-
-    const allCells = DOM.calView.querySelectorAll('.cell');
-    allCells.forEach(cell => {
-        const tt = cell.dataset.tt;
-        if (!tt) return;
+    const diffDaysTotal = Math.round((targetMs - todayMs) / 86400000);
+    DOM.calView.querySelectorAll('.cell').forEach(cell => {
+        const tt = cell.dataset.tt; if (!tt) return;
         try {
             const { gStr } = JSON.parse(tt);
             const nums = gStr.match(/\d+/g);
             if (!nums) return;
             const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
             if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
-            else if (cellMs === targetMs) cell.classList.add('cd-target');
+            else if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
         } catch(_) {}
     });
 }
-
-// ── 二维码弹窗（使用 QR Server API）────────────────────────────
-function _cdShowQr(url, name) {
-    document.querySelectorAll('.qr-overlay').forEach(el => el.remove());
-
-    const overlay = document.createElement('div');
-    overlay.className = 'qr-overlay';
-
-    const modal = document.createElement('div');
-    modal.className = 'qr-modal';
-    modal.addEventListener('click', e => e.stopPropagation());
-
-    // 标题
-    const title = document.createElement('div');
-    title.className = 'qr-modal-title';
-    title.textContent = name;
-    modal.appendChild(title);
-
-    // 分隔线
-    const divider = document.createElement('div');
-    divider.style.cssText = 'width:100%;height:1px;background:var(--muted);';
-    modal.appendChild(divider);
-
-    // 二维码图片
-    const imgWrap = document.createElement('div');
-    imgWrap.style.cssText = 'background:#FFFDF7;border-radius:10px;border:1px solid var(--border);padding:10px;';
-    const img = document.createElement('img');
-    img.width = 160; img.height = 160;
-    img.style.cssText = 'display:block;border-radius:4px;';
-    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=2C3E50&bgcolor=FFFDF5&data=${encodeURIComponent(url)}`;
-    img.alt = '二维码';
-    imgWrap.appendChild(img);
-    modal.appendChild(imgWrap);
-
-    // URL 展示
-    const urlDiv = document.createElement('div');
-    urlDiv.className = 'qr-modal-url';
-    urlDiv.textContent = url.length > 55 ? url.slice(0, 55) + '…' : url;
-    modal.appendChild(urlDiv);
-
-    // 按钮行
-    const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:8px;width:100%;';
-
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'cd-admin-submit';
-    copyBtn.style.cssText = 'flex:1;padding:7px;font-size:.68rem;';
-    copyBtn.textContent = '复制链接';
-    copyBtn.addEventListener('click', () => {
-        navigator.clipboard?.writeText(url).catch(() => {});
-        copyBtn.textContent = '已复制！';
-        setTimeout(() => { copyBtn.textContent = '复制链接'; }, 2000);
-    });
-
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'cd-admin-cancel';
-    closeBtn.style.cssText = 'padding:7px 14px;font-size:.68rem;';
-    closeBtn.textContent = '关闭';
-    closeBtn.addEventListener('click', () => overlay.remove());
-
-    btnRow.appendChild(copyBtn);
-    btnRow.appendChild(closeBtn);
-    modal.appendChild(btnRow);
-
-    overlay.appendChild(modal);
-    overlay.addEventListener('click', () => overlay.remove());
-    document.body.appendChild(overlay);
-}
-
 const NOMINATIM_HEADERS = { 'Accept-Language': 'zh', 'User-Agent': 'GengTiLi-Calendar/1.0 (https://alaricpolum.github.io/calendar/)' };
 const VC_COND_MAP = {
     'Clear':'晴朗','Partially cloudy':'晴间多云','Overcast':'阴天','Cloudy':'多云',
@@ -3446,13 +3665,23 @@ function _saveUnitPref() {
 // ═══════════════════════════════════════════════════════════════
 //  初始化
 // ═══════════════════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     initDOMCache();
     initMoonTable();
     // buildArcTable 异步执行，不阻塞首帧
     setTimeout(buildArcTable, 0);
     // focusMode 必须在 goHome()/render 之前恢复，_buildCdCard 依赖此状态
     if (localStorage.getItem('focusMode') === '1') document.body.classList.add('focus-mode');
+
+    // ── 倒计时系统初始化（验证 token，拉取任务）──────────────────
+    // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
+    await _cdInit();
+    const _urlInvite = new URLSearchParams(window.location.search).get('invite');
+    if (_urlInvite && !_cdGetToken()) {
+        // 延迟到页面渲染后再弹窗，避免遮挡加载画面
+        setTimeout(() => _cdShowRedeemModal(), 300);
+    }
+
     setMode('G'); goHome();
 
     // ── 外观设置（读取偏好 + 绑定开关）
