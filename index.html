@@ -1185,6 +1185,8 @@ async function _cdShowAddTaskModal() {
 //  包含：管理标签、生成邀请码
 // ═══════════════════════════════════════════════════════════════
 async function _cdShowAdminPanel() {
+    // 仅 superadmin 可访问
+    if (!_cdUser || _cdUser.role !== 'superadmin') return;
     document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
 
     const overlay = document.createElement('div');
@@ -1248,6 +1250,55 @@ async function _cdShowAdminPanel() {
 
     // ── 分隔线 ──────────────────────────────────────────────
     const div1 = document.createElement('div'); div1.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div1);
+
+    // ── 用户管理（查看所有用户 + 吊销 token）────────────────
+    const userSec = document.createElement('div'); userSec.style.marginBottom = '14px';
+    const userH = document.createElement('div'); userH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; userH.textContent = '用户管理';
+    userSec.appendChild(userH);
+    const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;';
+    const userLoading = document.createElement('div'); userLoading.style.cssText = 'font-size:.55rem;color:#ccc;'; userLoading.textContent = '加载中…';
+    userListWrap.appendChild(userLoading);
+    async function _refreshUserList() {
+        userListWrap.textContent = '';
+        try {
+            const res = await _cdFetch('/cd/users');
+            if (!res.ok) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '加载失败'; userListWrap.appendChild(e); return; }
+            const { users } = await res.json();
+            if (!users.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e); return; }
+            users.forEach(u => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 7px;background:var(--muted);border-radius:7px;border:1px solid var(--border);';
+                const roleTag = document.createElement('span');
+                roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;color:#fff;background:${u.role==='admin'?'#2F4F4F':'#02639D'};`;
+                roleTag.textContent = u.role;
+                const nameEl = document.createElement('span');
+                nameEl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                nameEl.textContent = u.name || '(未命名)';
+                const tagsEl = document.createElement('span');
+                tagsEl.style.cssText = 'font-size:.5rem;color:#aaa;flex-shrink:0;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+                tagsEl.textContent = (u.tags || []).join('、');
+                const revokeBtn = document.createElement('button');
+                revokeBtn.style.cssText = 'font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:5px;padding:1px 7px;background:var(--bg);transition:color .15s;flex-shrink:0;';
+                revokeBtn.textContent = '吊销';
+                revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
+                revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
+                revokeBtn.addEventListener('click', async () => {
+                    if (!confirm(`吊销「${u.name}」的访问权限？此操作不可撤销。`)) return;
+                    revokeBtn.disabled = true; revokeBtn.textContent = '吊销中…';
+                    const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
+                    if (r.ok) { _refreshUserList(); } else { revokeBtn.disabled = false; revokeBtn.textContent = '吊销'; alert('吊销失败，请重试'); }
+                });
+                row.appendChild(roleTag); row.appendChild(nameEl); row.appendChild(tagsEl); row.appendChild(revokeBtn);
+                userListWrap.appendChild(row);
+            });
+        } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
+    }
+    await _refreshUserList();
+    userSec.appendChild(userListWrap);
+    modal.appendChild(userSec);
+
+    // ── 分隔线 ──────────────────────────────────────────────
+    const div2 = document.createElement('div'); div2.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div2);
 
     // ── 邀请码生成 ─────────────────────────────────────────
     const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
@@ -1354,6 +1405,125 @@ async function _cdShowAdminPanel() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  弹窗：admin 专属"生成邀请链接"（只能邀请 viewer，标签限自己拥有的）
+// ═══════════════════════════════════════════════════════════════
+async function _cdShowAdminInviteModal() {
+    if (!_cdUser || _cdUser.role !== 'admin') return;
+    document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    const hdr = document.createElement('div');
+    hdr.className = 'cd-admin-modal-h';
+    hdr.textContent = '生成邀请链接';
+    modal.appendChild(hdr);
+
+    // 说明：只能邀请 viewer
+    const roleNote = document.createElement('div');
+    roleNote.style.cssText = 'font-size:.56rem;color:#7f8c8d;background:var(--muted);border-radius:6px;padding:5px 9px;margin-bottom:10px;line-height:1.5;';
+    roleNote.textContent = '作为管理员，您只能邀请"只读成员（viewer）"，且被邀请者可见范围限于您拥有的标签。';
+    modal.appendChild(roleNote);
+
+    // 标签多选（仅显示自己有的标签，来自 /cd/tags 接口的过滤结果）
+    const tagLabel = document.createElement('div');
+    tagLabel.style.cssText = 'font-size:.56rem;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:5px;';
+    tagLabel.textContent = '分配标签（可见范围，至少选一个）';
+    modal.appendChild(tagLabel);
+
+    const tagWrap = document.createElement('div');
+    tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;min-height:24px;';
+    modal.appendChild(tagWrap);
+
+    // 拉取自己有权限的标签
+    try {
+        const res = await _cdFetch('/cd/tags');
+        if (res.ok) {
+            const { tags } = await res.json();
+            if (!tags.length) {
+                const e = document.createElement('span');
+                e.style.cssText = 'font-size:.55rem;color:#ccc;';
+                e.textContent = '暂无可用标签，请联系管理员';
+                tagWrap.appendChild(e);
+            } else {
+                tags.forEach(tag => {
+                    const btn = document.createElement('button');
+                    btn.style.cssText = 'font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;color:var(--primary);transition:all .15s;';
+                    btn.textContent = tag;
+                    btn.dataset.selected = '0';
+                    btn.addEventListener('click', () => {
+                        const s = btn.dataset.selected === '1';
+                        btn.dataset.selected = s ? '0' : '1';
+                        btn.style.background  = s ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
+                        btn.style.borderColor = s ? 'var(--border)' : '#6B1010';
+                        btn.style.color       = s ? 'var(--primary)' : '#6B1010';
+                    });
+                    tagWrap.appendChild(btn);
+                });
+            }
+        }
+    } catch(_) {}
+
+    // 结果展示区
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'cd-admin-result';
+    resultDiv.style.display = 'none';
+    modal.appendChild(resultDiv);
+
+    // 按钮行
+    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+
+    const genBtn = document.createElement('button');
+    genBtn.className = 'cd-admin-submit'; genBtn.textContent = '生成邀请链接';
+    genBtn.addEventListener('click', async () => {
+        const selectedTags = [...tagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
+        if (!selectedTags.length) { alert('请至少选择一个标签'); return; }
+        genBtn.disabled = true; genBtn.textContent = '生成中…';
+        try {
+            const res = await _cdFetch('/cd/invite/create', {
+                method: 'POST',
+                body: JSON.stringify({ role: 'viewer', tags: selectedTags }),
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.error || '生成失败'); genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; return; }
+            // 生成带邀请码的链接
+            const u = new URL(window.location.href);
+            u.searchParams.set('invite', data.code);
+            const inviteUrl = u.toString();
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = '';
+            const urlSpan = document.createElement('span');
+            urlSpan.style.cssText = 'word-break:break-all;font-size:.54rem;color:var(--primary);display:block;margin-bottom:5px;';
+            urlSpan.textContent = inviteUrl;
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'cd-admin-copy'; copyBtn.style.marginTop = '4px'; copyBtn.textContent = '点击复制链接';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard?.writeText(inviteUrl).catch(() => {});
+                copyBtn.textContent = '已复制！';
+                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
+            });
+            const expNote = document.createElement('div');
+            expNote.style.cssText = 'font-size:.5rem;color:#aaa;margin-top:4px;';
+            expNote.textContent = '邀请码 24 小时内有效，用完即失效';
+            resultDiv.appendChild(urlSpan); resultDiv.appendChild(copyBtn); resultDiv.appendChild(expNote);
+        } catch(_) { alert('网络错误，请重试'); }
+        genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
+    });
+
+    btnRow.appendChild(cancelBtn); btnRow.appendChild(genBtn);
+    modal.appendChild(btnRow);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  渲染倒计时卡片
 // ═══════════════════════════════════════════════════════════════
 function _buildCdCard() {
@@ -1409,6 +1579,15 @@ function _buildCdCard() {
         addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
         addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAddTaskModal(); });
         hdrWrap.appendChild(addBtn);
+    }
+    // admin 专属：生成邀请链接（只能邀请 viewer）
+    if (isAdmin && !isSA) {
+        const invBtn = document.createElement('button');
+        invBtn.className = 'cd-admin-btn';
+        invBtn.style.marginLeft = '0';
+        invBtn.textContent = '邀请';
+        invBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminInviteModal(); });
+        hdrWrap.appendChild(invBtn);
     }
     if (isSA) {
         const mgBtn = document.createElement('button');
