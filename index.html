@@ -3674,11 +3674,61 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (localStorage.getItem('focusMode') === '1') document.body.classList.add('focus-mode');
 
     // ── 倒计时系统初始化（验证 token，拉取任务）──────────────────
-    // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
     await _cdInit();
     const _urlInvite = new URLSearchParams(window.location.search).get('invite');
-    if (_urlInvite && !_cdGetToken()) {
-        // 延迟到页面渲染后再弹窗，避免遮挡加载画面
+    const _urlGo     = new URLSearchParams(window.location.search).get('go');
+
+    // ── superadmin 快捷登录入口（?go=login）────────────────────
+    if (_urlGo === 'login') {
+        // 清除 URL 参数，避免输入框反复弹出
+        const _uGo = new URL(window.location.href);
+        _uGo.searchParams.delete('go');
+        history.replaceState(null, '', _uGo.toString());
+        setTimeout(() => {
+            const overlay = document.createElement('div');
+            overlay.className = 'cd-admin-overlay';
+            const modal = document.createElement('div');
+            modal.className = 'cd-admin-modal';
+            modal.addEventListener('click', e => e.stopPropagation());
+            const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理员登录';
+            const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+            const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = 'Token';
+            const inp = document.createElement('input'); inp.className = 'cd-admin-input'; inp.type = 'password'; inp.placeholder = '输入管理员 Token';
+            const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
+            f1.appendChild(l1); f1.appendChild(inp); f1.appendChild(errDiv);
+            const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+            const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+            cancelBtn.addEventListener('click', () => overlay.remove());
+            const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '登录';
+            const _doLogin = async () => {
+                const tk = inp.value.trim();
+                if (!tk) { errDiv.textContent = '请输入 Token'; return; }
+                submitBtn.disabled = true; submitBtn.textContent = '验证中…';
+                try {
+                    const res = await fetch(CD_API + '/cd/token/info', {
+                        headers: { 'Authorization': 'Bearer ' + tk }
+                    });
+                    if (!res.ok) { errDiv.textContent = 'Token 无效'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
+                    _cdSaveToken(tk);
+                    overlay.remove();
+                    await _cdInit();
+                    _buildCdCard(); _cdApplyCellColor();
+                } catch(_) {
+                    errDiv.textContent = '网络错误，请重试';
+                    submitBtn.disabled = false; submitBtn.textContent = '登录';
+                }
+            };
+            submitBtn.addEventListener('click', _doLogin);
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); });
+            btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+            modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(btnRow);
+            overlay.appendChild(modal);
+            overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+            document.body.appendChild(overlay);
+            inp.focus();
+        }, 300);
+    } else if (_urlInvite && !_cdGetToken()) {
+        // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
         setTimeout(() => _cdShowRedeemModal(), 300);
     }
 
