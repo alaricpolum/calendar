@@ -1049,6 +1049,15 @@ function _cdShowRedeemModal() {
         }
     });
 
+    // Tab：codeInput ↔ nameInput 循环；Enter：任意框触发提交
+    [codeInput, nameInput].forEach((el, i, arr) => {
+        el.addEventListener('keydown', e => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                arr[(i + (e.shiftKey ? arr.length - 1 : 1)) % arr.length].focus();
+            } else if (e.key === 'Enter') { submitBtn.click(); }
+        });
+    });
     btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
     modal.appendChild(btnRow);
     overlay.appendChild(modal);
@@ -1104,8 +1113,7 @@ async function _cdShowAddTaskModal() {
     const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
     const l2wrap = document.createElement('div'); l2wrap.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;';
     const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.style.marginBottom = '0'; l2.textContent = '目标日期（公历）';
-    const l2hint = document.createElement('span'); l2hint.style.cssText = 'font-size:.5rem;color:#aaa;'; l2hint.textContent = '支持 20260801 / 2026年8月1日';
-    l2wrap.appendChild(l2); l2wrap.appendChild(l2hint);
+    l2wrap.appendChild(l2);
     const dateInput = document.createElement('input'); dateInput.className = 'cd-admin-input'; dateInput.type = 'text'; dateInput.placeholder = '例：20260801';
     const dateHint = document.createElement('div'); dateHint.style.cssText = 'font-size:.52rem;color:#aaa;margin-top:3px;min-height:1em;';
     dateInput.addEventListener('input', () => {
@@ -1172,6 +1180,15 @@ async function _cdShowAddTaskModal() {
             submitBtn.disabled = false; submitBtn.textContent = '确定';
         }
     });
+    // Tab：nameInput ↔ dateInput 循环；Enter：任意输入框触发提交
+    [nameInput, dateInput].forEach((el, i, arr) => {
+        el.addEventListener('keydown', e => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                arr[(i + (e.shiftKey ? arr.length - 1 : 1)) % arr.length].focus();
+            } else if (e.key === 'Enter') { submitBtn.click(); }
+        });
+    });
     btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
     modal.appendChild(btnRow);
     overlay.appendChild(modal);
@@ -1217,11 +1234,18 @@ async function _cdShowAdminPanel() {
             tags.forEach(tag => {
                 const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:3px;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;';
                 const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--primary);'; lbl.textContent = tag;
-                const del = document.createElement('button'); del.style.cssText = 'font-size:.55rem;color:#aaa;cursor:pointer;border:none;background:none;padding:0 0 0 2px;line-height:1;'; del.textContent = '×';
+                const del = document.createElement('button'); del.style.cssText = 'font-size:.55rem;color:#aaa;cursor:pointer;border:none;background:none;padding:0 0 0 2px;line-height:1;transition:color .15s;'; del.textContent = '×';
+                del.addEventListener('mouseenter', () => { del.style.color = '#B22222'; });
+                del.addEventListener('mouseleave', () => { del.style.color = '#aaa'; });
                 del.addEventListener('click', async () => {
-                    if (!confirm(`删除标签"${tag}"？已分配此标签的用户将无法看到相关任务。`)) return;
+                    del.disabled = true;
+                    wrap.style.transition = 'opacity .2s';
+                    wrap.style.opacity = '0';
+                    setTimeout(() => wrap.remove(), 200);
                     await _cdFetch('/cd/tags/delete', { method: 'POST', body: JSON.stringify({ tag }) });
-                    _refreshTagList();
+                    if (!tagListWrap.children.length) {
+                        const e = document.createElement('span'); e.style.cssText = 'font-size:.58rem;color:#ccc;'; e.textContent = '暂无标签'; tagListWrap.appendChild(e);
+                    }
                 });
                 wrap.appendChild(lbl); wrap.appendChild(del); tagListWrap.appendChild(wrap);
             });
@@ -1237,11 +1261,45 @@ async function _cdShowAdminPanel() {
     addTagBtn.addEventListener('click', async () => {
         const tag = newTagInput.value.trim();
         if (!tag) return;
+        addTagBtn.disabled = true; addTagBtn.textContent = '添加中…';
         const res = await _cdFetch('/cd/tags/add', { method: 'POST', body: JSON.stringify({ tag }) });
         const data = await res.json();
+        addTagBtn.disabled = false; addTagBtn.textContent = '添加';
         if (!res.ok) { alert(data.error); return; }
         newTagInput.value = '';
-        _refreshTagList();
+        // ① 直接在标签管理列表末尾追加新 pill（无需重新拉取）
+        // 仅移除"暂无标签"占位（直接子 span），不影响 pill 内的文字 span
+        [...tagListWrap.children].forEach(c => { if (c.tagName === 'SPAN') c.remove(); });
+        const newWrap = document.createElement('div');
+        newWrap.style.cssText = 'display:flex;align-items:center;gap:3px;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;opacity:0;transition:opacity .2s;';
+        const newLbl = document.createElement('span'); newLbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--primary);'; newLbl.textContent = tag;
+        const newDel = document.createElement('button'); newDel.style.cssText = 'font-size:.55rem;color:#aaa;cursor:pointer;border:none;background:none;padding:0 0 0 2px;line-height:1;transition:color .15s;'; newDel.textContent = '×';
+        newDel.addEventListener('mouseenter', () => { newDel.style.color = '#B22222'; });
+        newDel.addEventListener('mouseleave', () => { newDel.style.color = '#aaa'; });
+        newDel.addEventListener('click', async () => {
+            newDel.disabled = true;
+            newWrap.style.opacity = '0';
+            setTimeout(() => newWrap.remove(), 200);
+            await _cdFetch('/cd/tags/delete', { method: 'POST', body: JSON.stringify({ tag }) });
+            if (!tagListWrap.children.length) {
+                const e = document.createElement('span'); e.style.cssText = 'font-size:.58rem;color:#ccc;'; e.textContent = '暂无标签'; tagListWrap.appendChild(e);
+            }
+        });
+        newWrap.appendChild(newLbl); newWrap.appendChild(newDel); tagListWrap.appendChild(newWrap);
+        requestAnimationFrame(() => { newWrap.style.opacity = '1'; });
+        // ② 同步追加到"分配标签"选择区
+        invTagWrap.querySelectorAll('span').forEach(s => s.remove());
+        const newInvBtn = document.createElement('button');
+        newInvBtn.style.cssText = 'font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;color:var(--primary);transition:all .15s;';
+        newInvBtn.textContent = tag; newInvBtn.dataset.selected = '0';
+        newInvBtn.addEventListener('click', () => {
+            const s = newInvBtn.dataset.selected === '1';
+            newInvBtn.dataset.selected = s ? '0' : '1';
+            newInvBtn.style.background  = s ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
+            newInvBtn.style.borderColor = s ? 'var(--border)' : '#6B1010';
+            newInvBtn.style.color       = s ? 'var(--primary)' : '#6B1010';
+        });
+        invTagWrap.appendChild(newInvBtn);
     });
     newTagInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTagBtn.click(); });
     newTagRow.appendChild(newTagInput); newTagRow.appendChild(addTagBtn);
@@ -1270,13 +1328,29 @@ async function _cdShowAdminPanel() {
                 roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;background:${u.role==='admin'?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${u.role==='admin'?'#6B1010':'#2F4F4F'};border:1px solid ${u.role==='admin'?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
                 roleTag.textContent = u.role;
                 const tagsSpan = document.createElement('span'); tagsSpan.style.cssText = 'font-size:.5rem;color:#888;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;'; tagsSpan.title = (u.tags||[]).join('、'); tagsSpan.textContent = (u.tags||[]).join('、');
-                const revokeBtn = document.createElement('button'); revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;'; revokeBtn.textContent = '吊销';
+                const revokeBtn = document.createElement('button'); revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;'; revokeBtn.textContent = '注销';
                 revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
                 revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
                 revokeBtn.addEventListener('click', async () => {
-                    if (!confirm(`吊销用户"${u.name}"的访问权限？此操作不可撤销。`)) return;
+                    revokeBtn.disabled = true;
+                    revokeBtn.textContent = '注销中…';
                     const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
-                    if (r.ok) _refreshUserList(); else alert('吊销失败，请重试');
+                    if (r.ok) {
+                        row.style.transition = 'opacity .2s';
+                        row.style.opacity = '0';
+                        setTimeout(() => {
+                            row.remove();
+                            if (!userListWrap.children.length) {
+                                const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e);
+                            }
+                        }, 200);
+                    } else {
+                        revokeBtn.disabled = false;
+                        revokeBtn.textContent = '注销';
+                        revokeBtn.style.color = '#B22222';
+                        revokeBtn.style.borderColor = '#B22222';
+                        setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
+                    }
                 });
                 row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsSpan); row.appendChild(revokeBtn);
                 userListWrap.appendChild(row);
@@ -1292,7 +1366,7 @@ async function _cdShowAdminPanel() {
 
     // ── 邀请码生成 ─────────────────────────────────────────
     const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
-    const invH = document.createElement('div'); invH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:8px;'; invH.textContent = '生成邀请码';
+    const invH = document.createElement('div'); invH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:8px;'; invH.textContent = '生成邀请链接';
     invSec.appendChild(invH);
 
     // 角色选择
@@ -1346,7 +1420,7 @@ async function _cdShowAdminPanel() {
     invSec.appendChild(invTagWrap);
 
     const invResultDiv = document.createElement('div'); invResultDiv.className = 'cd-admin-result'; invResultDiv.style.display = 'none';
-    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-bottom:6px;'; genBtn.textContent = '生成邀请码';
+    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-bottom:6px;'; genBtn.textContent = '生成邀请链接';
     genBtn.addEventListener('click', async () => {
         const selectedTags = [...invTagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
         if (!selectedTags.length) { alert('请至少选择一个标签'); return; }
@@ -1357,26 +1431,29 @@ async function _cdShowAdminPanel() {
                 body: JSON.stringify({ role: _selRole, tags: selectedTags }),
             });
             const data = await res.json();
-            if (!res.ok) { alert(data.error); genBtn.disabled = false; genBtn.textContent = '生成邀请码'; return; }
+            if (!res.ok) { genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; invResultDiv.style.display='block'; invResultDiv.textContent=''; const errSpan=document.createElement('span'); errSpan.style.cssText='font-size:.56rem;color:#B22222;'; errSpan.textContent='⚠ '+(data.error||'生成失败，请重试'); invResultDiv.appendChild(errSpan); return; }
             // 生成邀请链接（含邀请码）
             const u = new URL(window.location.href);
             u.searchParams.set('invite', data.code);
             const inviteUrl = u.toString();
             invResultDiv.style.display = 'block';
             invResultDiv.textContent = '';
-            const urlSpan = document.createElement('span'); urlSpan.style.cssText = 'word-break:break-all;font-size:.54rem;color:var(--primary);display:block;margin-bottom:5px;'; urlSpan.textContent = inviteUrl;
-            const copyBtn = document.createElement('button'); copyBtn.className = 'cd-admin-copy'; copyBtn.style.marginTop = '4px'; copyBtn.textContent = '点击复制链接';
+            const copyBtn = document.createElement('button'); copyBtn.className = 'cd-admin-copy'; copyBtn.style.cssText = 'width:100%;margin-bottom:6px;'; copyBtn.textContent = '点击复制邀请链接';
             copyBtn.addEventListener('click', () => {
                 navigator.clipboard?.writeText(inviteUrl).catch(() => {});
-                copyBtn.textContent = '已复制！';
-                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
+                copyBtn.textContent = '✓ 已复制！';
+                setTimeout(() => { copyBtn.textContent = '点击复制邀请链接'; }, 2000);
             });
-            const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.5rem;color:#aaa;margin-top:4px;'; expNote.textContent = '邀请码 24 小时内有效，用完即失效';
-            invResultDiv.appendChild(urlSpan); invResultDiv.appendChild(copyBtn); invResultDiv.appendChild(expNote);
+            const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;'; expNote.textContent = '链接 24 小时有效，用完即失效';
+            invResultDiv.appendChild(copyBtn); invResultDiv.appendChild(expNote);
         } catch(_) {
             alert('网络错误');
         }
-        genBtn.disabled = false; genBtn.textContent = '生成邀请码';
+        genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
+    });
+    // Enter 触发生成邀请链接
+    modal.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && document.activeElement !== newTagInput) genBtn.click();
     });
     invSec.appendChild(genBtn);
     invSec.appendChild(invResultDiv);
@@ -1488,24 +1565,26 @@ async function _cdShowAdminInviteModal() {
             const inviteUrl = u.toString();
             resultDiv.style.display = 'block';
             resultDiv.textContent = '';
-            const urlSpan = document.createElement('span');
-            urlSpan.style.cssText = 'word-break:break-all;font-size:.54rem;color:var(--primary);display:block;margin-bottom:5px;';
-            urlSpan.textContent = inviteUrl;
             const copyBtn = document.createElement('button');
-            copyBtn.className = 'cd-admin-copy'; copyBtn.style.marginTop = '4px'; copyBtn.textContent = '点击复制链接';
+            copyBtn.className = 'cd-admin-copy'; copyBtn.style.cssText = 'width:100%;margin-bottom:6px;'; copyBtn.textContent = '点击复制邀请链接';
             copyBtn.addEventListener('click', () => {
                 navigator.clipboard?.writeText(inviteUrl).catch(() => {});
-                copyBtn.textContent = '已复制！';
-                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
+                copyBtn.textContent = '✓ 已复制！';
+                setTimeout(() => { copyBtn.textContent = '点击复制邀请链接'; }, 2000);
             });
             const expNote = document.createElement('div');
-            expNote.style.cssText = 'font-size:.5rem;color:#aaa;margin-top:4px;';
-            expNote.textContent = '邀请码 24 小时内有效，用完即失效';
-            resultDiv.appendChild(urlSpan); resultDiv.appendChild(copyBtn); resultDiv.appendChild(expNote);
+            expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;';
+            expNote.textContent = '链接 24 小时有效，用完即失效';
+            resultDiv.appendChild(copyBtn); resultDiv.appendChild(expNote);
         } catch(_) { alert('网络错误，请重试'); }
         genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
     });
 
+    // Enter 触发生成；Escape 关闭
+    modal.addEventListener('keydown', e => {
+        if (e.key === 'Enter') genBtn.click();
+        else if (e.key === 'Escape') overlay.remove();
+    });
     btnRow.appendChild(cancelBtn); btnRow.appendChild(genBtn);
     modal.appendChild(btnRow);
     overlay.appendChild(modal);
@@ -1660,9 +1739,11 @@ function _buildCdCard() {
             const delBtn = document.createElement('button');
             delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:3px 10px;background:var(--muted);';
             delBtn.textContent = '删除此项';
+            delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
+            delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
             delBtn.addEventListener('click', async e => {
                 e.stopPropagation();
-                if (!confirm(`删除"${item.name}"？`)) return;
+                delBtn.disabled = true; delBtn.textContent = '删除中…';
                 await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
                 await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
             });
@@ -1738,9 +1819,11 @@ function _buildCdCard() {
         const delBtn = document.createElement('button');
         delBtn.style.cssText = 'margin-left:auto;font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;';
         delBtn.textContent = '删除';
+        delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
+        delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
         delBtn.addEventListener('click', async e => {
             e.stopPropagation();
-            if (!confirm(`删除"${item.name}"？`)) return;
+            delBtn.disabled = true; delBtn.textContent = '删除中…';
             await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
             await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
         });
