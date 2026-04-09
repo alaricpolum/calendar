@@ -1249,15 +1249,13 @@ async function _cdShowAdminPanel() {
     modal.appendChild(tagSec);
 
     // ── 分隔线 ──────────────────────────────────────────────
-    const div1 = document.createElement('div'); div1.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div1);
+    const divA = document.createElement('div'); divA.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(divA);
 
-    // ── 用户管理（查看所有用户 + 吊销 token）────────────────
+    // ── 所有用户 ───────────────────────────────────────────
     const userSec = document.createElement('div'); userSec.style.marginBottom = '14px';
-    const userH = document.createElement('div'); userH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; userH.textContent = '用户管理';
+    const userH = document.createElement('div'); userH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; userH.textContent = '所有用户';
     userSec.appendChild(userH);
-    const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;';
-    const userLoading = document.createElement('div'); userLoading.style.cssText = 'font-size:.55rem;color:#ccc;'; userLoading.textContent = '加载中…';
-    userListWrap.appendChild(userLoading);
+    const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
     async function _refreshUserList() {
         userListWrap.textContent = '';
         try {
@@ -1266,29 +1264,21 @@ async function _cdShowAdminPanel() {
             const { users } = await res.json();
             if (!users.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e); return; }
             users.forEach(u => {
-                const row = document.createElement('div');
-                row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 7px;background:var(--muted);border-radius:7px;border:1px solid var(--border);';
+                const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--muted);border-radius:8px;padding:5px 8px;';
+                const nameSpan = document.createElement('span'); nameSpan.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; nameSpan.textContent = u.name;
                 const roleTag = document.createElement('span');
-                roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;color:#fff;background:${u.role==='admin'?'#2F4F4F':'#02639D'};`;
+                roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;background:${u.role==='admin'?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${u.role==='admin'?'#6B1010':'#2F4F4F'};border:1px solid ${u.role==='admin'?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
                 roleTag.textContent = u.role;
-                const nameEl = document.createElement('span');
-                nameEl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                nameEl.textContent = u.name || '(未命名)';
-                const tagsEl = document.createElement('span');
-                tagsEl.style.cssText = 'font-size:.5rem;color:#aaa;flex-shrink:0;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-                tagsEl.textContent = (u.tags || []).join('、');
-                const revokeBtn = document.createElement('button');
-                revokeBtn.style.cssText = 'font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:5px;padding:1px 7px;background:var(--bg);transition:color .15s;flex-shrink:0;';
-                revokeBtn.textContent = '吊销';
+                const tagsSpan = document.createElement('span'); tagsSpan.style.cssText = 'font-size:.5rem;color:#888;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;'; tagsSpan.title = (u.tags||[]).join('、'); tagsSpan.textContent = (u.tags||[]).join('、');
+                const revokeBtn = document.createElement('button'); revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;'; revokeBtn.textContent = '吊销';
                 revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
                 revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
                 revokeBtn.addEventListener('click', async () => {
-                    if (!confirm(`吊销「${u.name}」的访问权限？此操作不可撤销。`)) return;
-                    revokeBtn.disabled = true; revokeBtn.textContent = '吊销中…';
+                    if (!confirm(`吊销用户"${u.name}"的访问权限？此操作不可撤销。`)) return;
                     const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
-                    if (r.ok) { _refreshUserList(); } else { revokeBtn.disabled = false; revokeBtn.textContent = '吊销'; alert('吊销失败，请重试'); }
+                    if (r.ok) _refreshUserList(); else alert('吊销失败，请重试');
                 });
-                row.appendChild(roleTag); row.appendChild(nameEl); row.appendChild(tagsEl); row.appendChild(revokeBtn);
+                row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsSpan); row.appendChild(revokeBtn);
                 userListWrap.appendChild(row);
             });
         } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
@@ -1298,7 +1288,7 @@ async function _cdShowAdminPanel() {
     modal.appendChild(userSec);
 
     // ── 分隔线 ──────────────────────────────────────────────
-    const div2 = document.createElement('div'); div2.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div2);
+    const div1 = document.createElement('div'); div1.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div1);
 
     // ── 邀请码生成 ─────────────────────────────────────────
     const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
@@ -1408,7 +1398,7 @@ async function _cdShowAdminPanel() {
 //  弹窗：admin 专属"生成邀请链接"（只能邀请 viewer，标签限自己拥有的）
 // ═══════════════════════════════════════════════════════════════
 async function _cdShowAdminInviteModal() {
-    if (!_cdUser || _cdUser.role !== 'admin') return;
+    if (!_cdUser || (_cdUser.role !== 'admin' && _cdUser.role !== 'superadmin')) return;
     document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
 
     const overlay = document.createElement('div');
@@ -3853,61 +3843,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (localStorage.getItem('focusMode') === '1') document.body.classList.add('focus-mode');
 
     // ── 倒计时系统初始化（验证 token，拉取任务）──────────────────
+    // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
     await _cdInit();
     const _urlInvite = new URLSearchParams(window.location.search).get('invite');
-    const _urlGo     = new URLSearchParams(window.location.search).get('go');
-
-    // ── superadmin 快捷登录入口（?go=login）────────────────────
-    if (_urlGo === 'login') {
-        // 清除 URL 参数，避免输入框反复弹出
-        const _uGo = new URL(window.location.href);
-        _uGo.searchParams.delete('go');
-        history.replaceState(null, '', _uGo.toString());
-        setTimeout(() => {
-            const overlay = document.createElement('div');
-            overlay.className = 'cd-admin-overlay';
-            const modal = document.createElement('div');
-            modal.className = 'cd-admin-modal';
-            modal.addEventListener('click', e => e.stopPropagation());
-            const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理员登录';
-            const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
-            const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = 'Token';
-            const inp = document.createElement('input'); inp.className = 'cd-admin-input'; inp.type = 'password'; inp.placeholder = '输入管理员 Token';
-            const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
-            f1.appendChild(l1); f1.appendChild(inp); f1.appendChild(errDiv);
-            const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
-            const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
-            cancelBtn.addEventListener('click', () => overlay.remove());
-            const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '登录';
-            const _doLogin = async () => {
-                const tk = inp.value.trim();
-                if (!tk) { errDiv.textContent = '请输入 Token'; return; }
-                submitBtn.disabled = true; submitBtn.textContent = '验证中…';
-                try {
-                    const res = await fetch(CD_API + '/cd/token/info', {
-                        headers: { 'Authorization': 'Bearer ' + tk }
-                    });
-                    if (!res.ok) { errDiv.textContent = 'Token 无效'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
-                    _cdSaveToken(tk);
-                    overlay.remove();
-                    await _cdInit();
-                    _buildCdCard(); _cdApplyCellColor();
-                } catch(_) {
-                    errDiv.textContent = '网络错误，请重试';
-                    submitBtn.disabled = false; submitBtn.textContent = '登录';
-                }
-            };
-            submitBtn.addEventListener('click', _doLogin);
-            inp.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); });
-            btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
-            modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(btnRow);
-            overlay.appendChild(modal);
-            overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-            document.body.appendChild(overlay);
-            inp.focus();
-        }, 300);
-    } else if (_urlInvite && !_cdGetToken()) {
-        // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
+    if (_urlInvite && !_cdGetToken()) {
+        // 延迟到页面渲染后再弹窗，避免遮挡加载画面
         setTimeout(() => _cdShowRedeemModal(), 300);
     }
 
