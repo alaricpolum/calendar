@@ -2228,7 +2228,6 @@ function _buildCdCard() {
 let _cdResizeObserver = null;
 function _applyCardHeight(card, view) {
     function _sync() {
-        // 先把倒计时卡临时移出 DOM，让月份卡恢复自然高度再量
         const parent = card.parentNode;
         const next   = card.nextSibling;
         if (parent) parent.removeChild(card);
@@ -2238,13 +2237,13 @@ function _applyCardHeight(card, view) {
             ? Math.max(...allBoxes.map(b => b.getBoundingClientRect().height))
             : 0;
 
-        // 把倒计时卡放回原位
         if (parent) {
             if (next) parent.insertBefore(card, next);
             else parent.appendChild(card);
         }
 
         if (maxH > 0) {
+            card.style.height    = maxH + 'px';
             card.style.maxHeight = maxH + 'px';
             card.style.overflowY = 'auto';
         }
