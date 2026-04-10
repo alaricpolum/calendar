@@ -28,7 +28,6 @@
 <!--
   合并优化版 · 修复清单
   ① 三版特性全部合并（Noto Serif SC + 悬浮吸附 + 大地球 + precipColor）
-  ② convHistory 写入逻辑提取为 recordHistory()，消除三处重复粘贴
   ③ getShEq USNO 竞态修复：异步结果落地后调用 render()+update() 刷新
   ④ hero-placeholder 高度由 JS 动态设置，不再硬编码 430px
   ⑤ wheel {passive:false} 降级为 {passive:true}，仅在 isBouncing 时用 scrollTo
@@ -445,6 +444,40 @@
     .tt-star-btn:hover { opacity: .85; transform: scale(1.1); }
     .tt-star-btn.active { opacity: 1; }
 
+    /* ── 区间复制操作条 ──────────────────────────────────────────── */
+    #rangeCopyBar {
+        position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 10px;
+        background: var(--v-blue); color: #fff;
+        border-radius: 20px; padding: 7px 14px 7px 16px;
+        font-size: .72rem; font-weight: 700;
+        box-shadow: 0 4px 16px rgba(47,79,79,.35);
+        z-index: 2200; white-space: nowrap;
+        animation: range-bar-in .2s cubic-bezier(.34,1.56,.64,1) both;
+        pointer-events: auto;
+        font-family: 'Noto Serif SC', serif;
+    }
+    #rangeCopyBar.hiding {
+        animation: range-bar-out .2s ease-in both;
+    }
+    @keyframes range-bar-in  { from { opacity:0; transform: translateX(-50%) translateY(10px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+    @keyframes range-bar-out { from { opacity:1; transform: translateX(-50%) translateY(0);    } to { opacity:0; transform: translateX(-50%) translateY(8px); } }
+    #rangeCopyBar .rcb-text { letter-spacing: .3px; opacity: .92; }
+    #rangeCopyBar .rcb-copy {
+        background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3);
+        color: #fff; border-radius: 12px; padding: 3px 10px;
+        font-size: .68rem; font-weight: 700; cursor: pointer;
+        font-family: inherit; transition: background .15s;
+        flex-shrink: 0;
+    }
+    #rangeCopyBar .rcb-copy:hover { background: rgba(255,255,255,.3); }
+    #rangeCopyBar .rcb-dismiss {
+        background: none; border: none; color: rgba(255,255,255,.55);
+        font-size: .85rem; cursor: pointer; padding: 0 0 0 2px;
+        line-height: 1; transition: color .15s; flex-shrink: 0;
+    }
+    #rangeCopyBar .rcb-dismiss:hover { color: #fff; }
+
     /* 专注模式时「今」按钮加退出提示 */
     .focus-mode .back-to-today {
         border-color: var(--v-blue);
@@ -585,11 +618,196 @@
         .month-box { padding: 6px 3px; }
     }
 
+    /* ── 功能11：文字便签（专注模式 tooltip 内） ─────────────────── */
+    .tt-note-section { padding: 6px 12px 4px; border-top: 1.5px solid var(--muted); }
+    .tt-note-text { font-size: .72rem; color: var(--primary); line-height: 1.5; padding: 2px 0; }
+    .tt-note-edit-link { font-size: .62rem; color: var(--v-blue); cursor: pointer; font-weight: 700; transition: opacity .15s; }
+    .tt-note-edit-link:hover { opacity: .7; }
+    .tt-note-wrap { position: relative; }
+    .tt-note-wrap.expanded { margin-bottom: 4px; }
+    .tt-note-textarea {
+        width: 100%; box-sizing: border-box; resize: none; height: 28px; overflow: hidden;
+        padding: 4px 6px; font-size: .7rem; border: 1px solid var(--border);
+        border-radius: 6px; font-family: inherit; background: var(--muted);
+        color: var(--primary); outline: none; transition: height .2s, border .2s; line-height: 1.4;
+    }
+    .tt-note-wrap.expanded .tt-note-textarea { height: 58px; overflow: auto; border-color: var(--v-blue); }
+    .tt-note-count { position: absolute; bottom: 3px; right: 6px; font-size: .5rem; color: #aaa; pointer-events: none; transition: color .2s; }
+    .tt-note-count.near-limit { color: var(--accent); font-weight: 700; }
+    .tt-note-footer { display: none; justify-content: flex-end; margin-top: 3px; }
+    .tt-note-footer.expanded { display: flex; }
+    .tt-note-save {
+        font-size: .62rem; font-weight: 700; color: #fff; background: var(--v-blue);
+        border: none; border-radius: 6px; padding: 3px 10px; cursor: pointer;
+        font-family: inherit; transition: opacity .15s;
+    }
+    .tt-note-save:hover { opacity: .85; }
+
+    /* 更替日"年度回顾"徽章：默认隐藏，专注模式且有权限时悬停/选中显示 */
+    .extra-review-badge {
+        display: none;
+        position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+        background: var(--accent); color: #fff;
+        font-size: .5rem; font-weight: 700;
+        padding: 1px 6px; border-radius: 6px;
+        white-space: nowrap; letter-spacing: .5px; pointer-events: none;
+    }
+    .focus-mode.has-cd-user .cell:hover .extra-review-badge,
+    .focus-mode.has-cd-user .cell:focus .extra-review-badge { display: block; }
+
+    /* ── 年度回顾弹窗 ─────────────────────────────────────────── */
+    #yearReviewOverlay {
+        position: fixed; inset: 0; background: rgba(28,22,14,.55);
+        z-index: 3000; display: flex; align-items: center; justify-content: center;
+        padding: 20px; box-sizing: border-box;
+        animation: yr-fade-in .2s ease both;
+    }
+    @keyframes yr-fade-in { from{opacity:0;} to{opacity:1;} }
+    #yearReviewModal {
+        background: var(--surface); border-radius: 18px;
+        border: 1px solid var(--border); width: 100%; max-width: 420px;
+        max-height: 90vh; overflow-y: auto;
+        animation: yr-slide-in .2s ease both;
+        font-family: 'Noto Serif SC', serif;
+    }
+    @keyframes yr-slide-in { from{transform:translateY(12px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+    .yr-header {
+        padding: 16px 18px 12px; border-bottom: 1px solid var(--muted);
+        display: flex; align-items: flex-start; justify-content: space-between;
+        position: sticky; top: 0; background: var(--surface); border-radius: 18px 18px 0 0; z-index: 1;
+    }
+    .yr-title { font-size: 1.05rem; font-weight: 900; color: #2C3E50; letter-spacing: 1px; text-align: center; }
+    .yr-sub   { font-size: .62rem; color: #7f8c8d; margin-top: 4px; font-weight: 500; text-align: center; }
+    .yr-close { background: none; border: none; font-size: 1rem; color: #aaa; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; transition: color .15s; }
+    .yr-close:hover { color: var(--accent); }
+    .yr-body  { padding: 14px 18px 16px; }
+    .yr-section-title {
+        font-size: .65rem; font-weight: 700; color: #aaa;
+        letter-spacing: 1.5px; margin: 14px 0 8px; text-transform: uppercase;
+    }
+    .yr-section-title:first-child { margin-top: 0; }
+    .yr-stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
+    .yr-stat-card { background: var(--muted); border-radius: 10px; padding: 8px 4px; text-align: center; border: 1px solid var(--border); }
+    .yr-stat-num  { font-size: 1.4rem; font-weight: 900; line-height: 1.1; }
+    .yr-stat-lbl  { font-size: .58rem; color: #7f8c8d; font-weight: 600; margin-top: 2px; letter-spacing: .3px; }
+    .yr-heat-row  { display: grid; grid-template-columns: repeat(13,1fr); gap: 3px; }
+    .yr-heat-cell { height: 18px; border-radius: 4px; border: 1px solid var(--border); }
+    .yr-heat-labels { display: flex; justify-content: space-between; font-size: .58rem; color: #aaa; margin-top: 3px; }
+    .yr-note-list { background: var(--muted); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
+    .yr-note-item {
+        display: flex; gap: 10px; align-items: flex-start;
+        padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: .78rem;
+    }
+    .yr-note-item:last-child { border-bottom: none; }
+    .yr-note-item:hover { background: #f0ece0; }
+    .yr-note-item:hover .yr-note-date { color: var(--v-blue); }
+    .yr-note-date { color: #7f8c8d; white-space: nowrap; min-width: 52px; line-height: 1.6; font-size: .72rem; font-weight: 600; }
+    .yr-note-text { color: var(--primary); line-height: 1.6; font-size: .78rem; }
+    .yr-empty     { color: #aaa; font-size: .75rem; text-align: center; padding: 12px 0; }
+    .yr-note-view-all {
+        display: block; text-align: center; margin-top: 10px;
+        font-size: .78rem; font-weight: 700; color: var(--v-blue);
+        cursor: pointer; letter-spacing: .3px;
+        padding: 2px 0;
+        transition: opacity .15s;
+        text-decoration: none;
+    }
+    .yr-note-view-all:hover { opacity: .7; }
+    .yr-export-btn {
+        display: block; width: 100%; margin-top: 10px;
+        font-size: .72rem; letter-spacing: .5px;
+    }
+    .yr-export-btn:hover { filter: brightness(.95); }
+    .yr-export-btn {
+        display: block; width: 100%; margin-top: 10px;
+        font-size: .72rem; letter-spacing: .5px;
+    }
+    .yr-footer {
+        padding: 10px 18px 14px; border-top: 1px solid var(--muted);
+        display: flex; gap: 8px; justify-content: space-between;
+        position: sticky; bottom: 0; background: var(--surface); border-radius: 0 0 18px 18px;
+    }
+    .yr-btn-sec { padding: 6px 16px; background: var(--muted); color: var(--primary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: .8rem; font-family: inherit; font-weight: 700; transition: filter .15s; }
+    .yr-btn-sec:hover { filter: brightness(.95); }
+    .yr-btn-pri { padding: 6px 24px; background: var(--v-blue); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-family: inherit; font-weight: 700; transition: filter .15s; }
+    .yr-btn-pri:hover { filter: brightness(1.12); }
+
+    /* ── 内联错误提示（替代 alert()） ──────────────────────────────── */
+    .cd-inline-err {
+        font-size: .58rem; color: #B22222;
+        margin-top: 4px; letter-spacing: .2px; line-height: 1.4;
+    }
+
+    /* ── 删除确认弹窗 ────────────────────────────────────────────── */
+    .cd-del-overlay {
+        position: fixed; inset: 0; background: rgba(28,22,14,.55);
+        z-index: 4000; display: flex; align-items: center; justify-content: center;
+        padding: 20px; box-sizing: border-box;
+        animation: yr-fade-in .15s ease both;
+    }
+    .cd-del-modal {
+        background: var(--surface); border-radius: 18px;
+        border: 1px solid var(--border); width: 100%; max-width: 320px;
+        font-family: 'Noto Serif SC', serif; overflow: hidden;
+        animation: yr-slide-in .15s ease both;
+    }
+    .cd-del-header {
+        padding: 14px 16px 12px; border-bottom: 1px solid var(--muted);
+        display: flex; align-items: center; gap: 10px;
+    }
+    .cd-del-icon {
+        width: 34px; height: 34px; flex-shrink: 0;
+        background: #FCEBEB; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cd-del-icon svg { width: 16px; height: 16px; }
+    .cd-del-hd-text { flex: 1; }
+    .cd-del-title { font-size: .8rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+    .cd-del-subtitle { font-size: .62rem; color: #7f8c8d; font-weight: 500; }
+    .cd-del-body { padding: 12px 16px 10px; }
+    .cd-del-task-card {
+        background: var(--muted); border-radius: 10px;
+        border: 1px solid var(--border); padding: 9px 12px; margin-bottom: 10px;
+        transition: opacity .3s;
+    }
+    .cd-del-task-card.fading { opacity: .4; }
+    .cd-del-task-name { font-size: .78rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .cd-del-task-meta { display: flex; gap: 10px; align-items: center; }
+    .cd-del-task-date { font-size: .65rem; color: #7f8c8d; font-weight: 600; }
+    .cd-del-task-days {
+        font-size: .65rem; font-weight: 700; color: var(--accent);
+        background: rgba(178,34,34,.08); padding: 1px 7px; border-radius: 20px;
+    }
+    .cd-del-warn { font-size: .68rem; color: #7f8c8d; line-height: 1.6; }
+    .cd-del-warn strong { color: var(--accent); font-weight: 700; }
+    .cd-del-progress { height: 2px; background: var(--muted); border-radius: 2px; margin: 8px 0 2px; overflow: hidden; display: none; }
+    .cd-del-progress-bar { height: 100%; background: var(--accent); width: 0; border-radius: 2px; transition: width 1.5s ease-out; }
+    .cd-del-footer {
+        padding: 10px 16px 14px; border-top: 1px solid var(--muted);
+        display: flex; gap: 8px;
+    }
+    .cd-del-cancel {
+        flex: 1; padding: 8px 0; background: var(--muted); color: var(--primary);
+        border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
+        font-size: .78rem; font-weight: 700; font-family: inherit; transition: filter .15s;
+    }
+    .cd-del-cancel:hover:not(:disabled) { filter: brightness(.95); }
+    .cd-del-cancel:disabled { opacity: .4; cursor: not-allowed; }
+    .cd-del-confirm {
+        flex: 1.2; padding: 8px 0; background: var(--accent); color: #fff;
+        border: none; border-radius: 8px; cursor: pointer;
+        font-size: .78rem; font-weight: 700; font-family: inherit; transition: filter .15s;
+    }
+    .cd-del-confirm:hover:not(:disabled) { filter: brightness(1.12); }
+    .cd-del-confirm:disabled { background: #aaa; cursor: not-allowed; }
+
     /* ── 倒计时卡片 ──────────────────────────────────────────────── */
     .cd-card {
         background: var(--surface); border-radius: 14px;
         border: 1.5px solid #6B1010; padding: 10px 12px 12px;
         display: flex; flex-direction: column; box-sizing: border-box;
+        overflow-y: auto;
+        scrollbar-width: none; -ms-overflow-style: none;
     }
     .cd-card::-webkit-scrollbar { display: none; }
     .cd-card-h {
@@ -679,6 +897,36 @@
     .cd-admin-input:focus { border-color: #6B1010; }
     .cd-admin-existing { margin-bottom: 12px; }
     .cd-admin-existing-h { font-size: .54rem; color: #aaa; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px; }
+
+    /* ── 标签 pill 统一样式 ──────────────────────────────────────── */
+    .tag-pill-mgr {
+        display: flex; align-items: center; gap: 3px;
+        background: var(--muted); border: 1px solid var(--border);
+        border-radius: 20px; padding: 2px 6px;
+        max-width: fit-content; box-sizing: border-box;
+    }
+    .tag-pill-mgr-lbl {
+        font-size: .62rem; font-weight: 700; color: var(--primary);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .tag-pill-mgr-del {
+        font-size: .55rem; color: #aaa; cursor: pointer;
+        border: none; background: none; padding: 0 0 0 2px;
+        line-height: 1; transition: color .15s; flex-shrink: 0;
+    }
+    .tag-pill-mgr-del:hover { color: #B22222; }
+    .tag-pill-sel {
+        font-size: .6rem; font-weight: 700;
+        padding: 2px 6px; border-radius: 20px;
+        border: 1px solid var(--border); background: var(--muted);
+        cursor: pointer; color: var(--primary); transition: all .15s;
+        max-width: fit-content; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; box-sizing: border-box;
+    }
+    .tag-pill-sel.selected {
+        background: rgba(107,16,16,0.08);
+        border-color: #6B1010; color: #6B1010;
+    }
     .cd-admin-existing-item {
         display: flex; align-items: center; gap: 6px;
         padding: 4px 6px; border-radius: 6px; background: var(--muted);
@@ -695,13 +943,13 @@
     .cd-admin-btns { display: flex; gap: 8px; margin-top: 4px; }
     .cd-admin-submit {
         flex: 1; padding: 8px; background: #6B1010; color: #fff;
-        border: none; border-radius: 8px; font-size: .72rem; font-weight: 700;
+        border: none; border-radius: 10px; font-size: .72rem; font-weight: 700;
         cursor: pointer; font-family: inherit; transition: opacity .2s;
     }
     .cd-admin-submit:hover { opacity: .85; }
     .cd-admin-cancel {
         padding: 8px 14px; background: var(--muted); color: var(--primary);
-        border: 1px solid var(--border); border-radius: 8px; font-size: .72rem;
+        border: 1px solid var(--border); border-radius: 10px; font-size: .72rem;
         font-weight: 700; cursor: pointer; font-family: inherit;
     }
     .cd-admin-result {
@@ -710,9 +958,9 @@
         word-break: break-all; line-height: 1.5; border: 1px solid var(--border);
     }
     .cd-admin-copy {
-        display: block; margin-top: 6px; text-align: center;
+        display: block; width: fit-content; margin: 6px auto 0; text-align: center;
         font-size: .62rem; font-weight: 700; color: #6B1010; cursor: pointer;
-        padding: 4px; border-radius: 6px; border: 1px solid rgba(107,16,16,0.3);
+        padding: 4px 18px; border-radius: 6px; border: 1px solid rgba(107,16,16,0.3);
         background: rgba(107,16,16,0.04); transition: background .15s;
     }
     .cd-admin-copy:hover { background: rgba(107,16,16,0.10); }
@@ -877,6 +1125,13 @@
 // ── Worker 代理统一入口（修改域名只需改这一处）──────────────────
 const WORKER_BASE = 'https://aqi-proxy.alaricpolum.workers.dev';
 
+// ── 物理/天文具名常量（替代散落的魔法数字）──────────────────────
+const DAY_MS          = 86400000;           // 一天的毫秒数
+const SYNODIC_MONTH   = 29.530588853;       // 朔望月天数（Meeus）
+const JD_EPOCH        = 2440587.5;          // Unix 纪元对应的儒略日
+const JD_J2000        = 2451545.0;          // J2000.0 标准历元
+const BJ_OFFSET_MS    = 8 * 3600000;        // 北京时间 UTC+8 偏移量（毫秒）
+
 const TERM_NAMES  = ["春分","清明","谷雨","立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑","白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至","小寒","大寒","立春","雨水","惊蛰"];
 const WKS        = ["周一","周二","周三","周四","周五","周六","周日"];
 const WK_COLORS  = ['#DF1B12','#FFC600','#02639D','#708090','#6B4E9B','#2F4F4F','#B22222'];
@@ -923,15 +1178,17 @@ async function _cdFetch(path, options = {}) {
 // ── 初始化：验证本地 token，拉取身份和任务 ───────────────────────
 async function _cdInit() {
     const token = _cdGetToken();
-    if (!token) { _cdUser = null; _cdTasks = []; return; }
+    if (!token) { _cdUser = null; _cdTasks = []; document.body.classList.remove('has-cd-user'); return; }
     try {
         const res = await _cdFetch('/cd/token/info');
-        if (!res.ok) { _cdUser = null; _cdClearToken(); return; }
+        if (!res.ok) { _cdUser = null; _cdClearToken(); document.body.classList.remove('has-cd-user'); return; }
         const data = await res.json();
         _cdUser = { token, role: data.role, name: data.name, tags: data.tags };
+        document.body.classList.add('has-cd-user');
         await _cdFetchTasks();
     } catch(_) {
         _cdUser = null;
+        document.body.classList.remove('has-cd-user');
     }
 }
 
@@ -1132,15 +1389,13 @@ async function _cdShowAddTaskModal() {
         const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
         availTags.forEach(tag => {
             const btn = document.createElement('button');
-            btn.style.cssText = 'font-size:.62rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;transition:all .15s;color:var(--primary);';
+            btn.className = 'tag-pill-sel';
             btn.textContent = tag;
             btn.dataset.selected = '0';
             btn.addEventListener('click', () => {
                 const sel = btn.dataset.selected === '1';
                 btn.dataset.selected = sel ? '0' : '1';
-                btn.style.background = sel ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
-                btn.style.borderColor = sel ? 'var(--border)' : '#6B1010';
-                btn.style.color = sel ? 'var(--primary)' : '#6B1010';
+                btn.classList.toggle('selected', !sel);
             });
             tagWrap.appendChild(btn);
         });
@@ -1218,7 +1473,7 @@ async function _cdShowAdminPanel() {
     modal.appendChild(hdr);
 
     // ── 标签管理 ──────────────────────────────────────────────
-    const tagSec = document.createElement('div'); tagSec.style.marginBottom = '14px';
+    const tagSec = document.createElement('div'); tagSec.style.marginBottom = '6px';
     const tagH = document.createElement('div'); tagH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; tagH.textContent = '标签管理';
     tagSec.appendChild(tagH);
 
@@ -1232,17 +1487,23 @@ async function _cdShowAdminPanel() {
             const { tags } = await res.json();
             if (!tags.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.58rem;color:#ccc;'; e.textContent = '暂无标签'; tagListWrap.appendChild(e); return; }
             tags.forEach(tag => {
-                const wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;align-items:center;gap:3px;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;';
-                const lbl = document.createElement('span'); lbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--primary);'; lbl.textContent = tag;
-                const del = document.createElement('button'); del.style.cssText = 'font-size:.55rem;color:#aaa;cursor:pointer;border:none;background:none;padding:0 0 0 2px;line-height:1;transition:color .15s;'; del.textContent = '×';
-                del.addEventListener('mouseenter', () => { del.style.color = '#B22222'; });
-                del.addEventListener('mouseleave', () => { del.style.color = '#aaa'; });
+                const wrap = document.createElement('div'); wrap.className = 'tag-pill-mgr';
+                const lbl = document.createElement('span'); lbl.className = 'tag-pill-mgr-lbl'; lbl.textContent = tag;
+                const del = document.createElement('button'); del.className = 'tag-pill-mgr-del'; del.textContent = '×';
                 del.addEventListener('click', async () => {
                     del.disabled = true;
                     wrap.style.transition = 'opacity .2s';
                     wrap.style.opacity = '0';
                     setTimeout(() => wrap.remove(), 200);
                     await _cdFetch('/cd/tags/delete', { method: 'POST', body: JSON.stringify({ tag }) });
+                    // 同步从"分配标签"区移除对应按钮
+                    [...invTagWrap.querySelectorAll('button')].forEach(b => {
+                        if (b.textContent === tag) {
+                            b.style.transition = 'opacity .2s';
+                            b.style.opacity = '0';
+                            setTimeout(() => b.remove(), 200);
+                        }
+                    });
                     if (!tagListWrap.children.length) {
                         const e = document.createElement('span'); e.style.cssText = 'font-size:.58rem;color:#ccc;'; e.textContent = '暂无标签'; tagListWrap.appendChild(e);
                     }
@@ -1255,32 +1516,42 @@ async function _cdShowAdminPanel() {
     tagSec.appendChild(tagListWrap);
 
     // 新增标签
-    const newTagRow = document.createElement('div'); newTagRow.style.cssText = 'display:flex;gap:6px;';
+    const newTagRow = document.createElement('div'); newTagRow.style.cssText = 'display:flex;gap:6px;flex-direction:column;';
+    const newTagInputRow = document.createElement('div'); newTagInputRow.style.cssText = 'display:flex;gap:6px;';
     const newTagInput = document.createElement('input'); newTagInput.className = 'cd-admin-input'; newTagInput.type = 'text'; newTagInput.placeholder = '新标签名'; newTagInput.style.cssText += 'flex:1;height:30px;padding:4px 8px;font-size:.72rem;';
     const addTagBtn = document.createElement('button'); addTagBtn.className = 'cd-admin-submit'; addTagBtn.style.cssText = 'padding:4px 10px;font-size:.68rem;flex-shrink:0;'; addTagBtn.textContent = '添加';
+    const addTagErr = document.createElement('div'); addTagErr.className = 'cd-inline-err';
     addTagBtn.addEventListener('click', async () => {
         const tag = newTagInput.value.trim();
         if (!tag) return;
         addTagBtn.disabled = true; addTagBtn.textContent = '添加中…';
+        addTagErr.textContent = '';
         const res = await _cdFetch('/cd/tags/add', { method: 'POST', body: JSON.stringify({ tag }) });
         const data = await res.json();
         addTagBtn.disabled = false; addTagBtn.textContent = '添加';
-        if (!res.ok) { alert(data.error); return; }
+        if (!res.ok) { addTagErr.textContent = data.error || '添加失败，请重试'; return; }
         newTagInput.value = '';
         // ① 直接在标签管理列表末尾追加新 pill（无需重新拉取）
         // 仅移除"暂无标签"占位（直接子 span），不影响 pill 内的文字 span
         [...tagListWrap.children].forEach(c => { if (c.tagName === 'SPAN') c.remove(); });
         const newWrap = document.createElement('div');
-        newWrap.style.cssText = 'display:flex;align-items:center;gap:3px;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:2px 8px;opacity:0;transition:opacity .2s;';
-        const newLbl = document.createElement('span'); newLbl.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--primary);'; newLbl.textContent = tag;
-        const newDel = document.createElement('button'); newDel.style.cssText = 'font-size:.55rem;color:#aaa;cursor:pointer;border:none;background:none;padding:0 0 0 2px;line-height:1;transition:color .15s;'; newDel.textContent = '×';
-        newDel.addEventListener('mouseenter', () => { newDel.style.color = '#B22222'; });
-        newDel.addEventListener('mouseleave', () => { newDel.style.color = '#aaa'; });
+        newWrap.className = 'tag-pill-mgr';
+        newWrap.style.cssText = 'opacity:0;transition:opacity .2s;';
+        const newLbl = document.createElement('span'); newLbl.className = 'tag-pill-mgr-lbl'; newLbl.textContent = tag;
+        const newDel = document.createElement('button'); newDel.className = 'tag-pill-mgr-del'; newDel.textContent = '×';
         newDel.addEventListener('click', async () => {
             newDel.disabled = true;
             newWrap.style.opacity = '0';
             setTimeout(() => newWrap.remove(), 200);
             await _cdFetch('/cd/tags/delete', { method: 'POST', body: JSON.stringify({ tag }) });
+            // 同步从"分配标签"区移除对应按钮
+            [...invTagWrap.querySelectorAll('button')].forEach(b => {
+                if (b.textContent === tag) {
+                    b.style.transition = 'opacity .2s';
+                    b.style.opacity = '0';
+                    setTimeout(() => b.remove(), 200);
+                }
+            });
             if (!tagListWrap.children.length) {
                 const e = document.createElement('span'); e.style.cssText = 'font-size:.58rem;color:#ccc;'; e.textContent = '暂无标签'; tagListWrap.appendChild(e);
             }
@@ -1290,27 +1561,26 @@ async function _cdShowAdminPanel() {
         // ② 同步追加到"分配标签"选择区
         invTagWrap.querySelectorAll('span').forEach(s => s.remove());
         const newInvBtn = document.createElement('button');
-        newInvBtn.style.cssText = 'font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;color:var(--primary);transition:all .15s;';
+        newInvBtn.className = 'tag-pill-sel';
         newInvBtn.textContent = tag; newInvBtn.dataset.selected = '0';
         newInvBtn.addEventListener('click', () => {
             const s = newInvBtn.dataset.selected === '1';
             newInvBtn.dataset.selected = s ? '0' : '1';
-            newInvBtn.style.background  = s ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
-            newInvBtn.style.borderColor = s ? 'var(--border)' : '#6B1010';
-            newInvBtn.style.color       = s ? 'var(--primary)' : '#6B1010';
+            newInvBtn.classList.toggle('selected', !s);
         });
         invTagWrap.appendChild(newInvBtn);
     });
     newTagInput.addEventListener('keydown', e => { if (e.key === 'Enter') addTagBtn.click(); });
-    newTagRow.appendChild(newTagInput); newTagRow.appendChild(addTagBtn);
+    newTagInputRow.appendChild(newTagInput); newTagInputRow.appendChild(addTagBtn);
+    newTagRow.appendChild(newTagInputRow); newTagRow.appendChild(addTagErr);
     tagSec.appendChild(newTagRow);
     modal.appendChild(tagSec);
 
     // ── 分隔线 ──────────────────────────────────────────────
-    const divA = document.createElement('div'); divA.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(divA);
+    const divA = document.createElement('div'); divA.style.cssText = 'height:1px;background:var(--muted);margin:6px 0;'; modal.appendChild(divA);
 
     // ── 所有用户 ───────────────────────────────────────────
-    const userSec = document.createElement('div'); userSec.style.marginBottom = '14px';
+    const userSec = document.createElement('div'); userSec.style.marginBottom = '6px';
     const userH = document.createElement('div'); userH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; userH.textContent = '所有用户';
     userSec.appendChild(userH);
     const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
@@ -1327,7 +1597,7 @@ async function _cdShowAdminPanel() {
                 const roleTag = document.createElement('span');
                 roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;background:${u.role==='admin'?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${u.role==='admin'?'#6B1010':'#2F4F4F'};border:1px solid ${u.role==='admin'?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
                 roleTag.textContent = u.role;
-                const tagsSpan = document.createElement('span'); tagsSpan.style.cssText = 'font-size:.5rem;color:#888;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;'; tagsSpan.title = (u.tags||[]).join('、'); tagsSpan.textContent = (u.tags||[]).join('、');
+                const tagsSpan = document.createElement('span'); tagsSpan.style.cssText = 'font-size:.5rem;color:#888;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;'; tagsSpan.textContent = (u.tags||[]).join('、');
                 const revokeBtn = document.createElement('button'); revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;'; revokeBtn.textContent = '注销';
                 revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
                 revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
@@ -1362,7 +1632,7 @@ async function _cdShowAdminPanel() {
     modal.appendChild(userSec);
 
     // ── 分隔线 ──────────────────────────────────────────────
-    const div1 = document.createElement('div'); div1.style.cssText = 'height:1px;background:var(--muted);margin:10px 0;'; modal.appendChild(div1);
+    const div1 = document.createElement('div'); div1.style.cssText = 'height:1px;background:var(--muted);margin:6px 0;'; modal.appendChild(div1);
 
     // ── 邀请码生成 ─────────────────────────────────────────
     const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
@@ -1393,7 +1663,7 @@ async function _cdShowAdminPanel() {
     // 标签多选（从已有标签里选）
     const invTagLabel = document.createElement('div'); invTagLabel.style.cssText = 'font-size:.56rem;color:#888;margin-bottom:5px;font-weight:600;letter-spacing:.5px;'; invTagLabel.textContent = '分配标签（可见范围）';
     invSec.appendChild(invTagLabel);
-    const invTagWrap = document.createElement('div'); invTagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;min-height:24px;';
+    const invTagWrap = document.createElement('div'); invTagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;min-height:24px;';
     async function _loadInvTags() {
         invTagWrap.textContent = '';
         try {
@@ -1403,14 +1673,12 @@ async function _cdShowAdminPanel() {
             if (!tags.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '请先添加标签'; invTagWrap.appendChild(e); return; }
             tags.forEach(tag => {
                 const btn = document.createElement('button');
-                btn.style.cssText = 'font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;color:var(--primary);transition:all .15s;';
+                btn.className = 'tag-pill-sel';
                 btn.textContent = tag; btn.dataset.selected = '0';
                 btn.addEventListener('click', () => {
                     const s = btn.dataset.selected === '1';
                     btn.dataset.selected = s ? '0' : '1';
-                    btn.style.background  = s ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
-                    btn.style.borderColor = s ? 'var(--border)' : '#6B1010';
-                    btn.style.color       = s ? 'var(--primary)' : '#6B1010';
+                    btn.classList.toggle('selected', !s);
                 });
                 invTagWrap.appendChild(btn);
             });
@@ -1420,10 +1688,14 @@ async function _cdShowAdminPanel() {
     invSec.appendChild(invTagWrap);
 
     const invResultDiv = document.createElement('div'); invResultDiv.className = 'cd-admin-result'; invResultDiv.style.display = 'none';
-    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-bottom:6px;'; genBtn.textContent = '生成邀请链接';
+    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-top:10px;margin-bottom:10px;'; genBtn.textContent = '生成邀请链接';
     genBtn.addEventListener('click', async () => {
         const selectedTags = [...invTagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
-        if (!selectedTags.length) { alert('请至少选择一个标签'); return; }
+        if (!selectedTags.length) {
+            invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
+            const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '请至少选择一个标签';
+            invResultDiv.appendChild(e); return;
+        }
         genBtn.disabled = true; genBtn.textContent = '生成中…';
         try {
             const res = await _cdFetch('/cd/invite/create', {
@@ -1431,23 +1703,24 @@ async function _cdShowAdminPanel() {
                 body: JSON.stringify({ role: _selRole, tags: selectedTags }),
             });
             const data = await res.json();
-            if (!res.ok) { genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; invResultDiv.style.display='block'; invResultDiv.textContent=''; const errSpan=document.createElement('span'); errSpan.style.cssText='font-size:.56rem;color:#B22222;'; errSpan.textContent='⚠ '+(data.error||'生成失败，请重试'); invResultDiv.appendChild(errSpan); return; }
-            // 生成邀请链接（含邀请码）
+            if (!res.ok) { genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; invResultDiv.style.display='block'; invResultDiv.textContent=''; const errSpan=document.createElement('span'); errSpan.className='cd-inline-err'; errSpan.textContent='⚠ '+(data.error||'生成失败，请重试'); invResultDiv.appendChild(errSpan); return; }
             const u = new URL(window.location.href);
             u.searchParams.set('invite', data.code);
             const inviteUrl = u.toString();
             invResultDiv.style.display = 'block';
             invResultDiv.textContent = '';
-            const copyBtn = document.createElement('button'); copyBtn.className = 'cd-admin-copy'; copyBtn.style.cssText = 'width:100%;margin-bottom:6px;'; copyBtn.textContent = '点击复制邀请链接';
+            const copyBtn = document.createElement('button'); copyBtn.className = 'cd-admin-copy'; copyBtn.textContent = '点击复制链接';
             copyBtn.addEventListener('click', () => {
                 navigator.clipboard?.writeText(inviteUrl).catch(() => {});
                 copyBtn.textContent = '✓ 已复制！';
-                setTimeout(() => { copyBtn.textContent = '点击复制邀请链接'; }, 2000);
+                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
             });
             const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;'; expNote.textContent = '链接 24 小时有效，用完即失效';
             invResultDiv.appendChild(copyBtn); invResultDiv.appendChild(expNote);
         } catch(_) {
-            alert('网络错误');
+            invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
+            const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ 网络错误，请重试';
+            invResultDiv.appendChild(e);
         }
         genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
     });
@@ -1459,9 +1732,12 @@ async function _cdShowAdminPanel() {
     invSec.appendChild(invResultDiv);
     modal.appendChild(invSec);
 
-    // ── 关闭按钮 ──────────────────────────────────────────
+    // ── 关闭按钮
+    const closeDivider = document.createElement('div');
+    closeDivider.style.cssText = 'height:1px;background:var(--muted);margin:0 0 10px;';
+    modal.appendChild(closeDivider);
     const closeBtn = document.createElement('button');
-    closeBtn.className = 'cd-admin-cancel'; closeBtn.style.cssText = 'width:100%;margin-top:6px;';
+    closeBtn.className = 'cd-admin-cancel'; closeBtn.style.cssText = 'display:block;margin:0 auto;padding:6px 32px;';
     closeBtn.textContent = '关闭';
     closeBtn.addEventListener('click', () => overlay.remove());
     modal.appendChild(closeBtn);
@@ -1518,15 +1794,13 @@ async function _cdShowAdminInviteModal() {
             } else {
                 tags.forEach(tag => {
                     const btn = document.createElement('button');
-                    btn.style.cssText = 'font-size:.6rem;font-weight:700;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--muted);cursor:pointer;color:var(--primary);transition:all .15s;';
+                    btn.className = 'tag-pill-sel';
                     btn.textContent = tag;
                     btn.dataset.selected = '0';
                     btn.addEventListener('click', () => {
                         const s = btn.dataset.selected === '1';
                         btn.dataset.selected = s ? '0' : '1';
-                        btn.style.background  = s ? 'var(--muted)' : 'rgba(107,16,16,0.08)';
-                        btn.style.borderColor = s ? 'var(--border)' : '#6B1010';
-                        btn.style.color       = s ? 'var(--primary)' : '#6B1010';
+                        btn.classList.toggle('selected', !s);
                     });
                     tagWrap.appendChild(btn);
                 });
@@ -1550,7 +1824,11 @@ async function _cdShowAdminInviteModal() {
     genBtn.className = 'cd-admin-submit'; genBtn.textContent = '生成邀请链接';
     genBtn.addEventListener('click', async () => {
         const selectedTags = [...tagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
-        if (!selectedTags.length) { alert('请至少选择一个标签'); return; }
+        if (!selectedTags.length) {
+            resultDiv.style.display = 'block'; resultDiv.textContent = '';
+            const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '请至少选择一个标签';
+            resultDiv.appendChild(e); return;
+        }
         genBtn.disabled = true; genBtn.textContent = '生成中…';
         try {
             const res = await _cdFetch('/cd/invite/create', {
@@ -1558,25 +1836,33 @@ async function _cdShowAdminInviteModal() {
                 body: JSON.stringify({ role: 'viewer', tags: selectedTags }),
             });
             const data = await res.json();
-            if (!res.ok) { alert(data.error || '生成失败'); genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; return; }
-            // 生成带邀请码的链接
+            if (!res.ok) {
+                resultDiv.style.display = 'block'; resultDiv.textContent = '';
+                const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ ' + (data.error || '生成失败，请重试');
+                resultDiv.appendChild(e);
+                genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; return;
+            }
             const u = new URL(window.location.href);
             u.searchParams.set('invite', data.code);
             const inviteUrl = u.toString();
             resultDiv.style.display = 'block';
             resultDiv.textContent = '';
             const copyBtn = document.createElement('button');
-            copyBtn.className = 'cd-admin-copy'; copyBtn.style.cssText = 'width:100%;margin-bottom:6px;'; copyBtn.textContent = '点击复制邀请链接';
+            copyBtn.className = 'cd-admin-copy'; copyBtn.textContent = '点击复制链接';
             copyBtn.addEventListener('click', () => {
                 navigator.clipboard?.writeText(inviteUrl).catch(() => {});
                 copyBtn.textContent = '✓ 已复制！';
-                setTimeout(() => { copyBtn.textContent = '点击复制邀请链接'; }, 2000);
+                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
             });
             const expNote = document.createElement('div');
             expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;';
             expNote.textContent = '链接 24 小时有效，用完即失效';
             resultDiv.appendChild(copyBtn); resultDiv.appendChild(expNote);
-        } catch(_) { alert('网络错误，请重试'); }
+        } catch(_) {
+            resultDiv.style.display = 'block'; resultDiv.textContent = '';
+            const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ 网络错误，请重试';
+            resultDiv.appendChild(e);
+        }
         genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
     });
 
@@ -1590,6 +1876,166 @@ async function _cdShowAdminInviteModal() {
     overlay.appendChild(modal);
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  删除倒计时确认弹窗（#4：替代直接删除，防止误触）
+// ═══════════════════════════════════════════════════════════════
+function _cdShowDeleteConfirm(item, diffDays, onConfirmed) {
+    document.querySelectorAll('.cd-del-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-del-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'cd-del-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    // ── 标题行
+    const header = document.createElement('div');
+    header.className = 'cd-del-header';
+    const icon = document.createElement('div');
+    icon.className = 'cd-del-icon';
+    icon.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="#A32D2D" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 14,4"/><path d="M6,4V2.5h4V4"/><path d="M5,4l.6,8.5a.9.9,0,0,0,.9.9h3a.9.9,0,0,0,.9-.9L11,4"/><line x1="8" y1="7" x2="8" y2="11.5"/><line x1="6.3" y1="7.1" x2="6.6" y2="11.4"/><line x1="9.7" y1="7.1" x2="9.4" y2="11.4"/></svg>`;
+    const hdText = document.createElement('div');
+    hdText.className = 'cd-del-hd-text';
+    const hdTitle = document.createElement('div');
+    hdTitle.className = 'cd-del-title'; hdTitle.textContent = '确认删除倒计时';
+    const hdSub = document.createElement('div');
+    hdSub.className = 'cd-del-subtitle'; hdSub.textContent = '此操作不可撤销';
+    hdText.appendChild(hdTitle); hdText.appendChild(hdSub);
+    header.appendChild(icon); header.appendChild(hdText);
+    modal.appendChild(header);
+
+    // ── 任务信息卡
+    const body = document.createElement('div');
+    body.className = 'cd-del-body';
+    const taskCard = document.createElement('div');
+    taskCard.className = 'cd-del-task-card';
+    const taskName = document.createElement('div');
+    taskName.className = 'cd-del-task-name'; taskName.textContent = item.name;
+    const taskMeta = document.createElement('div');
+    taskMeta.className = 'cd-del-task-meta';
+    const taskDate = document.createElement('span');
+    taskDate.className = 'cd-del-task-date';
+    const d = new Date(item.date + 'T12:00:00');
+    taskDate.textContent = `目标：${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+    taskMeta.appendChild(taskDate);
+    if (diffDays > 0) {
+        const taskDays = document.createElement('span');
+        taskDays.className = 'cd-del-task-days';
+        taskDays.textContent = `还剩 ${diffDays} 天`;
+        taskMeta.appendChild(taskDays);
+    }
+    taskCard.appendChild(taskName); taskCard.appendChild(taskMeta);
+    const progWrap = document.createElement('div'); progWrap.className = 'cd-del-progress';
+    const progBar  = document.createElement('div'); progBar.className = 'cd-del-progress-bar';
+    progWrap.appendChild(progBar);
+    const warn = document.createElement('p');
+    warn.className = 'cd-del-warn';
+    warn.innerHTML = '删除后<strong>无法恢复</strong>，所有成员将立即失去对该倒计时的访问。';
+    body.appendChild(taskCard); body.appendChild(progWrap); body.appendChild(warn);
+    modal.appendChild(body);
+
+    // ── 按钮行
+    const footer = document.createElement('div');
+    footer.className = 'cd-del-footer';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cd-del-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'cd-del-confirm'; confirmBtn.textContent = '确认删除';
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true; cancelBtn.disabled = true;
+        confirmBtn.textContent = '删除中…';
+        taskCard.classList.add('fading');
+        warn.style.display = 'none';
+        progWrap.style.display = 'block';
+        requestAnimationFrame(() => { progBar.style.width = '85%'; });
+        await onConfirmed();
+        overlay.remove();
+    });
+    footer.appendChild(cancelBtn); footer.appendChild(confirmBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
+    document.body.appendChild(overlay);
+    confirmBtn.focus();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  _buildCdCard 子函数（#6：拆分超长函数）
+// ═══════════════════════════════════════════════════════════════
+function _renderCdLogin(card, view) {
+    const loginBtn = document.createElement('button');
+    loginBtn.className = 'cd-admin-btn';
+    loginBtn.textContent = '用邀请码加入';
+    loginBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowRedeemModal(); });
+    return loginBtn;
+}
+
+function _renderCdEmpty(card, isAdmin) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:16px 0;';
+    const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#6B1010;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
+    const txt  = document.createElement('div'); txt.style.cssText  = 'font-size:.6rem;color:#aaa;text-align:center;margin-bottom:4px;'; txt.textContent = '暂无倒计时';
+    const sub  = document.createElement('div'); sub.style.cssText  = 'font-size:.54rem;color:#ccc;text-align:center;'; sub.textContent = isAdmin ? '点击右上角「新建」创建' : '管理员尚未添加任务';
+    empty.appendChild(icon); empty.appendChild(txt); empty.appendChild(sub);
+    return empty;
+}
+
+function _renderCdProgress(item, diffDays, color) {
+    const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
+    let totalDays = parseInt(localStorage.getItem(_cdKey) || '0');
+    if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
+    const passedDays = totalDays - diffDays;
+    const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
+    const wrap = document.createElement('div'); wrap.style.cssText = 'margin-bottom:7px;';
+    const labels = document.createElement('div'); labels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
+    const lL = document.createElement('span'); lL.textContent = `已过 ${passedDays} 天`;
+    const lR = document.createElement('span'); lR.textContent = `共 ${totalDays} 天`;
+    labels.appendChild(lL); labels.appendChild(lR);
+    const track = document.createElement('div'); track.className = 'cd-prog-track';
+    const fill  = document.createElement('div'); fill.className  = 'cd-prog-fill'; fill.style.background = color; fill.style.width = pct + '%';
+    track.appendChild(fill); wrap.appendChild(labels); wrap.appendChild(track);
+    return wrap;
+}
+
+function _renderCdDateRow(item) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:3em 1fr;row-gap:2px;align-items:baseline;';
+    const tDate = new Date(item.date + 'T12:00:00');
+    const vd = _cdVDate(tDate);
+    if (vd) {
+        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
+        const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
+        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${vd.m}月${vd.d}日 ${vd.wk}`;
+        r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
+    }
+    const r2 = document.createElement('div'); r2.className = 'cd-date-row';
+    const l2 = document.createElement('span'); l2.className = 'cd-date-lbl'; l2.textContent = '公历';
+    const v2 = document.createElement('span'); v2.className = 'cd-date-val';
+    const gWk = WKS[(tDate.getDay() + 6) % 7];
+    v2.textContent = `${tDate.getFullYear()}年${tDate.getMonth()+1}月${tDate.getDate()}日 ${gWk}`;
+    r2.appendChild(l2); r2.appendChild(v2); wrap.appendChild(r2);
+    return wrap;
+}
+
+function _renderCdMetrics(diffDays, color) {
+    const weeks = Math.floor(diffDays / 7), days2 = diffDays % 7;
+    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px;';
+    const mL = document.createElement('div'); mL.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
+    const mLL = document.createElement('div'); mLL.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mLL.textContent = '剩余天数';
+    const mLV = document.createElement('div'); mLV.style.cssText = `font-size:1.5rem;font-weight:800;line-height:1.1;color:${color};`; mLV.textContent = diffDays;
+    mL.appendChild(mLL); mL.appendChild(mLV);
+    const mR = document.createElement('div'); mR.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
+    const mRL = document.createElement('div'); mRL.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mRL.textContent = '剩余完整周';
+    const mRV = document.createElement('div'); mRV.style.cssText = 'font-size:1.1rem;font-weight:800;line-height:1.2;color:var(--primary);'; mRV.textContent = weeks > 0 ? `${weeks} 周${days2 > 0 ? ' ' + days2 + ' 天' : ''}` : `${days2} 天`;
+    mR.appendChild(mRL); mR.appendChild(mRV);
+    grid.appendChild(mL); grid.appendChild(mR);
+    return grid;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1626,11 +2072,7 @@ function _buildCdCard() {
 
     // 未登录提示按钮
     if (!_cdUser) {
-        const loginBtn = document.createElement('button');
-        loginBtn.className = 'cd-admin-btn';
-        loginBtn.textContent = '用邀请码加入';
-        loginBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowRedeemModal(); });
-        hdrWrap.appendChild(loginBtn);
+        hdrWrap.appendChild(_renderCdLogin());
         card.appendChild(hdrWrap);
         const tip = document.createElement('div');
         tip.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#ccc;padding:20px 0;';
@@ -1668,15 +2110,8 @@ function _buildCdCard() {
     }
     card.appendChild(hdrWrap);
 
-    // ── 无任务空状态 ─────────────────────────────────────────────
     if (!total) {
-        const empty = document.createElement('div');
-        empty.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:16px 0;';
-        const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#6B1010;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
-        const txt = document.createElement('div'); txt.style.cssText = 'font-size:.6rem;color:#aaa;text-align:center;margin-bottom:4px;'; txt.textContent = '暂无倒计时';
-        const sub = document.createElement('div'); sub.style.cssText = 'font-size:.54rem;color:#ccc;text-align:center;'; sub.textContent = isAdmin ? '点击右上角「新建」创建' : '管理员尚未添加任务';
-        empty.appendChild(icon); empty.appendChild(txt); empty.appendChild(sub);
-        card.appendChild(empty);
+        card.appendChild(_renderCdEmpty(card, isAdmin));
         view.appendChild(card);
         _applyCardHeight(card, view);
         return;
@@ -1741,11 +2176,12 @@ function _buildCdCard() {
             delBtn.textContent = '删除此项';
             delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
             delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
-            delBtn.addEventListener('click', async e => {
+            delBtn.addEventListener('click', e => {
                 e.stopPropagation();
-                delBtn.disabled = true; delBtn.textContent = '删除中…';
-                await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
-                await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+                _cdShowDeleteConfirm(item, 0, async () => {
+                    await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
+                    await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+                });
             });
             endedDiv.appendChild(delBtn);
         }
@@ -1755,55 +2191,9 @@ function _buildCdCard() {
         return;
     }
 
-    // ── 双指标：剩余天数 + 剩余完整周 ──────────────────────────
-    const weeks = Math.floor(diffDays / 7), days2 = diffDays % 7;
-    const metricGrid = document.createElement('div');
-    metricGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px;';
-    const mLeft = document.createElement('div'); mLeft.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
-    const mLeftLbl = document.createElement('div'); mLeftLbl.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mLeftLbl.textContent = '剩余天数';
-    const mLeftVal = document.createElement('div'); mLeftVal.style.cssText = `font-size:1.5rem;font-weight:800;line-height:1.1;color:${color};`; mLeftVal.textContent = diffDays;
-    mLeft.appendChild(mLeftLbl); mLeft.appendChild(mLeftVal);
-    const mRight = document.createElement('div'); mRight.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
-    const mRightLbl = document.createElement('div'); mRightLbl.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mRightLbl.textContent = '剩余完整周';
-    const mRightVal = document.createElement('div'); mRightVal.style.cssText = 'font-size:1.1rem;font-weight:800;line-height:1.2;color:var(--primary);'; mRightVal.textContent = weeks > 0 ? `${weeks} 周${days2 > 0 ? ' ' + days2 + ' 天' : ''}` : `${days2} 天`;
-    mRight.appendChild(mRightLbl); mRight.appendChild(mRightVal);
-    metricGrid.appendChild(mLeft); metricGrid.appendChild(mRight);
-    card.appendChild(metricGrid);
-
-    // ── 进度条 ──────────────────────────────────────────────────
-    const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
-    let totalDays = parseInt(localStorage.getItem(_cdKey) || '0');
-    if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
-    const passedDays = totalDays - diffDays;
-    const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
-    const progWrap = document.createElement('div'); progWrap.style.cssText = 'margin-bottom:7px;';
-    const progLabels = document.createElement('div'); progLabels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
-    const progL = document.createElement('span'); progL.textContent = `已过 ${passedDays} 天`;
-    const progR = document.createElement('span'); progR.textContent = `共 ${totalDays} 天`;
-    progLabels.appendChild(progL); progLabels.appendChild(progR);
-    const track = document.createElement('div'); track.className = 'cd-prog-track';
-    const fill = document.createElement('div'); fill.className = 'cd-prog-fill'; fill.style.background = color; fill.style.width = pct + '%';
-    track.appendChild(fill); progWrap.appendChild(progLabels); progWrap.appendChild(track);
-    card.appendChild(progWrap);
-
-    // ── 双历日期 ────────────────────────────────────────────────
-    const dateWrap = document.createElement('div');
-    dateWrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:3em 1fr;row-gap:2px;align-items:baseline;';
-    const tDate = new Date(item.date + 'T12:00:00');
-    const vd = _cdVDate(tDate);
-    if (vd) {
-        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
-        const l1e = document.createElement('span'); l1e.className = 'cd-date-lbl'; l1e.textContent = '更替历';
-        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${vd.m}月${vd.d}日 ${vd.wk}`;
-        r1.appendChild(l1e); r1.appendChild(v1); dateWrap.appendChild(r1);
-    }
-    const r2 = document.createElement('div'); r2.className = 'cd-date-row';
-    const l2el = document.createElement('span'); l2el.className = 'cd-date-lbl'; l2el.textContent = '公历';
-    const v2 = document.createElement('span'); v2.className = 'cd-date-val';
-    const gWk = WKS[(tDate.getDay() + 6) % 7];
-    v2.textContent = `${tDate.getFullYear()}年${tDate.getMonth()+1}月${tDate.getDate()}日 ${gWk}`;
-    r2.appendChild(l2el); r2.appendChild(v2); dateWrap.appendChild(r2);
-    card.appendChild(dateWrap);
+    card.appendChild(_renderCdMetrics(diffDays, color));
+    card.appendChild(_renderCdProgress(item, diffDays, color));
+    card.appendChild(_renderCdDateRow(item));
 
     // ── 操作行：标签显示 + 删除（admin） ────────────────────────
     const actRow = document.createElement('div');
@@ -1821,11 +2211,12 @@ function _buildCdCard() {
         delBtn.textContent = '删除';
         delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
         delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
-        delBtn.addEventListener('click', async e => {
+        delBtn.addEventListener('click', e => {
             e.stopPropagation();
-            delBtn.disabled = true; delBtn.textContent = '删除中…';
-            await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
-            await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+            _cdShowDeleteConfirm(item, diffDays, async () => {
+                await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
+                await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+            });
         });
         actRow.appendChild(delBtn);
     }
@@ -1835,25 +2226,44 @@ function _buildCdCard() {
     _applyCardHeight(card, view);
 }
 
-// ── 倒计时卡高度同步 ────────────────────────────────────────────
+// ── 倒计时卡高度限制：不超过同行月份卡高度，超出内部滚动 ──────────
 let _cdResizeObserver = null;
 function _applyCardHeight(card, view) {
-    const _sync = () => { card.style.maxHeight = ''; card.style.alignSelf = ''; };
+    function _sync() {
+        // 先把倒计时卡临时移出 DOM，让月份卡恢复自然高度再量
+        const parent = card.parentNode;
+        const next   = card.nextSibling;
+        if (parent) parent.removeChild(card);
+
+        const allBoxes = [...view.querySelectorAll('.month-box')];
+        const maxH = allBoxes.length
+            ? Math.max(...allBoxes.map(b => b.getBoundingClientRect().height))
+            : 0;
+
+        // 把倒计时卡放回原位
+        if (parent) {
+            if (next) parent.insertBefore(card, next);
+            else parent.appendChild(card);
+        }
+
+        if (maxH > 0) {
+            card.style.maxHeight = maxH + 'px';
+            card.style.overflowY = 'auto';
+        }
+    }
     requestAnimationFrame(_sync);
     if (_cdResizeObserver) { _cdResizeObserver.disconnect(); _cdResizeObserver = null; }
     if (window.ResizeObserver) {
-        _cdResizeObserver = new ResizeObserver(_sync);
-        const allBoxes = [...view.querySelectorAll('.month-box')];
-        const ref = allBoxes[allBoxes.length - 1];
+        _cdResizeObserver = new ResizeObserver(() => requestAnimationFrame(_sync));
+        const ref = [...view.querySelectorAll('.month-box')].pop();
         if (ref) _cdResizeObserver.observe(ref);
     }
 }
 
 // ── 日历格染色（跟随当前激活的倒计时）──────────────────────────
 function _cdApplyCellColor() {
-    DOM.calView.querySelectorAll('.cell').forEach(c => {
-        c.classList.remove('cd-range', 'cd-target'); delete c.dataset.cdDays;
-    });
+    _cellCache.forEach(({ cell }) => { cell.classList.remove('cd-range', 'cd-target'); delete cell.dataset.cdDays; });
+    _extraCache.forEach(cell => { if (cell) { cell.classList.remove('cd-range', 'cd-target'); delete cell.dataset.cdDays; } });
     const list = _cdSortedTasks();
     if (!list.length) return;
     const item = list[_cdActiveIdx];
@@ -1863,18 +2273,16 @@ function _cdApplyCellColor() {
     const _dp = item.date.split('-').map(Number);
     const targetMs = new Date(_dp[0], _dp[1]-1, _dp[2]).getTime();
     if (targetMs <= todayMs) return;
-    const diffDaysTotal = Math.round((targetMs - todayMs) / 86400000);
-    DOM.calView.querySelectorAll('.cell').forEach(cell => {
-        const tt = cell.dataset.tt; if (!tt) return;
-        try {
-            const { gStr } = JSON.parse(tt);
-            const nums = gStr.match(/\d+/g);
-            if (!nums) return;
-            const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
-            if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
-            else if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
-        } catch(_) {}
-    });
+    const diffDaysTotal = Math.round((targetMs - todayMs) / DAY_MS);
+    const applyColor = cell => {
+        const data = _cellDataMap.get(cell); if (!data) return;
+        const nums = data.gStr.match(/\d+/g); if (!nums) return;
+        const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
+        if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
+        else if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
+    };
+    _cellCache.forEach(({ cell }) => applyColor(cell));
+    _extraCache.forEach(cell => { if (cell) applyColor(cell); });
 }
 const NOMINATIM_HEADERS = { 'Accept-Language': 'zh', 'User-Agent': 'GengTiLi-Calendar/1.0 (https://alaricpolum.github.io/calendar/)' };
 const VC_COND_MAP = {
@@ -1914,6 +2322,7 @@ let _focusMarks = {};
 try { _focusMarks = JSON.parse(localStorage.getItem('focusMarks') || '{}'); } catch(_) {}
 // _rangeStart/_rangeEnd: 区间高亮的起止格子 offset（基于当前渲染年份）
 let _rangeStart = null, _rangeEnd = null;
+let _lastYearReviewExtraData = null; // 缓存最近一次年度回顾的 extraData，供翻页复用
 
 const MOON_PATH_TABLE = [];
 const ARC_TABLE_SIZE  = 2000;
@@ -1962,18 +2371,17 @@ const _termOffsetsCache = {};
 const _TERM_CACHE_MAX = 50;
 function _calcTermOffsets(year) {
     if (_termOffsetsCache[year]) return _termOffsetsCache[year];
-    // 超出上限时清除最早的一半条目
     const keys = Object.keys(_termOffsetsCache);
     if (keys.length >= _TERM_CACHE_MAX) keys.slice(0, _TERM_CACHE_MAX >> 1).forEach(k => delete _termOffsetsCache[k]);
     const springEq  = getShEq(year);
-    const springJDE = (springEq.getTime() / 86400000) + 2440587.5;
+    const springJDE = (springEq.getTime() / DAY_MS) + JD_EPOCH;
     const result    = {};
     for (let i = 0; i < 24; i++) {
         const targetLon = (i * 15) % 360;
         const jde       = _jdeForSunLon(targetLon, springJDE + (i*15/360)*365.25);
-        const bj        = new Date((jde - 2440587.5)*86400000 + 8*3600000);
+        const bj        = new Date((jde - JD_EPOCH)*DAY_MS + BJ_OFFSET_MS);
         const termDate  = new Date(bj.getUTCFullYear(), bj.getUTCMonth(), bj.getUTCDate());
-        const off       = Math.round((termDate - springEq) / 86400000);
+        const off       = Math.round((termDate - springEq) / DAY_MS);
         if (off >= 0 && off < 366) result[off] = TERM_NAMES[i];
     }
     _termOffsetsCache[year] = result;
@@ -2010,8 +2418,8 @@ function _getDeltaT(year) {
 }
 function _vernalEquinoxUTC(year) {
     const jde    = _meeusEquinoxJDE(year);
-    const jdeUTC = jde - _getDeltaT(year) / 86400;
-    return new Date((jdeUTC - 2440587.5) * 86400000);
+    const jdeUTC = jde - _getDeltaT(year) / DAY_MS;
+    return new Date((jdeUTC - JD_EPOCH) * DAY_MS);
 }
 
 // ── 春分日缓存（含 USNO 保险，竞态修复：异步结果落地后刷新视图）
@@ -2019,14 +2427,12 @@ const _eqCache = {};
 function getShEq(year) {
     if (_eqCache[year]) return _eqCache[year];
     const utc  = _vernalEquinoxUTC(year);
-    const bj   = new Date(utc.getTime() + 8 * 3600000);
+    const bj   = new Date(utc.getTime() + BJ_OFFSET_MS);
     const h    = bj.getUTCHours(), m = bj.getUTCMinutes();
     const totalMin = h * 60 + m;
     const inDangerZone = totalMin >= 23*60+58 || totalMin <= 1;
-    // 先写本地计算结果
     const result = new Date(bj.getUTCFullYear(), bj.getUTCMonth(), bj.getUTCDate(), 0, 0, 0);
     _eqCache[year] = result;
-    // 危险窗口：异步核对USNO，若结果不同则更新缓存并刷新视图
     if (inDangerZone) {
         fetch(`https://aa.usno.navy.mil/api/seasons?year=${year}&tz=8&dst=false`)
             .then(r => r.json())
@@ -2036,7 +2442,6 @@ function getShEq(year) {
                     const dt = new Date(entry.date+'T00:00:00');
                     if (dt.getTime() !== _eqCache[year]?.getTime()) {
                         _eqCache[year] = dt;
-                        // 仅在覆写后刷新，避免无意义重渲染
                         render(); update();
                     }
                 }
@@ -2045,11 +2450,11 @@ function getShEq(year) {
     return result;
 }
 
-function isLeapYearV(y)    { return Math.round((getShEq(y+1) - getShEq(y)) / 86400000); }
+function isLeapYearV(y)    { return Math.round((getShEq(y+1) - getShEq(y)) / DAY_MS); }
 function getDayDiff(d1,d2) {
     const t1 = new Date(d1.getFullYear(),d1.getMonth(),d1.getDate()).getTime();
     const t2 = new Date(d2.getFullYear(),d2.getMonth(),d2.getDate()).getTime();
-    return Math.floor((t2-t1)/86400000);
+    return Math.floor((t2-t1)/DAY_MS);
 }
 // ── Meeus《天文算法》第49章：精确月相时刻（TDT） ────────────────
 // phase: 0=新月, 0.25=上弦, 0.5=满月, 0.75=下弦
@@ -2196,10 +2601,7 @@ function getMoonPhase(date) {
     const fullMs = _meeusLunarPhaseUTC(k0,   0.5);
     const q1Ms   = _meeusLunarPhaseUTC(k0,  0.25);
     const q3Ms   = _meeusLunarPhaseUTC(k0,  0.75);
-    // 线性 phase（用于月龄计算）
     const phase  = (ms - prevMs) / (nextMs - prevMs);
-    // 用 Meeus 精确四相位分段插值计算精确 n，与月相日历完全同源
-    // 分段：新月→上弦(0~0.25)、上弦→满月(0.25~0.5)、满月→下弦(0.5~0.75)、下弦→新月(0.75~1)
     let n;
     if (ms < q1Ms) {
         n = 0.25 * (ms - prevMs) / (q1Ms - prevMs);
@@ -2211,12 +2613,9 @@ function getMoonPhase(date) {
         n = 0.75 + 0.25 * (ms - q3Ms)  / (nextMs - q3Ms);
     }
     n = Math.max(0, Math.min(0.9999999, n));
-    // 几何亮面比例：(1 - cos(2π·n)) / 2
-    // 新月=0%，上下弦=50%，满月=100%，与月相日历曲线完全一致
     const illumination = (1 - Math.cos(2 * Math.PI * n)) / 2;
-    // 趋势：以精确满月时刻为分界，而非线性中点
     const waxing = ms < fullMs;
-    return { age: phase * 29.530588853, normalized: n, illumination, waxing };
+    return { age: phase * SYNODIC_MONTH, normalized: n, illumination, waxing };
 }
 function getAstronomyParams(date, forceYear) {
     const vYear    = forceYear;
@@ -2282,14 +2681,10 @@ let _moonRADecCache = null;
 function _getMoonRADec(date) {
     const sec = Math.floor(date.getTime() / 1000);
     if (_moonRADecCache && _moonRADecCache.sec === sec) return _moonRADecCache.val;
-    const T  = (date.getTime()/86400000 - 10957.5) / 36525; // J2000起的儒略世纪
-    // 月亮平黄经
+    const T  = (date.getTime()/DAY_MS - 10957.5) / 36525;
     const L0 = (218.3165 + 481267.8813*T) % 360;
-    // 月亮平近点角
     const M  = ((134.9634 + 477198.8676*T) % 360) * Math.PI/180;
-    // 月亮纬度参数
     const F  = ((93.2721 + 483202.0175*T)  % 360) * Math.PI/180;
-    // 太阳平近点角
     const Ms = ((357.5291 + 35999.0503*T)  % 360) * Math.PI/180;
     // 月亮黄经修正（主要项）
     const dLon = 6.289*Math.sin(M)
@@ -2325,8 +2720,8 @@ function _getMoonRADec(date) {
 
 // 格林尼治恒星时（GMST，弧度）
 function _getGMST(date) {
-    const T = (date.getTime()/86400000 - 10957.5) / 36525;
-    const gmst = 280.46061837 + 360.98564736629*(date.getTime()/86400000 - 10957.5)
+    const T = (date.getTime()/DAY_MS - 10957.5) / 36525;
+    const gmst = 280.46061837 + 360.98564736629*(date.getTime()/DAY_MS - 10957.5)
                + 0.000387933*T*T - T*T*T/38710000;
     return ((gmst % 360) + 360) % 360 * Math.PI/180;
 }
@@ -2562,6 +2957,11 @@ function _renderForecast(days) {
 // ═══════════════════════════════════════════════════════════════
 function showTooltip(e, data) {
     e.stopPropagation();
+    // 专注模式 + 有权限 + 更替日 A → 触发年度回顾弹窗
+    if (data.isExtra && data.extraName === '更替日 A' && document.body.classList.contains('focus-mode') && _cdUser) {
+        _showYearReview(data.vYear, data);
+        return;
+    }
     const isFocus = document.body.classList.contains('focus-mode');
     const tt  = DOM.tooltip;
     const now = new Date();
@@ -2572,12 +2972,15 @@ function showTooltip(e, data) {
     tt.setAttribute('data-active-cell', cellId);
 
     const ttW=172, ttH=220, GAP=8;
-    const winW=document.documentElement.clientWidth, winH=document.documentElement.clientHeight;
+    const vv   = window.visualViewport;
+    const winW = vv ? vv.width  : document.documentElement.clientWidth;
+    const winH = vv ? vv.height : document.documentElement.clientHeight;
+    const vvTop = vv ? vv.offsetTop : 0;
     const cell=(e.target.closest('.cell')||e.target).getBoundingClientRect();
     const flipX = cell.right+GAP+ttW > winW;
-    const flipY = cell.bottom+GAP+ttH > winH;
+    const flipY = (cell.bottom - vvTop)+GAP+ttH > winH;
     tt.style.left = Math.max(8, flipX?cell.left-ttW-GAP:cell.right+GAP)+'px';
-    tt.style.top  = Math.max(8, flipY?cell.top-ttH-GAP:cell.bottom+GAP)+'px';
+    tt.style.top  = Math.max(8, flipY?cell.top-vvTop-ttH-GAP:cell.bottom-vvTop+GAP)+'px';
 
     const dayGap = Math.round((new Date(targetDate.getFullYear(),targetDate.getMonth(),targetDate.getDate())
                              - new Date(now.getFullYear(),now.getMonth(),now.getDate())) / 86400000);
@@ -2681,53 +3084,95 @@ function showTooltip(e, data) {
         if (termName) { const _dn=document.createElement('div'); _dn.style.cssText='font-size:.65rem;color:#7f8c8d;font-weight:700;margin-top:2px;letter-spacing:1px;'; _dn.textContent=termName; _d1.appendChild(_dn); }
         tt.appendChild(_d1); tt.appendChild(_makeTtRows());
     }
-    // 专注模式下追加操作栏
+    // 专注模式下追加操作栏（便签需要权限；色点/星标始终可用）
     if (isFocus) {
         const gKey = data.gStr;
+
+        // ── 便签区（仅 superadmin / admin / viewer 可见）────────
+        if (_cdUser) {
+            const noteSection = document.createElement('div');
+            noteSection.className = 'tt-note-section';
+
+            function _getCurrentNote() { return _focusMarks[gKey]?.note || ''; }
+
+            function _doSave(val) {
+                if (!_focusMarks[gKey]) _focusMarks[gKey] = {};
+                if (val) { _focusMarks[gKey].note = val; }
+                else { delete _focusMarks[gKey].note; if (!Object.keys(_focusMarks[gKey]).length) delete _focusMarks[gKey]; }
+                _saveFocusMarks(); _applyFocusMarks(); _renderNoteView();
+                if (flipY) { const realH = tt.offsetHeight; tt.style.top = Math.max(8, cell.top - realH - GAP) + 'px'; }
+            }
+
+            function _renderNoteView() {
+                while (noteSection.firstChild) noteSection.removeChild(noteSection.firstChild);
+                const note = _getCurrentNote();
+                if (note) {
+                    const noteText = document.createElement('div'); noteText.className = 'tt-note-text'; noteText.textContent = note;
+                    noteSection.appendChild(noteText);
+                    const actionRow = document.createElement('div'); actionRow.style.cssText = 'display:flex;justify-content:space-between;margin-top:2px;';
+                    const delLink = document.createElement('div'); delLink.className = 'tt-note-edit-link'; delLink.style.color = '#c0392b'; delLink.textContent = '删除';
+                    delLink.addEventListener('click', e => { e.stopPropagation(); _doSave(''); });
+                    const editLink = document.createElement('div'); editLink.className = 'tt-note-edit-link'; editLink.textContent = '编辑';
+                    editLink.addEventListener('click', e => { e.stopPropagation(); _renderNoteEdit(); });
+                    actionRow.appendChild(delLink); actionRow.appendChild(editLink); noteSection.appendChild(actionRow);
+                } else { _renderNoteEdit(); }
+            }
+
+            function _renderNoteEdit() {
+                while (noteSection.firstChild) noteSection.removeChild(noteSection.firstChild);
+                const wrap = document.createElement('div'); wrap.className = 'tt-note-wrap';
+                const textarea = document.createElement('textarea'); textarea.className = 'tt-note-textarea'; textarea.maxLength = 50; textarea.placeholder = '为这一天写点什么…'; textarea.value = _getCurrentNote();
+                textarea.addEventListener('click', e => e.stopPropagation());
+                textarea.addEventListener('mousedown', e => e.stopPropagation());
+                textarea.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); _doSave(textarea.value.trim()); } });
+                const counter = document.createElement('span'); counter.className = 'tt-note-count'; counter.textContent = textarea.value.length + '/50';
+                function _updateCounter() {
+                    const len = textarea.value.length;
+                    counter.textContent = len + '/50';
+                    counter.classList.toggle('near-limit', len >= 40);
+                }
+                textarea.addEventListener('input', _updateCounter);
+                const footer = document.createElement('div'); footer.className = 'tt-note-footer';
+                function _expandTextarea() { wrap.classList.add('expanded'); footer.classList.add('expanded'); textarea.focus(); }
+                textarea.addEventListener('focus', _expandTextarea);
+                const saveBtn = document.createElement('button'); saveBtn.className = 'tt-note-save'; saveBtn.textContent = '保存';
+                saveBtn.addEventListener('click', e => { e.stopPropagation(); _doSave(textarea.value.trim()); });
+                footer.appendChild(saveBtn); wrap.appendChild(textarea); wrap.appendChild(counter);
+                noteSection.appendChild(wrap); noteSection.appendChild(footer);
+                if (textarea.value) { setTimeout(_expandTextarea, 0); }
+            }
+
+            _renderNoteView();
+            tt.appendChild(noteSection);
+        }
+
+        // ── 色点 + 星标操作栏 ───────────────────────────────────
         const bar = document.createElement('div');
         bar.className = 'tt-focus-bar';
-
-        // 色点按钮组
-        const dotWrap = document.createElement('div');
-        dotWrap.className = 'tt-dot-btns';
-
+        const dotWrap = document.createElement('div'); dotWrap.className = 'tt-dot-btns';
         const currentDot = _focusMarks[gKey]?.dot || null;
         ['red','blue','green'].forEach(color => {
             const btn = document.createElement('div');
             btn.className = `tt-dot-btn tt-dot-btn-${color}${currentDot===color?' active':''}`;
-
             btn.addEventListener('click', e => {
                 e.stopPropagation();
                 if (!_focusMarks[gKey]) _focusMarks[gKey] = {};
-                if (_focusMarks[gKey].dot === color) {
-                    delete _focusMarks[gKey].dot;
-                } else {
-                    _focusMarks[gKey].dot = color;
-                }
-                _saveFocusMarks();
-                _applyFocusMarks();
-                hideTooltip(e);
+                if (_focusMarks[gKey].dot === color) { delete _focusMarks[gKey].dot; } else { _focusMarks[gKey].dot = color; }
+                _saveFocusMarks(); _applyFocusMarks(); hideTooltip(e);
             });
             dotWrap.appendChild(btn);
         });
-
-        // 五角星按钮
         const starBtn = document.createElement('button');
         starBtn.className = 'tt-star-btn' + (_focusMarks[gKey]?.star ? ' active' : '');
         starBtn.textContent = '★';
-
         starBtn.addEventListener('click', e => {
             e.stopPropagation();
             if (!_focusMarks[gKey]) _focusMarks[gKey] = {};
             _focusMarks[gKey].star = !_focusMarks[gKey].star;
             if (!_focusMarks[gKey].star) delete _focusMarks[gKey].star;
-            _saveFocusMarks();
-            _applyFocusMarks();
-            hideTooltip(e);
+            _saveFocusMarks(); _applyFocusMarks(); hideTooltip(e);
         });
-
-        bar.appendChild(dotWrap);
-        bar.appendChild(starBtn);
+        bar.appendChild(dotWrap); bar.appendChild(starBtn);
         tt.appendChild(bar);
     }
     tt.style.animation='tt-appear .15s ease-out both';
@@ -2743,6 +3188,263 @@ function showTooltip(e, data) {
         update();
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  年度回顾弹窗（仅 superadmin / admin / viewer 可见）
+// ═══════════════════════════════════════════════════════════════
+function _showYearReview(vYear, extraData) {
+    if (extraData) _lastYearReviewExtraData = extraData;
+    else extraData = _lastYearReviewExtraData;
+    const total = isLeapYearV(vYear);
+    const cEq   = getShEq(vYear);
+
+    // ── 从 extraData 计算附属信息行（与普通 tooltip 同源）──────────
+    function _buildInfoNode(data) {
+        if (!data || !data.gStr) return null;
+        const gNums = data.gStr.match(/\d+/g);
+        if (!gNums || gNums.length < 3) return null;
+        const now = new Date();
+        const targetDate = new Date(+gNums[0], +gNums[1]-1, +gNums[2], now.getHours(), now.getMinutes(), now.getSeconds());
+        const dayGap = Math.round((new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+                                 - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+        let tVY = targetDate.getFullYear();
+        if (targetDate < getShEq(tVY)) tVY--;
+        const moon = getMoonPhase(targetDate);
+        const TERMS2 = _calcTermOffsets(tVY);
+        const total2 = isLeapYearV(tVY);
+        const major = Object.entries(TERMS2).filter(([,n])=>['春分','夏至','秋分','冬至'].includes(n)).map(([o])=>+o).sort((a,b)=>a-b);
+        const nextMajorOff = major.find(o=>o>data.offset);
+        const daysStr = major.includes(data.offset)
+            ? `今日${TERMS2[data.offset]}`
+            : (data.offset>=(major[3]||277) ? `${total2-data.offset}天后春分` : `${nextMajorOff-data.offset}天后${TERMS2[nextMajorOff]}`);
+        const dayGapStr = dayGap===0?'今日':(dayGap>0?`${dayGap}天后`:`${Math.abs(dayGap)}天前`);
+        const moonStr = (moon.illumination * 100).toFixed(1) + '%' + (moon.waxing ? ' ↑' : ' ↓');
+        const wkStr = WKS[data.realGDayWk] || '';
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'font-size:.6rem;color:#7f8c8d;margin-top:5px;letter-spacing:.3px;text-align:center;line-height:1.4;';
+        wrap.textContent = [data.gStr, wkStr, dayGapStr, moonStr, daysStr].filter(Boolean).join(' | ');
+        return wrap;
+    }
+    const _infoNode = _buildInfoNode(extraData);
+
+    // ── 统计数据 ────────────────────────────────────────────────
+    const yearStart = cEq.getTime();
+    const yearEnd   = getShEq(vYear + 1).getTime();
+    let cntRed = 0, cntBlue = 0, cntGreen = 0, cntStar = 0;
+    const monthCounts = new Array(13).fill(0);
+    const noteItems   = [];
+    Object.entries(_focusMarks).forEach(([gStr, mark]) => {
+        const nums = gStr.match(/\d+/g);
+        if (!nums || nums.length < 3) return;
+        const d = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
+        if (d < yearStart || d >= yearEnd) return;
+        const off = Math.round((d - yearStart) / 86400000);
+        if (off < 0 || off >= total) return;
+        const mo = Math.floor(off / 28);
+        const hasAny = mark.dot || mark.star || (mark.note && mark.note.trim());
+        if (!hasAny) return;
+        monthCounts[Math.min(12, mo)]++;
+        if (mark.dot === 'red')   cntRed++;
+        if (mark.dot === 'blue')  cntBlue++;
+        if (mark.dot === 'green') cntGreen++;
+        if (mark.star)            cntStar++;
+        if (mark.note && mark.note.trim()) noteItems.push({ note: mark.note.trim(), offset: off, gStr });
+    });
+    noteItems.sort((a, b) => a.offset - b.offset);
+    const maxCount = Math.max(1, ...monthCounts);
+
+    // ── 构建 body 节点 ───────────────────────────────────────────
+    function _buildBody(overlayRef) {
+        const body = document.createElement('div');
+        body.className = 'yr-body';
+
+        const s1 = document.createElement('div'); s1.className = 'yr-section-title'; s1.textContent = '全年标记';
+        body.appendChild(s1);
+        const statGrid = document.createElement('div'); statGrid.className = 'yr-stat-grid';
+        [
+            { num: cntRed,   lbl: '红色标记', color: '#B22222' },
+            { num: cntBlue,  lbl: '蓝色标记', color: '#02639D' },
+            { num: cntGreen, lbl: '绿色标记', color: '#4A5D23' },
+            { num: cntStar,  lbl: '星标',     color: '#B8860B' },
+        ].forEach(({ num, lbl, color }) => {
+            const card = document.createElement('div'); card.className = 'yr-stat-card';
+            const n = document.createElement('div'); n.className = 'yr-stat-num'; n.style.color = color; n.textContent = num;
+            const l = document.createElement('div'); l.className = 'yr-stat-lbl'; l.textContent = lbl;
+            card.appendChild(n); card.appendChild(l); statGrid.appendChild(card);
+        });
+        body.appendChild(statGrid);
+
+        const s2 = document.createElement('div'); s2.className = 'yr-section-title'; s2.textContent = '月度热力（13 月）';
+        body.appendChild(s2);
+        const heatRow = document.createElement('div'); heatRow.className = 'yr-heat-row';
+        monthCounts.forEach((cnt, i) => {
+            const cell = document.createElement('div'); cell.className = 'yr-heat-cell';
+            const alpha = cnt === 0 ? 0.06 : 0.12 + (cnt / maxCount) * 0.72;
+            cell.style.background = `rgba(47,79,79,${alpha.toFixed(2)})`;
+            cell.title = `${i+1}月：${cnt} 个标记`;
+            heatRow.appendChild(cell);
+        });
+        body.appendChild(heatRow);
+        const heatLbls = document.createElement('div'); heatLbls.className = 'yr-heat-labels';
+        heatLbls.innerHTML = '<span>1月</span><span>7月</span><span>13月</span>';
+        body.appendChild(heatLbls);
+
+        const s3 = document.createElement('div'); s3.className = 'yr-section-title';
+        s3.textContent = `便签摘要（共 ${noteItems.length} 条）`;
+        body.appendChild(s3);
+        if (noteItems.length === 0) {
+            const empty = document.createElement('div'); empty.className = 'yr-empty';
+            empty.textContent = '本年无便签记录';
+            body.appendChild(empty);
+        } else {
+            const noteList = document.createElement('div'); noteList.className = 'yr-note-list';
+
+            function _buildNoteItem({ note, offset, gStr: itemGStr }) {
+                const vMo = Math.floor(offset / 28) + 1;
+                const vDay = (offset % 28) + 1;
+                const item = document.createElement('div'); item.className = 'yr-note-item';
+                item.style.cursor = 'pointer';
+                item.addEventListener('click', () => {
+                    overlayRef.remove();
+                    const nums = itemGStr.match(/\d+/g);
+                    if (nums && nums.length >= 3) {
+                        const gDate = new Date(+nums[0], +nums[1]-1, +nums[2]);
+                        let tY = gDate.getFullYear();
+                        if (gDate < getShEq(tY)) tY--;
+                        _jumpToCalCell(tY, offset);
+                    }
+                });
+                const dt = document.createElement('div'); dt.className = 'yr-note-date'; dt.textContent = `${vMo}月${vDay}日`;
+                const nt = document.createElement('div'); nt.className = 'yr-note-text';
+                nt.style.cssText = 'max-height:3.6em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;';
+                nt.textContent = note;
+                item.appendChild(dt); item.appendChild(nt);
+                return item;
+            }
+
+            const FOLD = 3;
+            noteItems.slice(0, FOLD).forEach(n => noteList.appendChild(_buildNoteItem(n)));
+            body.appendChild(noteList);
+
+            if (noteItems.length > FOLD) {
+                const viewAll = document.createElement('a');
+                viewAll.className = 'yr-note-view-all';
+                viewAll.textContent = `查看全部 ${noteItems.length} 条便签`;
+                viewAll.addEventListener('click', () => {
+                    const rest = noteItems.slice(FOLD);
+                    rest.forEach(n => noteList.appendChild(_buildNoteItem(n)));
+                    viewAll.remove();
+                });
+                body.appendChild(viewAll);
+            }
+
+            const exportBtn = document.createElement('button');
+            exportBtn.className = 'yr-btn-sec yr-export-btn';
+            exportBtn.textContent = `导出全部 ${noteItems.length} 条便签`;
+            exportBtn.addEventListener('click', () => {
+                const lines = noteItems.map(({ note, offset, gStr }) => {
+                    const vMo  = Math.floor(offset / 28) + 1;
+                    const vDay = (offset % 28) + 1;
+                    return `${vYear}年${vMo}月${vDay}日（${gStr}）：${note}`;
+                });
+                const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+                const url  = URL.createObjectURL(blob);
+                const a    = document.createElement('a');
+                a.href = url; a.download = `更替历_${vYear}_便签.txt`;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+            });
+            body.appendChild(exportBtn);
+        }
+        return body;
+    }
+
+    // ── 构建 footer 节点 ─────────────────────────────────────────
+    function _buildFooter(overlay, modal) {
+        const footer = document.createElement('div'); footer.className = 'yr-footer';
+        const _nowR = new Date();
+        let _thisVY = _nowR.getFullYear();
+        if (_nowR < getShEq(_thisVY)) _thisVY--;
+
+        const btnPrev = document.createElement('button'); btnPrev.className = 'yr-btn-pri';
+        btnPrev.textContent = '←';
+        btnPrev.disabled = vYear <= 1900;
+        if (vYear <= 1900) btnPrev.style.opacity = '.4';
+        btnPrev.addEventListener('click', () => { if (vYear <= 1900) return; DOM.yIn.value = vYear - 1; _showYearReview(vYear - 1); requestAnimationFrame(render); });
+
+        const btnToday = document.createElement('button'); btnToday.className = 'yr-btn-sec';
+        btnToday.textContent = '今年';
+        btnToday.style.cssText = 'padding:6px 14px;font-size:.8rem;';
+        if (vYear === _thisVY) { btnToday.disabled = true; btnToday.style.opacity = '.4'; }
+        btnToday.addEventListener('click', () => { DOM.yIn.value = _thisVY; _showYearReview(_thisVY); requestAnimationFrame(render); });
+
+        const btnNext = document.createElement('button'); btnNext.className = 'yr-btn-pri';
+        btnNext.textContent = '→';
+        btnNext.disabled = vYear >= 2200;
+        if (vYear >= 2200) btnNext.style.opacity = '.4';
+        btnNext.addEventListener('click', () => { if (vYear >= 2200) return; DOM.yIn.value = vYear + 1; _showYearReview(vYear + 1); requestAnimationFrame(render); });
+
+        footer.appendChild(btnPrev); footer.appendChild(btnToday); footer.appendChild(btnNext);
+        return footer;
+    }
+
+    // ── 已有弹窗：原地替换 body + footer，不重建 overlay ────────
+    const existingOverlay = document.getElementById('yearReviewOverlay');
+    if (existingOverlay) {
+        const modal = existingOverlay.querySelector('#yearReviewModal');
+        const titleEl = modal.querySelector('.yr-title');
+        if (titleEl) { titleEl.textContent = `${vYear} 年度回顾`; titleEl.style.cssText = 'color:#2C3E50;text-align:center;'; }
+        const subEl = modal.querySelector('.yr-sub');
+        if (subEl) { subEl.textContent = `更替历 ${vYear} 年 · 共 ${total} 天 · ${total===366?'闰年':'平年'}`; subEl.style.cssText = 'font-size:.62rem;margin-top:4px;text-align:center;'; }
+        let infoEl = modal.querySelector('.yr-info-line');
+        if (_infoNode) {
+            _infoNode.className = 'yr-info-line';
+            if (infoEl) { infoEl.parentNode.replaceChild(_infoNode, infoEl); }
+            else { subEl && subEl.parentNode.appendChild(_infoNode); }
+        } else if (infoEl) { infoEl.remove(); }
+        const oldBody = modal.querySelector('.yr-body');
+        const newBody = _buildBody(existingOverlay);
+        if (oldBody) modal.replaceChild(newBody, oldBody);
+        const oldFooter = modal.querySelector('.yr-footer');
+        const newFooter = _buildFooter(existingOverlay, modal);
+        if (oldFooter) modal.replaceChild(newFooter, oldFooter);
+        modal.scrollTop = 0;
+        return;
+    }
+
+    // ── 首次：创建完整弹窗 ───────────────────────────────────────
+    const overlay = document.createElement('div');
+    overlay.id = 'yearReviewOverlay';
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
+
+    const modal = document.createElement('div');
+    modal.id = 'yearReviewModal';
+
+    const header = document.createElement('div'); header.className = 'yr-header';
+    const hLeft = document.createElement('div'); hLeft.style.cssText = 'flex:1;text-align:center;';
+    const hTitle = document.createElement('div'); hTitle.className = 'yr-title';
+    hTitle.style.cssText = 'color:#2C3E50;text-align:center;';
+    hTitle.textContent = `${vYear} 年度回顾`;
+    const hSub = document.createElement('div'); hSub.className = 'yr-sub';
+    hSub.style.cssText = 'font-size:.62rem;margin-top:4px;text-align:center;';
+    hSub.textContent = `更替历 ${vYear} 年 · 共 ${total} 天 · ${total===366?'闰年':'平年'}`;
+    hLeft.appendChild(hTitle); hLeft.appendChild(hSub);
+    if (_infoNode) { _infoNode.className = 'yr-info-line'; hLeft.appendChild(_infoNode); }
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'yr-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    header.appendChild(hLeft); header.appendChild(closeBtn);
+    modal.appendChild(header);
+
+    modal.appendChild(_buildBody(overlay));
+    modal.appendChild(_buildFooter(overlay, modal));
+    overlay.appendChild(modal);
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
+    document.body.appendChild(overlay);
+    closeBtn.focus();
+}
+
 function hideTooltip(e) {
     const tt = DOM.tooltip;
     if (tt?.style.display==='block') {
@@ -2953,6 +3655,10 @@ const _extraCache = [];     // 索引 0=B或A，1=A（闰年）
 let   _calBuilt   = false;  // 是否已完成首次构建
 let   _lastTotal  = 0;      // 上次渲染的年份总天数（用于判断更替日区域是否需要重建）
 
+// #2：WeakMap 存储格子结构化数据，替代 JSON.parse(cell.dataset.tt)
+// key = DOM 元素，value = { gStr, offset, realGDayWk, isWangshu?, isExtra?, vYear?, extraName? }
+const _cellDataMap = new WeakMap();
+
 function render() {
     if (_renderRaf) cancelAnimationFrame(_renderRaf);
     _renderRaf = requestAnimationFrame(() => { _renderRaf=null; _doRender(); });
@@ -3074,8 +3780,9 @@ function _buildCalendar(y) {
         if (!_rangeDragActive || _rangeStart === null || _rangeEnd !== null) return;
         const el = document.elementFromPoint(e.clientX, e.clientY);
         const cell = el?.closest('.cell');
-        if (!cell || !cell.dataset.tt) { _clearRangePreview(); return; }
-        _applyRangePreview(JSON.parse(cell.dataset.tt).offset);
+        if (!cell) { _clearRangePreview(); return; }
+        const data = _cellDataMap.get(cell); if (!data) { _clearRangePreview(); return; }
+        _applyRangePreview(data.offset);
     }
     function _onDragUp(e) {
         document.removeEventListener('mousemove', _onDragMove);
@@ -3085,9 +3792,9 @@ function _buildCalendar(y) {
         _justDragged = true;
         const el = document.elementFromPoint(e.clientX, e.clientY);
         const cell = el?.closest('.cell');
-        if (!cell || !cell.dataset.tt) return;
-        const { offset } = JSON.parse(cell.dataset.tt);
-        if (offset !== _rangeStart) _rangeSetEnd(offset);
+        if (!cell) return;
+        const data = _cellDataMap.get(cell); if (!data) return;
+        if (data.offset !== _rangeStart) _rangeSetEnd(data.offset);
     }
 
     view.addEventListener('mousedown', e => {
@@ -3107,7 +3814,7 @@ function _buildCalendar(y) {
             document.removeEventListener('mouseup',   _onPreCancel);
             hideTooltip();
             document.activeElement?.blur();
-            _rangeSetStart(JSON.parse(_mouseDownCell.dataset.tt).offset);
+            _rangeSetStart(_cellDataMap.get(_mouseDownCell)?.offset ?? 0);
             _rangeDragActive = true;
             document.addEventListener('mousemove', _onDragMove);
             document.addEventListener('mouseup',   _onDragUp);
@@ -3122,14 +3829,13 @@ function _buildCalendar(y) {
     });
 
     // selecting 状态下鼠标悬停预览（非拖拽时）
-    view.addEventListener('dragstart', e => {
-    });
     view.addEventListener('mouseover', e => {
         if (!document.body.classList.contains('focus-mode')) return;
         if (_rangeDragActive || _rangeStart === null || _rangeEnd !== null) return;
         const cell = e.target.closest('.cell');
-        if (!cell || !cell.dataset.tt) { _clearRangePreview(); return; }
-        _applyRangePreview(JSON.parse(cell.dataset.tt).offset);
+        if (!cell) { _clearRangePreview(); return; }
+        const data = _cellDataMap.get(cell); if (!data) { _clearRangePreview(); return; }
+        _applyRangePreview(data.offset);
     });
     view.addEventListener('mouseleave', () => _clearRangePreview());
 
@@ -3146,10 +3852,10 @@ function _buildCalendar(y) {
                 return; // selecting 状态：只设终点，不弹窗
             }
         }
-        if (cell.dataset.tt) {
+        if (_cellDataMap.has(cell)) {
             e.stopPropagation();
-            cell.focus(); // 恢复红框：preventDefault 阻止了自动 focus，手动补回
-            showTooltip(e, JSON.parse(cell.dataset.tt));
+            cell.focus();
+            showTooltip(e, _cellDataMap.get(cell));
         }
     });
 
@@ -3157,29 +3863,25 @@ function _buildCalendar(y) {
     view.addEventListener('touchstart', e => {
         if (!document.body.classList.contains('focus-mode')) return;
         const cell = e.target.closest('.cell');
-        if (!cell || !cell.dataset.tt) return;
-        const { offset } = JSON.parse(cell.dataset.tt);
+        if (!cell) return;
+        const data = _cellDataMap.get(cell); if (!data) return;
+        const { offset } = data;
 
-        // 若已处于 selecting 状态，touchstart 不启动长按（由 touchend/click 处理终点）
         if (_rangeStart !== null && _rangeEnd === null) return;
 
-        // active 状态：立即作为新起点（不等长按）
         if (_rangeEnd !== null) {
             _rangeSetStart(offset);
-            // 添加长按涟漪反馈
             cell.classList.add('range-longpress-active');
             setTimeout(() => cell.classList.remove('range-longpress-active'), 500);
             return;
         }
 
-        // idle：长按计时
         cell.classList.add('range-longpress-active');
         _rangeLongPressTimer = setTimeout(() => {
             _rangeLongPressTimer = null;
             hideTooltip();
             document.activeElement?.blur();
             _rangeSetStart(offset);
-            // 轻震动反馈（若设备支持）
             try { navigator.vibrate?.(30); } catch(_) {}
         }, RANGE_LONG_PRESS_MS);
     }, { passive: true });
@@ -3196,11 +3898,11 @@ function _buildCalendar(y) {
         cell?.classList.remove('range-longpress-active');
 
         if (!document.body.classList.contains('focus-mode')) return;
-        if (_rangeStart !== null && _rangeEnd === null && cell && cell.dataset.tt) {
-            const { offset } = JSON.parse(cell.dataset.tt);
-            if (offset !== _rangeStart) {
-                _rangeSetEnd(offset);
-                e.preventDefault(); // 阻止后续 click 事件（避免弹窗意外触发）
+        if (_rangeStart !== null && _rangeEnd === null && cell) {
+            const data = _cellDataMap.get(cell);
+            if (data && data.offset !== _rangeStart) {
+                _rangeSetEnd(data.offset);
+                e.preventDefault();
             }
         }
     }, { passive: false });
@@ -3217,7 +3919,8 @@ function _buildCalendar(y) {
     view.addEventListener('keydown', e=>{
         if(e.key==='Enter'||e.key===' '){
             const cell=e.target.closest('.cell');
-            if(cell?.dataset.tt){e.preventDefault();e.stopPropagation();showTooltip(e,JSON.parse(cell.dataset.tt));}
+            const data = cell && _cellDataMap.get(cell);
+            if(data){e.preventDefault();e.stopPropagation();showTooltip(e, data);}
         }
     });
 
@@ -3247,16 +3950,24 @@ function _buildExtraBox(y, cEq, total, now, isFMfn) {
         const isFM = isFMfn(off);
         const isT  = gD.toDateString()===now.toDateString();
         const cellCls = `cell ${isT?'is-today':''} ${isFM?'is-full-moon':''}`.trim();
-        const ttData  = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1});
+        const ttObj   = {gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isExtra:true,vYear:y,extraName:name};
         const cell = document.createElement('div');
         cell.className = cellCls;
         cell.setAttribute('role','button');
         cell.setAttribute('tabindex','0');
         cell.setAttribute('aria-label', name);
-        cell.dataset.tt = ttData;
+        _cellDataMap.set(cell, ttObj);
+        cell.dataset.tt = JSON.stringify(ttObj);
         const numEl2 = document.createElement('div'); numEl2.className='v-num'; numEl2.style.cssText='color:var(--accent);font-weight:800;'; numEl2.textContent=name;
         const gInfoEl2 = document.createElement('div'); gInfoEl2.className='g-info'; gInfoEl2.textContent=`${gD.getMonth()+1}.${gD.getDate()}`;
         cell.appendChild(numEl2); cell.appendChild(gInfoEl2);
+        // 只有更替日 A 才有"年度回顾"徽章
+        if (name === '更替日 A') {
+            const badge = document.createElement('div');
+            badge.className = 'extra-review-badge';
+            badge.textContent = '年度回顾';
+            cell.appendChild(badge);
+        }
         dg.appendChild(cell);
         _extraCache[i] = cell;
     }
@@ -3287,7 +3998,9 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
         if (isFM)      cell.classList.add('is-full-moon');
         if (isWang)    cell.classList.add('is-wangshu');
         cell.setAttribute('aria-label', `${gD.getMonth()+1}月${gD.getDate()}日`);
-        cell.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang});
+        const _ttObj = {gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang};
+        _cellDataMap.set(cell, _ttObj);
+        cell.dataset.tt = JSON.stringify(_ttObj);
 
         // 数字颜色（只在变化时写入，避免不必要的样式重计算）
         const _newColor = isEqToday?'#DF1B12':(isT?'var(--accent)':dayColor);
@@ -3330,7 +4043,9 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
             ec.classList.remove('is-today','is-full-moon');
             if (isT)  ec.classList.add('is-today');
             if (isFM) ec.classList.add('is-full-moon');
-            ec.dataset.tt = JSON.stringify({gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1});
+            const _ecObj = {gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isExtra:true,vYear:y,extraName:(total===365?'更替日 A':(i===0?'更替日 B':'更替日 A'))};
+            _cellDataMap.set(ec, _ecObj);
+            ec.dataset.tt = JSON.stringify(_ecObj);
             ec.querySelector('.g-info').textContent = `${gD.getMonth()+1}.${gD.getDate()}`;
         }
     }
@@ -3364,9 +4079,10 @@ function _doRender() {
 
 // ── 专注模式：保存标记到 localStorage ──────────────────────────────
 function _saveFocusMarks() {
-    // 清理空对象
+    // 清理空对象：dot / star / note 三个字段均为空时才删除
     Object.keys(_focusMarks).forEach(k => {
-        if (!_focusMarks[k].dot && !_focusMarks[k].star) delete _focusMarks[k];
+        const m = _focusMarks[k];
+        if (!m.dot && !m.star && !m.note) delete _focusMarks[k];
     });
     try { localStorage.setItem('focusMarks', JSON.stringify(_focusMarks)); } catch(_) {}
 }
@@ -3377,34 +4093,40 @@ function _applyFocusMarks() {
     const now = new Date();
     const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-    // 遍历所有格子，先清除旧标记元素，再按数据重建
-    const allCells = DOM.calView.querySelectorAll('.cell');
-    allCells.forEach(cell => {
+    // 一次性建立 gStr → cell 的 O(1) 查找表
+    const gStrMap = new Map();
+    _cellCache.forEach(({ cell }) => {
+        const data = _cellDataMap.get(cell);
+        if (data?.gStr) gStrMap.set(data.gStr, cell);
+    });
+    _extraCache.forEach(cell => {
+        if (!cell) return;
+        const data = _cellDataMap.get(cell);
+        if (data?.gStr) gStrMap.set(data.gStr, cell);
+    });
+
+    // 先清除所有旧标记元素
+    gStrMap.forEach(cell => {
         cell.querySelectorAll('.cell-dot,.cell-star,.cell-countdown').forEach(el => el.remove());
     });
 
+    // 按查找表 O(1) 定位格子并渲染标记
     Object.entries(_focusMarks).forEach(([gStr, mark]) => {
-        // 找到对应格子：从 dataset.tt 中匹配 gStr
-        const cell = Array.from(allCells).find(c => {
-            try { return JSON.parse(c.dataset.tt||'{}').gStr === gStr; } catch(_) { return false; }
-        });
+        const cell = gStrMap.get(gStr);
         if (!cell) return;
 
-        // 色点
         if (mark.dot) {
             const dot = document.createElement('div');
             dot.className = `cell-dot cell-dot-${mark.dot}`;
             cell.appendChild(dot);
         }
 
-        // 五角星 + 倒计时
         if (mark.star) {
             const star = document.createElement('div');
             star.className = 'cell-star';
             star.textContent = '★';
             cell.appendChild(star);
 
-            // 计算倒计时
             const nums = gStr.match(/\d+/g);
             if (nums) {
                 const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
@@ -3414,7 +4136,7 @@ function _applyFocusMarks() {
                     cd.className = 'cell-countdown';
                     cd.textContent = `${diffDays}`;
                     cell.appendChild(cd);
-                } // diffDays===0 时不显示"今日"文字，今日格已有红框标识
+                }
             }
         }
     });
@@ -3426,19 +4148,19 @@ function _applyFocusMarks() {
 // ── 专注模式：区间高亮渲染 ───────────────────────────────────────────
 function _applyRangeHighlight() {
     if (!_calBuilt) return;
-    const allCells = DOM.calView.querySelectorAll('.cell');
-    allCells.forEach(cell => {
+    _cellCache.forEach(({ cell }) => {
         cell.classList.remove('range-highlight','range-start','range-end');
         cell.removeAttribute('data-range-days');
+    });
+    _extraCache.forEach(cell => {
+        if (cell) { cell.classList.remove('range-highlight','range-start','range-end'); cell.removeAttribute('data-range-days'); }
     });
     if (_rangeStart === null) return;
     const lo = Math.min(_rangeStart, _rangeEnd ?? _rangeStart);
     const hi = Math.max(_rangeStart, _rangeEnd ?? _rangeStart);
     const days = hi - lo + 1;
     _cellCache.forEach(({ cell }, off) => {
-        if (off === lo && lo === hi) {
-            cell.classList.add('range-start');
-        } else if (off === lo) {
+        if (off === lo) {
             cell.classList.add('range-start');
         } else if (off === hi) {
             cell.classList.add('range-end');
@@ -3477,11 +4199,66 @@ function _rangeSetEnd(offset) {
     DOM.calView.classList.remove('range-selecting');
     _clearRangePreview();
     _applyRangeHighlight();
-    // 验证 DOM 是否真的被修改
+    _showRangeCopyBar();
+}
+
+// ── 区间复制操作条 ────────────────────────────────────────────────
+let _rangeCopyBarTimer = null;
+function _showRangeCopyBar() {
+    _dismissRangeCopyBar(true); // 先移除旧条（若有）
+    if (_rangeStart === null || _rangeEnd === null) return;
+
     const lo = Math.min(_rangeStart, _rangeEnd);
     const hi = Math.max(_rangeStart, _rangeEnd);
-    const startCell = _cellCache[lo]?.cell;
-    const endCell   = _cellCache[hi]?.cell;
+    const days = hi - lo + 1;
+
+    // 从 WeakMap 取两端格子的公历字符串
+    const startData = _cellDataMap.get(_cellCache[lo]?.cell);
+    const endData   = _cellDataMap.get(_cellCache[hi]?.cell);
+    if (!startData || !endData) return;
+
+    // 解析公历日期 → 更替历月日
+    function _vLabel(offset) {
+        const mo  = Math.floor(offset / 28) + 1;
+        const day = (offset % 28) + 1;
+        return `${mo}月${day}日`;
+    }
+    const rangeText = `${_vLabel(lo)} ~ ${_vLabel(hi)}（共 ${days} 天）`;
+
+    const bar = document.createElement('div');
+    bar.id = 'rangeCopyBar';
+
+    const text = document.createElement('span');
+    text.className = 'rcb-text';
+    text.textContent = rangeText;
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'rcb-copy';
+    copyBtn.textContent = '复制';
+    copyBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        navigator.clipboard?.writeText(rangeText).catch(() => {});
+        copyBtn.textContent = '✓ 已复制';
+        if (_rangeCopyBarTimer) clearTimeout(_rangeCopyBarTimer);
+        _rangeCopyBarTimer = setTimeout(() => _dismissRangeCopyBar(), 1000);
+    });
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'rcb-dismiss';
+    dismissBtn.textContent = '×';
+    dismissBtn.addEventListener('click', e => { e.stopPropagation(); _dismissRangeCopyBar(); });
+
+    bar.appendChild(text); bar.appendChild(copyBtn); bar.appendChild(dismissBtn);
+    document.body.appendChild(bar);
+}
+
+function _dismissRangeCopyBar(immediate = false) {
+    if (_rangeCopyBarTimer) { clearTimeout(_rangeCopyBarTimer); _rangeCopyBarTimer = null; }
+    const bar = document.getElementById('rangeCopyBar');
+    if (!bar) return;
+    if (immediate) { bar.remove(); return; }
+    bar.classList.add('hiding');
+    setTimeout(() => bar.remove(), 200);
 }
 
 // ── 专注模式：重置区间 ──────────────────────────────────────────────
@@ -3491,6 +4268,7 @@ function _rangeClear() {
     DOM.calView.classList.remove('range-selecting');
     _clearRangePreview();
     _applyRangeHighlight();
+    _dismissRangeCopyBar();
 }
 
 // ── 专注模式：清除 hover 预览 ────────────────────────────────────────
@@ -3500,8 +4278,7 @@ function _clearRangePreview() {
 
 // ── 专注模式：在 selecting 状态下渲染 hover 预览 ─────────────────────
 function _applyRangePreview(hoverOffset) {
-    const allCells = DOM.calView.querySelectorAll('.cell');
-    allCells.forEach(cell => cell.classList.remove('range-preview'));
+    _cellCache.forEach(({ cell }) => cell.classList.remove('range-preview'));
     if (_rangeStart === null || _rangeEnd !== null) return;
     const lo = Math.min(_rangeStart, hoverOffset);
     const hi = Math.max(_rangeStart, hoverOffset);
@@ -3512,21 +4289,13 @@ function _applyRangePreview(hoverOffset) {
 
 // ── 专注模式：selecting 状态下点击另一格设为终点 ─────────────────────
 function _handleSelectingClick(cell) {
-    const tt = cell.dataset.tt; if (!tt) return;
-    const { offset } = JSON.parse(tt);
-    if (offset === _rangeStart) {
-        // 再次点击起点 → 取消
-        _rangeClear();
-    } else {
-        _rangeSetEnd(offset);
-    }
+    const data = _cellDataMap.get(cell); if (!data) return;
+    if (data.offset === _rangeStart) { _rangeClear(); } else { _rangeSetEnd(data.offset); }
 }
 
-// ── 专注模式：active 状态下点击格子（重新选择起点）─────────────────
 function _handleActiveClick(cell) {
-    const tt = cell.dataset.tt; if (!tt) return;
-    const { offset } = JSON.parse(tt);
-    _rangeSetStart(offset);
+    const data = _cellDataMap.get(cell); if (!data) return;
+    _rangeSetStart(data.offset);
 }
 
 // ═══════════════════════════════════════════════════════════════
