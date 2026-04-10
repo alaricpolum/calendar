@@ -2045,8 +2045,6 @@ function _buildCdCard() {
     const view = DOM.calView;
     view.querySelectorAll('.cd-card').forEach(el => el.remove());
 
-    // 专注模式才渲染
-    if (!document.body.classList.contains('focus-mode')) return;
     // 未登录 且 没有任务 → 不渲染（避免空卡）
     if (!_cdUser && !_cdTasks.length) return;
 
