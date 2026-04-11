@@ -1341,7 +1341,7 @@ function _parseDateInput(raw) {
 }
 
 async function _cdShowAddTaskModal() {
-    if (!_cdUser || _cdUser.role === 'viewer') return;
+    if (!_cdUser) return;
     document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
 
     // 拉取可用标签
@@ -1382,10 +1382,10 @@ async function _cdShowAddTaskModal() {
     f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint); modal.appendChild(f2);
 
     // 标签多选（可选，未选则仅自己可见）
+    const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
+    const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（可选，未选则仅自己可见）';
+    f3.appendChild(l3);
     if (availTags.length > 0) {
-        const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
-        const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（可选，未选则仅自己可见）';
-        f3.appendChild(l3);
         const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
         availTags.forEach(tag => {
             const btn = document.createElement('button');
@@ -1399,8 +1399,14 @@ async function _cdShowAddTaskModal() {
             });
             tagWrap.appendChild(btn);
         });
-        f3.appendChild(tagWrap); modal.appendChild(f3);
+        f3.appendChild(tagWrap);
+    } else {
+        const hint = document.createElement('div');
+        hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;';
+        hint.textContent = '暂无可用标签，创建后仅自己可见';
+        f3.appendChild(hint);
     }
+    modal.appendChild(f3);
 
     const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
     modal.appendChild(errDiv);
@@ -2153,14 +2159,12 @@ function _buildCdCard() {
         return;
     }
 
-    // admin / SA 操作按钮
-    if (isAdmin) {
-        const addBtn = document.createElement('button');
-        addBtn.className = 'cd-admin-btn';
-        addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
-        addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAddTaskModal(); });
-        hdrWrap.appendChild(addBtn);
-    }
+    // 所有登录用户均可新建（viewer 新建的任务无标签，仅自己可见）
+    const addBtn = document.createElement('button');
+    addBtn.className = 'cd-admin-btn';
+    addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
+    addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAddTaskModal(); });
+    hdrWrap.appendChild(addBtn);
     // admin 专属：生成邀请链接（只能邀请 viewer）
     if (isAdmin && !isSA) {
         const invBtn = document.createElement('button');
@@ -2239,8 +2243,8 @@ function _buildCdCard() {
         const endedDiv = document.createElement('div');
         endedDiv.style.cssText = 'text-align:center;padding:16px 0 8px;font-size:.72rem;color:#aaa;font-weight:700;letter-spacing:1px;';
         endedDiv.textContent = '已结束';
-        // admin 可删除
-        if (isAdmin) {
+        // admin 或自己创建的任务可删除
+        if (isAdmin || item.createdBy === _cdGetToken()) {
             const delBtn = document.createElement('button');
             delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:3px 10px;background:var(--muted);';
             delBtn.textContent = '删除此项';
@@ -2275,7 +2279,7 @@ function _buildCdCard() {
             t.textContent = tag; actRow.appendChild(t);
         });
     }
-    if (isAdmin) {
+    if (isAdmin || item.createdBy === _cdGetToken()) {
         const delBtn = document.createElement('button');
         delBtn.style.cssText = 'margin-left:auto;font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;';
         delBtn.textContent = '删除';
