@@ -971,7 +971,7 @@
 <body>
 <div id="tooltip"></div>
 
-<div class="back-to-today" id="btnHome" role="button" tabindex="0" aria-label="回到今天">
+<div class="back-to-today" id="btnHome" role="button" tabindex="0">
     <span class="v-home-text">今</span>
     <span id="vHomeYearBg" class="v-year-bg">2025</span>
 </div>
@@ -1311,6 +1311,7 @@ function _cdShowRedeemModal() {
         el.addEventListener('keydown', e => {
             if (e.key === 'Tab') {
                 e.preventDefault();
+                e.stopPropagation();
                 arr[(i + (e.shiftKey ? arr.length - 1 : 1)) % arr.length].focus();
             } else if (e.key === 'Enter') { submitBtn.click(); }
         });
@@ -1409,11 +1410,7 @@ async function _cdShowAddTaskModal() {
             f3.appendChild(hint);
         }
     } else {
-        // viewer：显示只读提示，不显示标签选择
-        const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;background:var(--muted);border-radius:6px;padding:5px 9px;line-height:1.5;';
-        hint.textContent = '仅自己可见（只读成员不可分配可见标签）';
-        f3.appendChild(hint);
+        // viewer：不显示标签区域
     }
     modal.appendChild(f3);
 
@@ -1457,6 +1454,7 @@ async function _cdShowAddTaskModal() {
         el.addEventListener('keydown', e => {
             if (e.key === 'Tab') {
                 e.preventDefault();
+                e.stopPropagation();
                 arr[(i + (e.shiftKey ? arr.length - 1 : 1)) % arr.length].focus();
             } else if (e.key === 'Enter') { submitBtn.click(); }
         });
@@ -1855,12 +1853,6 @@ async function _cdShowAdminInviteModal() {
     hdr.textContent = '生成邀请链接';
     modal.appendChild(hdr);
 
-    // 说明：只能邀请 viewer
-    const roleNote = document.createElement('div');
-    roleNote.style.cssText = 'font-size:.56rem;color:#7f8c8d;background:var(--muted);border-radius:6px;padding:5px 9px;margin-bottom:10px;line-height:1.5;';
-    roleNote.textContent = '作为管理员，您只能邀请"只读成员（viewer）"，且被邀请者可见范围限于您拥有的标签。';
-    modal.appendChild(roleNote);
-
     // 标签多选（仅显示自己有的标签，来自 /cd/tags 接口的过滤结果）
     const tagLabel = document.createElement('div');
     tagLabel.style.cssText = 'font-size:.56rem;font-weight:700;color:#aaa;letter-spacing:.5px;margin-bottom:5px;';
@@ -2225,7 +2217,7 @@ function _buildCdCard() {
     navName.style.cssText = 'flex:1;text-align:center;font-size:.82rem;font-weight:700;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
     navName.textContent = item.name;
     const pinBtn = document.createElement('button');
-    pinBtn.title = isPinned ? '取消置顶' : '置顶';
+
     pinBtn.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid ${isPinned?'#6B1010':'var(--border)'};background:${isPinned?'rgba(107,16,16,0.08)':'var(--muted)'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;`;
     pinBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M9.5 1.5L14.5 6.5L11 10L9 8L5.5 11.5L4.5 10.5L8 7L6 5L9.5 1.5Z" fill="${isPinned?'#6B1010':'#aaa'}"/><path d="M1.5 14.5L5.5 10.5" stroke="${isPinned?'#6B1010':'#aaa'}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
     pinBtn.addEventListener('click', e => { e.stopPropagation(); _cdSetPinned(isPinned ? null : item.name); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor(); });
@@ -2291,13 +2283,15 @@ function _buildCdCard() {
             t.textContent = tag; actRow.appendChild(t);
         });
     }
-    // 创建者用户名：仅 superadmin 可见，从任务的 creatorName 字段读取
-    if (isSA && item.creatorName) {
+    // 创建者用户名：仅 superadmin 可见
+    // creatorName 由新版后端写入；旧任务无此字段时显示"未知"兜底
+    if (isSA) {
+        const displayName = item.creatorName || (item.createdBy ? item.createdBy.slice(0, 8) + '…' : '未知');
         const creatorTag = document.createElement('span');
-        creatorTag.style.cssText = 'font-size:.48rem;color:#6B1010;background:rgba(107,16,16,0.06);border:1px solid rgba(107,16,16,0.25);border-radius:20px;padding:1px 8px;display:flex;align-items:center;gap:3px;';
+        creatorTag.style.cssText = 'font-size:.48rem;color:#6B1010;background:rgba(107,16,16,0.06);border:1px solid rgba(107,16,16,0.25);border-radius:20px;padding:1px 8px;display:inline-flex;align-items:center;gap:3px;';
         const icon = document.createElement('span'); icon.textContent = '👤'; icon.style.fontSize = '.5rem';
-        const name = document.createElement('span'); name.textContent = item.creatorName;
-        creatorTag.appendChild(icon); creatorTag.appendChild(name);
+        const nameSpan = document.createElement('span'); nameSpan.textContent = displayName;
+        creatorTag.appendChild(icon); creatorTag.appendChild(nameSpan);
         actRow.appendChild(creatorTag);
     }
     if (isAdmin || item.createdBy === _cdGetToken()) {
@@ -4108,8 +4102,6 @@ function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn
             termEl.textContent = '元';
         } else if (termName) {
             termEl.className = `term-tag ${isMajor?'major-red':'minor-term'}`;
-            termEl.setAttribute('title', termName);
-            termEl.setAttribute('aria-label', termName);
             termEl.textContent = termName;
         } else {
             termEl.className = 'term-placeholder';
@@ -4788,16 +4780,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     // focusMode 必须在 goHome()/render 之前恢复，_buildCdCard 依赖此状态
     if (localStorage.getItem('focusMode') === '1') document.body.classList.add('focus-mode');
 
-    // ── 倒计时系统初始化（验证 token，拉取任务）──────────────────
-    // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
-    await _cdInit();
-    const _urlInvite = new URLSearchParams(window.location.search).get('invite');
-    if (_urlInvite && !_cdGetToken()) {
-        // 延迟到页面渲染后再弹窗，避免遮挡加载画面
-        setTimeout(() => _cdShowRedeemModal(), 300);
-    }
-
+    // ── 日历立即渲染，不等待倒计时网络请求 ──────────────────────
     setMode('G'); goHome();
+
+    // ── 倒计时系统后台初始化（验证 token，拉取任务，不阻塞日历）──
+    // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
+    _cdInit().then(() => {
+        // token 验证 + 任务拉取完成后，追加渲染倒计时卡片
+        _buildCdCard();
+        _cdApplyCellColor();
+        const _urlInvite = new URLSearchParams(window.location.search).get('invite');
+        if (_urlInvite && !_cdGetToken()) {
+            setTimeout(() => _cdShowRedeemModal(), 300);
+        }
+    });
 
     // ── 外观设置（读取偏好 + 绑定开关）
     initSettings();
@@ -4974,6 +4970,8 @@ window.addEventListener('DOMContentLoaded', async () => {
             yIn.value=cur+(e.key==='ArrowRight'?1:-1); render();
         }
         else if(e.key==='Tab'&&!e.ctrlKey&&!e.shiftKey){
+            // 有弹窗打开时，让浏览器默认Tab行为在弹窗内循环，不拦截
+            if(document.querySelector('.cd-admin-overlay, .cd-del-overlay, .cd-redeem-overlay, #yearReviewOverlay, .qr-overlay')) return;
             e.preventDefault();
             if(!hasFocusedInput) convIn.focus();
             else setMode(currentMode==='G'?'V':'G',true);
