@@ -1674,6 +1674,192 @@ async function _cdShowAdminPanel() {
     const userH = document.createElement('div'); userH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; userH.textContent = '所有用户';
     userSec.appendChild(userH);
     const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+
+    // 渲染单个用户行
+    // 布局：[名字(flex:1)] [role pill(固定宽)] [标签区(固定宽,超出隐藏)] [注销按钮]
+    // 长按展开标签区 → 显示所有标签pill（可删）+ 「+」新增按钮
+    function _buildUserRow(u, allTags) {
+        const TAGS_MAX_W = 90; // 折叠时标签区最大宽度
+        const LONG_PRESS_MS = 400;
+        let expanded = false;
+        let longPressTimer = null;
+        let currentTags = [...(u.tags || [])];
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--muted);border-radius:8px;padding:5px 8px;cursor:default;user-select:none;';
+
+        // 名字
+        const nameSpan = document.createElement('span');
+        nameSpan.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        nameSpan.textContent = u.name;
+
+        // role pill（固定宽，对齐）
+        const roleTag = document.createElement('span');
+        const isAdmin = u.role === 'admin';
+        roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;width:44px;text-align:center;box-sizing:border-box;background:${isAdmin?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${isAdmin?'#6B1010':'#2F4F4F'};border:1px solid ${isAdmin?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
+        roleTag.textContent = u.role;
+
+        // 标签区容器
+        const tagsArea = document.createElement('div');
+        tagsArea.style.cssText = `display:flex;align-items:center;gap:3px;flex-shrink:0;width:${TAGS_MAX_W}px;overflow:hidden;transition:width .25s;`;
+
+        // 注销按钮
+        const revokeBtn = document.createElement('button');
+        revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;';
+        revokeBtn.textContent = '注销';
+        revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
+        revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
+        revokeBtn.addEventListener('click', () => {
+            _cdShowRevokeConfirm(u, async () => {
+                const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
+                if (r.ok) {
+                    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+                    setTimeout(() => {
+                        row.remove();
+                        if (!userListWrap.children.length) {
+                            const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e);
+                        }
+                    }, 200);
+                } else {
+                    revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222';
+                    setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
+                }
+            });
+        });
+
+        // 保存标签到服务器
+        async function _saveTags() {
+            await _cdFetch('/cd/token/tags/update', { method: 'POST', body: JSON.stringify({ token: u.token, tags: currentTags }) });
+        }
+
+        // 渲染折叠态标签（纯文字，超出裁剪）
+        function _renderCollapsed() {
+            tagsArea.style.width = TAGS_MAX_W + 'px';
+            tagsArea.style.overflow = 'hidden';
+            tagsArea.style.flexWrap = 'nowrap';
+            tagsArea.textContent = '';
+            if (!currentTags.length) {
+                const empty = document.createElement('span'); empty.style.cssText = 'font-size:.48rem;color:#ccc;'; empty.textContent = '无标签';
+                tagsArea.appendChild(empty); return;
+            }
+            // 逐个渲染pill，超出部分被overflow:hidden裁掉
+            currentTags.forEach(tag => {
+                const pill = document.createElement('span');
+                pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px;white-space:nowrap;flex-shrink:0;transition:background .15s,color .15s;cursor:default;';
+                pill.textContent = tag;
+                // 悬停变红提示可删
+                pill.addEventListener('mouseenter', () => { pill.style.background='#FCEBEB'; pill.style.color='#B22222'; pill.style.borderColor='#B22222'; pill.style.cursor='pointer'; });
+                pill.addEventListener('mouseleave', () => { pill.style.background='var(--bg)'; pill.style.color='#7f8c8d'; pill.style.borderColor='var(--border)'; pill.style.cursor='default'; });
+                pill.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    currentTags = currentTags.filter(t => t !== tag);
+                    await _saveTags();
+                    _renderCollapsed();
+                });
+                tagsArea.appendChild(pill);
+            });
+        }
+
+        // 渲染展开态（所有标签pill可删 + 「+」新增）
+        function _renderExpanded() {
+            tagsArea.style.width = '100%';
+            tagsArea.style.overflow = 'visible';
+            tagsArea.style.flexWrap = 'wrap';
+            tagsArea.textContent = '';
+            // 可删标签pill
+            currentTags.forEach(tag => {
+                const pill = document.createElement('span');
+                pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px 0 5px;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;cursor:pointer;transition:all .15s;';
+                const lbl = document.createElement('span'); lbl.textContent = tag;
+                const del = document.createElement('span'); del.textContent = '×'; del.style.cssText = 'font-size:.55rem;color:#aaa;line-height:1;';
+                pill.appendChild(lbl); pill.appendChild(del);
+                pill.addEventListener('mouseenter', () => { pill.style.background='#FCEBEB'; pill.style.borderColor='#B22222'; lbl.style.color='#B22222'; del.style.color='#B22222'; });
+                pill.addEventListener('mouseleave', () => { pill.style.background='var(--bg)'; pill.style.borderColor='var(--border)'; lbl.style.color='#7f8c8d'; del.style.color='#aaa'; });
+                pill.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    currentTags = currentTags.filter(t => t !== tag);
+                    await _saveTags();
+                    _renderExpanded();
+                });
+                tagsArea.appendChild(pill);
+            });
+            // 「+」新增按钮：下拉从 allTags 中选未拥有的
+            const addableTags = allTags.filter(t => !currentTags.includes(t));
+            if (addableTags.length) {
+                const addBtn = document.createElement('span');
+                addBtn.style.cssText = 'font-size:.48rem;color:#4A5D23;background:rgba(74,93,35,0.08);border:1px dashed #4A5D23;border-radius:20px;padding:0 6px;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;';
+                addBtn.textContent = '+ 添加';
+                addBtn.addEventListener('mouseenter', () => { addBtn.style.background='rgba(74,93,35,0.16)'; });
+                addBtn.addEventListener('mouseleave', () => { addBtn.style.background='rgba(74,93,35,0.08)'; });
+                addBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    // 下拉弹出标签选择
+                    const existing = tagsArea.querySelector('.tag-picker');
+                    if (existing) { existing.remove(); return; }
+                    const picker = document.createElement('div');
+                    picker.className = 'tag-picker';
+                    picker.style.cssText = 'position:absolute;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;display:flex;flex-wrap:wrap;gap:3px;box-shadow:0 2px 8px rgba(0,0,0,.1);margin-top:2px;';
+                    addableTags.forEach(tag => {
+                        const opt = document.createElement('span');
+                        opt.style.cssText = 'font-size:.46rem;color:#4A5D23;background:rgba(74,93,35,0.08);border:1px solid rgba(74,93,35,0.3);border-radius:20px;padding:1px 7px;cursor:pointer;white-space:nowrap;transition:all .15s;';
+                        opt.textContent = tag;
+                        opt.addEventListener('mouseenter', () => { opt.style.background='rgba(74,93,35,0.2)'; });
+                        opt.addEventListener('mouseleave', () => { opt.style.background='rgba(74,93,35,0.08)'; });
+                        opt.addEventListener('click', async (e2) => {
+                            e2.stopPropagation();
+                            currentTags.push(tag);
+                            await _saveTags();
+                            picker.remove();
+                            _renderExpanded();
+                        });
+                        picker.appendChild(opt);
+                    });
+                    // 点击外部关闭
+                    setTimeout(() => {
+                        document.addEventListener('click', function _close() {
+                            picker.remove(); document.removeEventListener('click', _close);
+                        });
+                    }, 0);
+                    tagsArea.style.position = 'relative';
+                    tagsArea.appendChild(picker);
+                });
+                tagsArea.appendChild(addBtn);
+            }
+        }
+
+        // 切换展开/折叠
+        function _toggleExpand() {
+            expanded = !expanded;
+            if (expanded) {
+                _renderExpanded();
+                row.style.background = '#f0ece0';
+                row.style.alignItems = 'flex-start';
+            } else {
+                _renderCollapsed();
+                row.style.background = 'var(--muted)';
+                row.style.alignItems = 'center';
+            }
+        }
+
+        // 长按展开（移动端 + 桌面端）
+        row.addEventListener('mousedown', (e) => {
+            if (e.target === revokeBtn || revokeBtn.contains(e.target)) return;
+            longPressTimer = setTimeout(_toggleExpand, LONG_PRESS_MS);
+        });
+        row.addEventListener('mouseup',    () => { clearTimeout(longPressTimer); });
+        row.addEventListener('mouseleave', () => { clearTimeout(longPressTimer); });
+        row.addEventListener('touchstart', (e) => {
+            if (e.target === revokeBtn || revokeBtn.contains(e.target)) return;
+            longPressTimer = setTimeout(_toggleExpand, LONG_PRESS_MS);
+        }, { passive: true });
+        row.addEventListener('touchend',    () => { clearTimeout(longPressTimer); }, { passive: true });
+        row.addEventListener('touchmove',   () => { clearTimeout(longPressTimer); }, { passive: true });
+
+        _renderCollapsed();
+        row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsArea); row.appendChild(revokeBtn);
+        return row;
+    }
+
     async function _refreshUserList() {
         userListWrap.textContent = '';
         try {
@@ -1681,38 +1867,10 @@ async function _cdShowAdminPanel() {
             if (!res.ok) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '加载失败'; userListWrap.appendChild(e); return; }
             const { users } = await res.json();
             if (!users.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e); return; }
-            users.forEach(u => {
-                const row = document.createElement('div'); row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--muted);border-radius:8px;padding:5px 8px;';
-                const nameSpan = document.createElement('span'); nameSpan.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; nameSpan.textContent = u.name;
-                const roleTag = document.createElement('span');
-                roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;background:${u.role==='admin'?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${u.role==='admin'?'#6B1010':'#2F4F4F'};border:1px solid ${u.role==='admin'?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
-                roleTag.textContent = u.role;
-                const tagsSpan = document.createElement('span'); tagsSpan.style.cssText = 'font-size:.5rem;color:#888;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;'; tagsSpan.textContent = (u.tags||[]).join('、');
-                const revokeBtn = document.createElement('button'); revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;'; revokeBtn.textContent = '注销';
-                revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
-                revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
-                revokeBtn.addEventListener('click', () => {
-                    _cdShowRevokeConfirm(u, async () => {
-                        const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
-                        if (r.ok) {
-                            row.style.transition = 'opacity .2s';
-                            row.style.opacity = '0';
-                            setTimeout(() => {
-                                row.remove();
-                                if (!userListWrap.children.length) {
-                                    const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e);
-                                }
-                            }, 200);
-                        } else {
-                            revokeBtn.style.color = '#B22222';
-                            revokeBtn.style.borderColor = '#B22222';
-                            setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
-                        }
-                    });
-                });
-                row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsSpan); row.appendChild(revokeBtn);
-                userListWrap.appendChild(row);
-            });
+            // 拉取全部标签供新增使用
+            let allTags = [];
+            try { const tr = await _cdFetch('/cd/tags'); if (tr.ok) { const td = await tr.json(); allTags = td.tags || []; } } catch(_) {}
+            users.forEach(u => userListWrap.appendChild(_buildUserRow(u, allTags)));
         } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
     }
     await _refreshUserList();
