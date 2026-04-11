@@ -801,6 +801,71 @@
     .cd-del-confirm:hover:not(:disabled) { filter: brightness(1.12); }
     .cd-del-confirm:disabled { background: #aaa; cursor: not-allowed; }
 
+    /* ── 倒计时到达当天强制弹窗 ──────────────────────────────────── */
+    .cd-arrival-overlay {
+        position: fixed; inset: 0; background: rgba(28,22,14,.6);
+        z-index: 4500; display: flex; align-items: center; justify-content: center;
+        padding: 20px; box-sizing: border-box;
+        animation: yr-fade-in .2s ease both;
+    }
+    .cd-arrival-modal {
+        background: var(--surface); border-radius: 18px;
+        border: 1.5px solid var(--accent); width: 100%; max-width: 320px;
+        font-family: 'Noto Serif SC', serif; overflow: hidden;
+        animation: yr-slide-in .2s ease both;
+    }
+    .cd-arrival-header {
+        background: var(--accent); padding: 14px 16px 12px;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .cd-arrival-header-icon {
+        width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%;
+        background: rgba(255,255,255,.2);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cd-arrival-header-text { flex: 1; }
+    .cd-arrival-header-title { font-size: .82rem; font-weight: 700; color: #fff; }
+    .cd-arrival-header-sub   { font-size: .62rem; color: rgba(255,255,255,.75); margin-top: 2px; }
+    .cd-arrival-body { padding: 16px 18px 14px; }
+    .cd-arrival-name {
+        font-size: .72rem; font-weight: 700; color: #7f8c8d;
+        letter-spacing: 1px; text-align: center; margin-bottom: 6px;
+    }
+    .cd-arrival-zero {
+        font-size: 64px; font-weight: 800; color: var(--accent);
+        line-height: 1; letter-spacing: -3px; text-align: center;
+    }
+    .cd-arrival-unit {
+        font-size: .7rem; color: #bbb; font-weight: 500;
+        text-align: center; margin-bottom: 14px; margin-top: 2px;
+    }
+    .cd-arrival-info {
+        background: #FFF8F8; border-radius: 10px;
+        border: 1px solid #F7C1C1; padding: 10px 14px; margin-bottom: 14px;
+    }
+    .cd-arrival-info-row {
+        font-size: .65rem; color: #7f8c8d; line-height: 1.9;
+    }
+    .cd-arrival-info-row strong { color: var(--primary); font-weight: 700; }
+    .cd-arrival-info-row em { color: var(--accent); font-style: normal; font-weight: 700; }
+    .cd-arrival-footer { display: flex; gap: 8px; }
+    .cd-arrival-btn-jump {
+        flex: 1.2; padding: 10px 0; background: var(--accent); color: #fff;
+        border: none; border-radius: 9px; cursor: pointer;
+        font-size: .78rem; font-weight: 700; font-family: inherit; transition: filter .15s;
+    }
+    .cd-arrival-btn-jump:hover { filter: brightness(1.1); }
+    .cd-arrival-btn-later {
+        flex: 1; padding: 10px 0; background: var(--muted); color: var(--primary);
+        border: 1px solid var(--border); border-radius: 9px; cursor: pointer;
+        font-size: .78rem; font-weight: 700; font-family: inherit; transition: filter .15s;
+    }
+    .cd-arrival-btn-later:hover { filter: brightness(.96); }
+    .cd-arrival-note {
+        text-align: center; margin-top: 10px;
+        font-size: .58rem; color: #ccc;
+    }
+
     /* ── 倒计时卡片 ──────────────────────────────────────────────── */
     .cd-card {
         background: var(--surface); border-radius: 14px;
@@ -2248,18 +2313,18 @@ function _renderCdDateRow(item) {
     wrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:3em 1fr;row-gap:2px;align-items:baseline;';
     const tDate = new Date(item.date + 'T12:00:00');
     const vd = _cdVDate(tDate);
-    if (vd) {
-        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
-        const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
-        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${vd.m}月${vd.d}日 ${vd.wk}`;
-        r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
-    }
     const r2 = document.createElement('div'); r2.className = 'cd-date-row';
     const l2 = document.createElement('span'); l2.className = 'cd-date-lbl'; l2.textContent = '公历';
     const v2 = document.createElement('span'); v2.className = 'cd-date-val';
     const gWk = WKS[(tDate.getDay() + 6) % 7];
-    v2.textContent = `${tDate.getFullYear()}年${tDate.getMonth()+1}月${tDate.getDate()}日 ${gWk}`;
+    v2.textContent = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
     r2.appendChild(l2); r2.appendChild(v2); wrap.appendChild(r2);
+    if (vd) {
+        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
+        const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
+        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}`;
+        r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
+    }
     return wrap;
 }
 
@@ -2276,6 +2341,151 @@ function _renderCdMetrics(diffDays, color) {
     mR.appendChild(mRL); mR.appendChild(mRV);
     grid.appendChild(mL); grid.appendChild(mR);
     return grid;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  倒计时到达当天强制弹窗
+//  触发时机：diffDays===0 且当日尚未弹过（localStorage 去重）
+//  多任务同日到达时，按 _cdSortedTasks() 顺序依次弹出（队列）
+// ═══════════════════════════════════════════════════════════════
+function _cdCheckArrivalAlert() {
+    if (!_cdTasks.length) return;
+    const now      = new Date();
+    const todayMs  = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayKey = now.getFullYear() + '' +
+                     String(now.getMonth()+1).padStart(2,'0') +
+                     String(now.getDate()).padStart(2,'0');
+
+    // 收集今日到达且尚未弹过的任务，保持 _cdSortedTasks() 顺序
+    const queue = _cdSortedTasks().filter(item => {
+        const dp = item.date.split('-').map(Number);
+        const targetMs = new Date(dp[0], dp[1]-1, dp[2]).getTime();
+        if (targetMs !== todayMs) return false;
+        const key = 'cdAlert_' + (item.id || encodeURIComponent(item.name)) + '_' + todayKey;
+        return !localStorage.getItem(key);
+    });
+
+    if (!queue.length) return;
+
+    // 依次弹出：关闭当前后自动弹下一个
+    function _showOne(idx) {
+        if (idx >= queue.length) return;
+        const item  = queue[idx];
+        const key   = 'cdAlert_' + (item.id || encodeURIComponent(item.name)) + '_' + todayKey;
+        try { localStorage.setItem(key, '1'); } catch(_) {}
+
+        // 计算摘要信息
+        const cdKey      = 'cdTotal_' + encodeURIComponent(item.name);
+        const totalDays  = parseInt(localStorage.getItem(cdKey) || '0') || '—';
+        const weeks      = typeof totalDays === 'number' ? Math.floor(totalDays / 7) : null;
+        const tDate      = new Date(item.date + 'T12:00:00');
+        const gWk        = WKS[(tDate.getDay() + 6) % 7];
+        const gDateStr   = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
+        const vd         = _cdVDate(tDate);
+        const vDateStr   = vd ? `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}` : null;
+
+        // 构建遮罩
+        const overlay = document.createElement('div');
+        overlay.className = 'cd-arrival-overlay';
+
+        const modal = document.createElement('div');
+        modal.className = 'cd-arrival-modal';
+
+        // 标题栏
+        const hdr = document.createElement('div');
+        hdr.className = 'cd-arrival-header';
+        const hIcon = document.createElement('div');
+        hIcon.className = 'cd-arrival-header-icon';
+        hIcon.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="white" stroke-width="1.4"/><path d="M8 4.5v3.5l2 1.5" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>';
+        const hText = document.createElement('div');
+        hText.className = 'cd-arrival-header-text';
+        const hTitle = document.createElement('div');
+        hTitle.className = 'cd-arrival-header-title';
+        hTitle.textContent = '倒计时到达';
+        const hSub = document.createElement('div');
+        hSub.className = 'cd-arrival-header-sub';
+        hSub.textContent = '今天是目标日期';
+        hText.appendChild(hTitle); hText.appendChild(hSub);
+        hdr.appendChild(hIcon); hdr.appendChild(hText);
+
+        // 正文
+        const body = document.createElement('div');
+        body.className = 'cd-arrival-body';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'cd-arrival-name';
+        nameEl.textContent = item.name;
+
+        const zeroEl = document.createElement('div');
+        zeroEl.className = 'cd-arrival-zero';
+        zeroEl.textContent = '0';
+
+        const unitEl = document.createElement('div');
+        unitEl.className = 'cd-arrival-unit';
+        unitEl.textContent = '天';
+
+        // 信息卡
+        const info = document.createElement('div');
+        info.className = 'cd-arrival-info';
+        const infoRow = document.createElement('div');
+        infoRow.className = 'cd-arrival-info-row';
+        const r1 = document.createElement('div');
+        if (typeof totalDays === 'number') {
+            r1.appendChild(document.createTextNode('已历时 '));
+            const s1 = document.createElement('strong'); s1.textContent = totalDays + ' 天';
+            r1.appendChild(s1);
+            if (weeks !== null) {
+                r1.appendChild(document.createTextNode(' · 约 '));
+                const s2 = document.createElement('strong'); s2.textContent = weeks + ' 周';
+                r1.appendChild(s2);
+            }
+            r1.appendChild(document.createTextNode(' · 完成 '));
+            const s3 = document.createElement('em'); s3.textContent = '100%';
+            r1.appendChild(s3);
+        } else {
+            r1.textContent = '今日即目标日期';
+        }
+        const r2 = document.createElement('div');
+        r2.appendChild(document.createTextNode('公历：' + gDateStr));
+        if (vDateStr) {
+            const r3 = document.createElement('div');
+            r3.appendChild(document.createTextNode('更替历：' + vDateStr));
+            infoRow.appendChild(r1); infoRow.appendChild(r2); infoRow.appendChild(r3);
+        } else {
+            infoRow.appendChild(r1); infoRow.appendChild(r2);
+        }
+        info.appendChild(infoRow);
+
+        // 按钮行
+        const footer = document.createElement('div');
+        footer.className = 'cd-arrival-footer';
+        const btnJump = document.createElement('button');
+        btnJump.className = 'cd-arrival-btn-jump';
+        btnJump.textContent = '跳转今日';
+        const btnLater = document.createElement('button');
+        btnLater.className = 'cd-arrival-btn-later';
+        btnLater.textContent = '稍后再说';
+        footer.appendChild(btnJump); footer.appendChild(btnLater);
+
+        const note = document.createElement('div');
+        note.className = 'cd-arrival-note';
+        note.textContent = '今日仅提示一次';
+
+        body.appendChild(nameEl); body.appendChild(zeroEl); body.appendChild(unitEl);
+        body.appendChild(info); body.appendChild(footer); body.appendChild(note);
+        modal.appendChild(hdr); modal.appendChild(body);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        function _close() {
+            overlay.remove();
+            _showOne(idx + 1); // 弹出队列中下一个
+        }
+        btnJump.addEventListener('click', () => { _close(); goHome(); });
+        btnLater.addEventListener('click', _close);
+    }
+
+    _showOne(0);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4947,6 +5157,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         // token 验证 + 任务拉取完成后，追加渲染倒计时卡片
         _buildCdCard();
         _cdApplyCellColor();
+        _cdCheckArrivalAlert(); // 页面首次加载：检查今日是否有到达的倒计时
         const _urlInvite = new URLSearchParams(window.location.search).get('invite');
         if (_urlInvite && !_cdGetToken()) {
             setTimeout(() => _cdShowRedeemModal(), 300);
@@ -5196,11 +5407,37 @@ window.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // ── 零点自动刷新：精确计算到下一个 00:00:00 的毫秒数，届时重渲染日历与倒计时
+    let _midnightTimer = null;
+    function _scheduleNextMidnight() {
+        const now = new Date();
+        const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
+        _midnightTimer = setTimeout(() => {
+            render();
+            _buildCdCard();
+            _cdApplyCellColor();
+            _cdCheckArrivalAlert();
+            _scheduleNextMidnight();
+        }, msToMidnight);
+    }
+    _scheduleNextMidnight();
+
     // ── Page Visibility：标签页隐藏时同时暂停 rAF 和天气定时器
+    // 设备休眠可能导致 setTimeout 延迟，重新激活时补一次日期检查作为保险
+    let _lastVisibleDate = new Date().toDateString();
     document.addEventListener('visibilitychange',()=>{
         _paused=document.hidden;
-        if(!_paused) { scheduleUpdate(); _startWeatherTimers(); }
-        else         { _stopWeatherTimers(); }
+        if(!_paused) {
+            scheduleUpdate(); _startWeatherTimers();
+            const todayStr = new Date().toDateString();
+            if (todayStr !== _lastVisibleDate) {
+                _lastVisibleDate = todayStr;
+                render(); _buildCdCard(); _cdApplyCellColor();
+                _cdCheckArrivalAlert();
+            }
+        } else {
+            _stopWeatherTimers();
+        }
     });
 
     // ── 定位 → 天气（失败时显示"上海（默认·点击重试）"）
