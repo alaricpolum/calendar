@@ -1622,6 +1622,7 @@ async function _cdShowAdminPanel() {
     modal.className = 'cd-admin-modal';
     modal.style.maxHeight = '80vh';
     modal.style.overflowY = 'auto';
+    modal.style.overflowX = 'hidden';
     modal.addEventListener('click', e => e.stopPropagation());
 
     const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理面板';
@@ -1797,32 +1798,108 @@ async function _cdShowAdminPanel() {
             await _cdFetch('/cd/token/tags/update', { method: 'POST', body: JSON.stringify({ token: u.token, tags: currentTags }) });
         }
 
-        // 渲染折叠态标签（纯文字，超出裁剪）
+        // 渲染折叠态标签（向左拖动后右上角显示×才能删除）
         function _renderCollapsed() {
             tagsArea.style.width = TAGS_MAX_W + 'px';
             tagsArea.style.overflow = 'hidden';
             tagsArea.style.flexWrap = 'nowrap';
+            tagsArea.style.paddingTop = '0';
+            tagsArea.style.paddingBottom = '0';
             tagsArea.textContent = '';
             if (!currentTags.length) {
                 const empty = document.createElement('span'); empty.style.cssText = 'font-size:.48rem;color:#ccc;'; empty.textContent = '无标签';
                 tagsArea.appendChild(empty); return;
             }
-            // 逐个渲染pill，超出部分被overflow:hidden裁掉
+            // 逐个渲染pill，支持向左滑动显示×删除按钮
             currentTags.forEach(tag => {
+                const wrapper = document.createElement('span');
+                wrapper.style.cssText = 'position:relative;display:inline-flex;align-items:center;flex-shrink:0;';
+
                 const pill = document.createElement('span');
-                pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px;white-space:nowrap;flex-shrink:0;transition:background .15s,color .15s;cursor:default;';
+                pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px;white-space:nowrap;flex-shrink:0;cursor:default;display:inline-block;transform:translateX(0);transition:transform .2s ease;user-select:none;-webkit-user-select:none;';
                 pill.textContent = tag;
-                // 悬停变红提示可删
-                pill.addEventListener('mouseenter', () => { pill.style.background='#FCEBEB'; pill.style.color='#B22222'; pill.style.borderColor='#B22222'; pill.style.cursor='pointer'; });
-                pill.addEventListener('mouseleave', () => { pill.style.background='var(--bg)'; pill.style.color='#7f8c8d'; pill.style.borderColor='var(--border)'; pill.style.cursor='default'; });
-                pill.addEventListener('click', async (e) => {
+
+                // × 删除按钮（默认隐藏，滑动后显示）
+                const delBtn = document.createElement('span');
+                delBtn.textContent = '×';
+                delBtn.style.cssText = 'position:absolute;top:-5px;right:-3px;width:10px;height:10px;background:#B22222;color:#fff;border-radius:50%;font-size:.45rem;line-height:10px;text-align:center;cursor:pointer;opacity:0;transition:opacity .2s ease;z-index:10;display:flex;align-items:center;justify-content:center;';
+
+                // 滑动状态
+                let swiped = false;
+                let startX = 0;
+                let startTime = 0;
+                const SWIPE_THRESHOLD = 18; // 触发阈值px
+
+                function _showDel() {
+                    swiped = true;
+                    pill.style.transform = 'translateX(-6px)';
+                    delBtn.style.opacity = '1';
+                }
+                function _hideDel() {
+                    swiped = false;
+                    pill.style.transform = 'translateX(0)';
+                    delBtn.style.opacity = '0';
+                }
+
+                // ── 鼠标拖拽支持 ──
+                pill.addEventListener('mousedown', (e) => {
+                    startX = e.clientX;
+                    startTime = Date.now();
+                    const onMove = (me) => {
+                        const dx = me.clientX - startX;
+                        if (dx < -SWIPE_THRESHOLD) { _showDel(); document.removeEventListener('mousemove', onMove); }
+                        else if (dx > SWIPE_THRESHOLD && swiped) { _hideDel(); document.removeEventListener('mousemove', onMove); }
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                });
+
+                // ── 触摸滑动支持 ──
+                pill.addEventListener('touchstart', (e) => {
+                    startX = e.touches[0].clientX;
+                    startTime = Date.now();
+                }, { passive: true });
+                pill.addEventListener('touchmove', (e) => {
+                    const dx = e.touches[0].clientX - startX;
+                    if (dx < -SWIPE_THRESHOLD && !swiped) _showDel();
+                    else if (dx > SWIPE_THRESHOLD && swiped) _hideDel();
+                }, { passive: true });
+
+                // 点击其他pill时收回已展开的×
+                tagsArea.addEventListener('click', (e) => {
+                    if (!wrapper.contains(e.target) && swiped) _hideDel();
+                });
+
+                // × 按钮点击删除
+                delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     currentTags = currentTags.filter(t => t !== tag);
                     await _saveTags();
                     _renderCollapsed();
                 });
-                tagsArea.appendChild(pill);
+
+                wrapper.appendChild(pill);
+                wrapper.appendChild(delBtn);
+                tagsArea.appendChild(wrapper);
             });
+
+            // 点击标签区外部时收回所有已展开的×
+            setTimeout(() => {
+                document.addEventListener('click', function _collapseAll(e) {
+                    if (!tagsArea.contains(e.target)) {
+                        tagsArea.querySelectorAll('span[style*="translateX(-6px)"]').forEach(p => {
+                            p.style.transform = 'translateX(0)';
+                            const del = p.parentElement?.querySelector('span:last-child');
+                            if (del) del.style.opacity = '0';
+                        });
+                        document.removeEventListener('click', _collapseAll);
+                    }
+                });
+            }, 0);
         }
 
         // 渲染展开态（所有标签pill可删 + 「+」新增）
