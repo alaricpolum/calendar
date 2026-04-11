@@ -1381,29 +1381,38 @@ async function _cdShowAddTaskModal() {
     });
     f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint); modal.appendChild(f2);
 
-    // 标签多选（可选，未选则仅自己可见）
+    // 标签多选（仅 admin / superadmin 可选标签，viewer 固定空标签仅自己可见）
     const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
-    const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（可选，未选则仅自己可见）';
-    f3.appendChild(l3);
-    if (availTags.length > 0) {
-        const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
-        availTags.forEach(tag => {
-            const btn = document.createElement('button');
-            btn.className = 'tag-pill-sel';
-            btn.textContent = tag;
-            btn.dataset.selected = '0';
-            btn.addEventListener('click', () => {
-                const sel = btn.dataset.selected === '1';
-                btn.dataset.selected = sel ? '0' : '1';
-                btn.classList.toggle('selected', !sel);
+    const isViewer = _cdUser && _cdUser.role === 'viewer';
+    if (!isViewer) {
+        const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（可选，未选则仅自己可见）';
+        f3.appendChild(l3);
+        if (availTags.length > 0) {
+            const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
+            availTags.forEach(tag => {
+                const btn = document.createElement('button');
+                btn.className = 'tag-pill-sel';
+                btn.textContent = tag;
+                btn.dataset.selected = '0';
+                btn.addEventListener('click', () => {
+                    const sel = btn.dataset.selected === '1';
+                    btn.dataset.selected = sel ? '0' : '1';
+                    btn.classList.toggle('selected', !sel);
+                });
+                tagWrap.appendChild(btn);
             });
-            tagWrap.appendChild(btn);
-        });
-        f3.appendChild(tagWrap);
+            f3.appendChild(tagWrap);
+        } else {
+            const hint = document.createElement('div');
+            hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;';
+            hint.textContent = '暂无可用标签，创建后仅自己可见';
+            f3.appendChild(hint);
+        }
     } else {
+        // viewer：显示只读提示，不显示标签选择
         const hint = document.createElement('div');
-        hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;';
-        hint.textContent = '暂无可用标签，创建后仅自己可见';
+        hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;background:var(--muted);border-radius:6px;padding:5px 9px;line-height:1.5;';
+        hint.textContent = '仅自己可见（只读成员不可分配可见标签）';
         f3.appendChild(hint);
     }
     modal.appendChild(f3);
@@ -1418,9 +1427,12 @@ async function _cdShowAddTaskModal() {
     submitBtn.addEventListener('click', async () => {
         const name = nameInput.value.trim();
         const parsedDate = _parseDateInput(dateInput.value);
-        const selectedTags = availTags.length > 0
-            ? [...modal.querySelectorAll('[data-selected="1"]')].map(b => b.textContent)
-            : [];
+        // viewer 强制空标签（仅自己可见），admin/superadmin 读取选中的标签
+        const selectedTags = isViewer
+            ? []
+            : (availTags.length > 0
+                ? [...modal.querySelectorAll('[data-selected="1"]')].map(b => b.textContent)
+                : []);
         if (!name) { errDiv.textContent = '请填写目标名称'; nameInput.style.borderColor = '#B22222'; return; }
         if (!parsedDate) { errDiv.textContent = '请填写有效的目标日期'; dateInput.style.borderColor = '#B22222'; return; }
         // 若无可用标签（superadmin 还没建标签），暂时用空数组，Worker 会报错
@@ -2269,7 +2281,7 @@ function _buildCdCard() {
     card.appendChild(_renderCdProgress(item, diffDays, color));
     card.appendChild(_renderCdDateRow(item));
 
-    // ── 操作行：标签显示 + 删除（admin） ────────────────────────
+    // ── 操作行：标签显示 + 创建者（superadmin）+ 删除（admin） ──
     const actRow = document.createElement('div');
     actRow.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:4px;border-top:1px solid var(--muted);padding-top:6px;margin-top:0;';
     if (Array.isArray(item.tags) && item.tags.length) {
@@ -2278,6 +2290,15 @@ function _buildCdCard() {
             t.style.cssText = 'font-size:.5rem;color:#7f8c8d;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;';
             t.textContent = tag; actRow.appendChild(t);
         });
+    }
+    // 创建者用户名：仅 superadmin 可见，从任务的 creatorName 字段读取
+    if (isSA && item.creatorName) {
+        const creatorTag = document.createElement('span');
+        creatorTag.style.cssText = 'font-size:.48rem;color:#6B1010;background:rgba(107,16,16,0.06);border:1px solid rgba(107,16,16,0.25);border-radius:20px;padding:1px 8px;display:flex;align-items:center;gap:3px;';
+        const icon = document.createElement('span'); icon.textContent = '👤'; icon.style.fontSize = '.5rem';
+        const name = document.createElement('span'); name.textContent = item.creatorName;
+        creatorTag.appendChild(icon); creatorTag.appendChild(name);
+        actRow.appendChild(creatorTag);
     }
     if (isAdmin || item.createdBy === _cdGetToken()) {
         const delBtn = document.createElement('button');
