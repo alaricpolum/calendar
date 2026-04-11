@@ -1381,10 +1381,10 @@ async function _cdShowAddTaskModal() {
     });
     f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint); modal.appendChild(f2);
 
-    // 标签多选
+    // 标签多选（可选，未选则仅自己可见）
     if (availTags.length > 0) {
         const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
-        const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（至少选一个）';
+        const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（可选，未选则仅自己可见）';
         f3.appendChild(l3);
         const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
         availTags.forEach(tag => {
@@ -1417,7 +1417,6 @@ async function _cdShowAddTaskModal() {
             : [];
         if (!name) { errDiv.textContent = '请填写目标名称'; nameInput.style.borderColor = '#B22222'; return; }
         if (!parsedDate) { errDiv.textContent = '请填写有效的目标日期'; dateInput.style.borderColor = '#B22222'; return; }
-        if (availTags.length > 0 && selectedTags.length === 0) { errDiv.textContent = '请至少选择一个标签'; return; }
         // 若无可用标签（superadmin 还没建标签），暂时用空数组，Worker 会报错
         submitBtn.disabled = true; submitBtn.textContent = '保存中…';
         try {
@@ -1453,7 +1452,82 @@ async function _cdShowAddTaskModal() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  弹窗：管理面板（superadmin 专用）
+//  注销确认弹窗（参考删除确认弹窗样式）
+// ═══════════════════════════════════════════════════════════════
+function _cdShowRevokeConfirm(u, onConfirmed) {
+    document.querySelectorAll('.cd-del-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-del-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'cd-del-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    // ── 标题行
+    const header = document.createElement('div');
+    header.className = 'cd-del-header';
+    const icon = document.createElement('div');
+    icon.className = 'cd-del-icon';
+    icon.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="#A32D2D" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="2.5"/><path d="M3 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/><line x1="12" y1="10" x2="14" y2="12"/><line x1="14" y1="10" x2="12" y2="12"/></svg>`;
+    const hdText = document.createElement('div');
+    hdText.className = 'cd-del-hd-text';
+    const hdTitle = document.createElement('div');
+    hdTitle.className = 'cd-del-title'; hdTitle.textContent = '确认注销用户';
+    const hdSub = document.createElement('div');
+    hdSub.className = 'cd-del-subtitle'; hdSub.textContent = '该用户将立即失去访问权限';
+    hdText.appendChild(hdTitle); hdText.appendChild(hdSub);
+    header.appendChild(icon); header.appendChild(hdText);
+    modal.appendChild(header);
+
+    // ── 用户信息卡
+    const body = document.createElement('div');
+    body.className = 'cd-del-body';
+    const userCard = document.createElement('div');
+    userCard.className = 'cd-del-task-card';
+    const userName = document.createElement('div');
+    userName.className = 'cd-del-task-name'; userName.textContent = u.name;
+    const userMeta = document.createElement('div');
+    userMeta.className = 'cd-del-task-meta';
+    const roleSpan = document.createElement('span');
+    roleSpan.className = 'cd-del-task-date'; roleSpan.textContent = `角色：${u.role}`;
+    userMeta.appendChild(roleSpan);
+    if (u.tags?.length) {
+        const tagsSpan = document.createElement('span');
+        tagsSpan.className = 'cd-del-task-days'; tagsSpan.textContent = u.tags.join('、');
+        userMeta.appendChild(tagsSpan);
+    }
+    userCard.appendChild(userName); userCard.appendChild(userMeta);
+    const warn = document.createElement('p');
+    warn.className = 'cd-del-warn';
+    warn.innerHTML = '注销后用户需重新获取邀请链接才能加入，<strong>历史数据不受影响</strong>。';
+    body.appendChild(userCard); body.appendChild(warn);
+    modal.appendChild(body);
+
+    // ── 按钮行
+    const footer = document.createElement('div');
+    footer.className = 'cd-del-footer';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cd-del-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'cd-del-confirm'; confirmBtn.textContent = '确认注销';
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true; cancelBtn.disabled = true;
+        confirmBtn.textContent = '注销中…';
+        userCard.classList.add('fading');
+        await onConfirmed();
+        overlay.remove();
+    });
+    footer.appendChild(cancelBtn); footer.appendChild(confirmBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
+    document.body.appendChild(overlay);
+    confirmBtn.focus();
+}
 //  包含：管理标签、生成邀请码
 // ═══════════════════════════════════════════════════════════════
 async function _cdShowAdminPanel() {
@@ -1601,26 +1675,24 @@ async function _cdShowAdminPanel() {
                 const revokeBtn = document.createElement('button'); revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;'; revokeBtn.textContent = '注销';
                 revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
                 revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
-                revokeBtn.addEventListener('click', async () => {
-                    revokeBtn.disabled = true;
-                    revokeBtn.textContent = '注销中…';
-                    const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
-                    if (r.ok) {
-                        row.style.transition = 'opacity .2s';
-                        row.style.opacity = '0';
-                        setTimeout(() => {
-                            row.remove();
-                            if (!userListWrap.children.length) {
-                                const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e);
-                            }
-                        }, 200);
-                    } else {
-                        revokeBtn.disabled = false;
-                        revokeBtn.textContent = '注销';
-                        revokeBtn.style.color = '#B22222';
-                        revokeBtn.style.borderColor = '#B22222';
-                        setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
-                    }
+                revokeBtn.addEventListener('click', () => {
+                    _cdShowRevokeConfirm(u, async () => {
+                        const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
+                        if (r.ok) {
+                            row.style.transition = 'opacity .2s';
+                            row.style.opacity = '0';
+                            setTimeout(() => {
+                                row.remove();
+                                if (!userListWrap.children.length) {
+                                    const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e);
+                                }
+                            }, 200);
+                        } else {
+                            revokeBtn.style.color = '#B22222';
+                            revokeBtn.style.borderColor = '#B22222';
+                            setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
+                        }
+                    });
                 });
                 row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsSpan); row.appendChild(revokeBtn);
                 userListWrap.appendChild(row);
