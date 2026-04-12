@@ -847,6 +847,7 @@
         font-size: .65rem; color: #7f8c8d; line-height: 1.9;
     }
     .cd-arrival-info-row strong { color: var(--primary); font-weight: 700; }
+    .cd-arrival-info-row-main { font-size: .8rem; margin-bottom: 4px; }
     .cd-arrival-info-row em { color: var(--accent); font-style: normal; font-weight: 700; }
     .cd-arrival-footer { display: flex; gap: 8px; }
     .cd-arrival-btn-jump {
@@ -2406,7 +2407,7 @@ function _renderCdDateRow(item) {
     v2.textContent = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
     r2.appendChild(l2); r2.appendChild(v2); wrap.appendChild(r2);
     if (vd) {
-        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
+        const r1 = document.createElement('div'); r1.className = 'cd-arrival-info-row-main';
         const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
         const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}`;
         r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
@@ -2520,7 +2521,7 @@ function _cdCheckArrivalAlert() {
         info.className = 'cd-arrival-info';
         const infoRow = document.createElement('div');
         infoRow.className = 'cd-arrival-info-row';
-        const r1 = document.createElement('div');
+        const r1 = document.createElement('div'); r1.className = 'cd-arrival-info-row-main';
         if (totalDays) {
             r1.appendChild(document.createTextNode('已历时 '));
             const remainDays = totalDays % 7;
@@ -2541,14 +2542,14 @@ function _cdCheckArrivalAlert() {
         // 日期行：用 grid 对齐标签与日期值
         const r2 = document.createElement('div');
         r2.style.cssText = 'display:grid;grid-template-columns:4em 1fr;align-items:baseline;gap:0 4px;';
-        const r2L = document.createElement('span'); r2L.style.cssText = 'color:#aaa;font-weight:400;';
+        const r2L = document.createElement('span'); r2L.style.cssText = '';
         r2L.textContent = '公历';
         const r2V = document.createElement('span'); r2V.textContent = gDateStr;
         r2.appendChild(r2L); r2.appendChild(r2V);
         if (vDateStr) {
             const r3 = document.createElement('div');
             r3.style.cssText = 'display:grid;grid-template-columns:4em 1fr;align-items:baseline;gap:0 4px;';
-            const r3L = document.createElement('span'); r3L.style.cssText = 'color:#aaa;font-weight:400;';
+            const r3L = document.createElement('span'); r3L.style.cssText = '';
             r3L.textContent = '更替历';
             const r3V = document.createElement('span'); r3V.textContent = vDateStr;
             r3.appendChild(r3L); r3.appendChild(r3V);
