@@ -1502,7 +1502,16 @@ async function _cdShowAddTaskModal() {
         try {
             const res = await _cdFetch('/cd/tasks/add', {
                 method: 'POST',
-                body: JSON.stringify({ name, date: parsedDate.iso, tags: selectedTags }),
+                body: JSON.stringify({
+                    name,
+                    date: parsedDate.iso,
+                    tags: selectedTags,
+                    totalDays: (() => {
+                        const t = new Date(parsedDate.iso + 'T00:00:00');
+                        const n = new Date(); const today = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+                        return Math.round((t - today) / 86400000);
+                    })(),
+                }),
             });
             const data = await res.json();
             if (!res.ok) { errDiv.textContent = data.error || '保存失败'; submitBtn.disabled = false; submitBtn.textContent = '确定'; return; }
@@ -2452,14 +2461,19 @@ function _cdCheckArrivalAlert() {
         try { localStorage.setItem(key, '1'); } catch(_) {}
 
         // 计算摘要信息
-        const cdKey      = 'cdTotal_' + encodeURIComponent(item.name);
-        const totalDays  = parseInt(localStorage.getItem(cdKey) || '0') || '—';
-        const weeks      = typeof totalDays === 'number' ? Math.floor(totalDays / 7) : null;
         const tDate      = new Date(item.date + 'T12:00:00');
         const gWk        = WKS[(tDate.getDay() + 6) % 7];
         const gDateStr   = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
         const vd         = _cdVDate(tDate);
         const vDateStr   = vd ? `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}` : null;
+        // 已历时：直接读任务创建时写入的 totalDays 字段
+        let totalDays = (typeof item.totalDays === 'number' && item.totalDays > 0) ? item.totalDays : null;
+        // fallback：老任务没有 totalDays，从 localStorage 读
+        if (!totalDays) {
+            const cdKey = 'cdTotal_' + encodeURIComponent(item.name);
+            totalDays = parseInt(localStorage.getItem(cdKey) || '0') || null;
+        }
+        const weeks = totalDays ? Math.floor(totalDays / 7) : null;
 
         // 构建遮罩
         const overlay = document.createElement('div');
@@ -2507,7 +2521,7 @@ function _cdCheckArrivalAlert() {
         const infoRow = document.createElement('div');
         infoRow.className = 'cd-arrival-info-row';
         const r1 = document.createElement('div');
-        if (typeof totalDays === 'number') {
+        if (totalDays) {
             r1.appendChild(document.createTextNode('已历时 '));
             const s1 = document.createElement('strong'); s1.textContent = totalDays + ' 天';
             r1.appendChild(s1);
@@ -2522,11 +2536,20 @@ function _cdCheckArrivalAlert() {
         } else {
             r1.textContent = '今日即目标日期';
         }
+        // 日期行：用 grid 对齐标签与日期值
         const r2 = document.createElement('div');
-        r2.appendChild(document.createTextNode('公历：' + gDateStr));
+        r2.style.cssText = 'display:grid;grid-template-columns:3.5em 1fr;align-items:baseline;';
+        const r2L = document.createElement('span'); r2L.style.cssText = 'font-size:.7em;color:#aaa;font-weight:600;';
+        r2L.textContent = '公历';
+        const r2V = document.createElement('span'); r2V.textContent = gDateStr;
+        r2.appendChild(r2L); r2.appendChild(r2V);
         if (vDateStr) {
             const r3 = document.createElement('div');
-            r3.appendChild(document.createTextNode('更替历：' + vDateStr));
+            r3.style.cssText = 'display:grid;grid-template-columns:3.5em 1fr;align-items:baseline;';
+            const r3L = document.createElement('span'); r3L.style.cssText = 'font-size:.7em;color:#aaa;font-weight:600;';
+            r3L.textContent = '更替历';
+            const r3V = document.createElement('span'); r3V.textContent = vDateStr;
+            r3.appendChild(r3L); r3.appendChild(r3V);
             infoRow.appendChild(r1); infoRow.appendChild(r2); infoRow.appendChild(r3);
         } else {
             infoRow.appendChild(r1); infoRow.appendChild(r2);
@@ -5236,7 +5259,59 @@ window.addEventListener('DOMContentLoaded', async () => {
         _cdApplyCellColor();
         _cdCheckArrivalAlert(); // 页面首次加载：检查今日是否有到达的倒计时
         const _urlInvite = new URLSearchParams(window.location.search).get('invite');
-        if (_urlInvite && !_cdGetToken()) {
+        const _urlGo     = new URLSearchParams(window.location.search).get('go');
+
+        // ── superadmin 快捷登录入口（?go=login）────────────────────
+        if (_urlGo === 'login') {
+            // 清除 URL 参数，避免输入框反复弹出
+            const _uGo = new URL(window.location.href);
+            _uGo.searchParams.delete('go');
+            history.replaceState(null, '', _uGo.toString());
+            setTimeout(() => {
+                const overlay = document.createElement('div');
+                overlay.className = 'cd-admin-overlay';
+                const modal = document.createElement('div');
+                modal.className = 'cd-admin-modal';
+                modal.addEventListener('click', e => e.stopPropagation());
+                const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理员登录';
+                const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+                const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = 'Token';
+                const inp = document.createElement('input'); inp.className = 'cd-admin-input'; inp.type = 'password'; inp.placeholder = '输入管理员 Token';
+                const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
+                f1.appendChild(l1); f1.appendChild(inp); f1.appendChild(errDiv);
+                const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+                const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+                cancelBtn.addEventListener('click', () => overlay.remove());
+                const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '登录';
+                const _doLogin = async () => {
+                    const tk = inp.value.trim();
+                    if (!tk) { errDiv.textContent = '请输入 Token'; return; }
+                    submitBtn.disabled = true; submitBtn.textContent = '验证中…';
+                    try {
+                        const res = await fetch(CD_API + '/cd/token/info', {
+                            headers: { 'Authorization': 'Bearer ' + tk }
+                        });
+                        if (!res.ok) { errDiv.textContent = 'Token 无效'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
+                        _cdSaveToken(tk);
+                        overlay.remove();
+                        await _cdInit();
+                        _buildCdCard(); _cdApplyCellColor();
+                    } catch(_) {
+                        errDiv.textContent = '网络错误，请重试';
+                        submitBtn.disabled = false; submitBtn.textContent = '登录';
+                    }
+                };
+                submitBtn.addEventListener('click', _doLogin);
+                inp.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); });
+                btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+                modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(btnRow);
+                overlay.appendChild(modal);
+                overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+                document.body.appendChild(overlay);
+                inp.focus();
+            }, 300);
+        } else if (_urlInvite && !_cdGetToken()) {
+            // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
             setTimeout(() => _cdShowRedeemModal(), 300);
         }
     });
