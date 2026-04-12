@@ -2523,11 +2523,13 @@ function _cdCheckArrivalAlert() {
         const r1 = document.createElement('div');
         if (totalDays) {
             r1.appendChild(document.createTextNode('已历时 '));
-            const s1 = document.createElement('strong'); s1.textContent = totalDays + ' 天';
+            const remainDays = totalDays % 7;
+            const s1 = document.createElement('strong');
+            s1.textContent = (weeks > 0 ? weeks + ' 周' + (remainDays > 0 ? ' ' + remainDays + ' 天' : '') : totalDays + ' 天');
             r1.appendChild(s1);
-            if (weeks !== null) {
-                r1.appendChild(document.createTextNode(' · 约 '));
-                const s2 = document.createElement('strong'); s2.textContent = weeks + ' 周';
+            if (weeks > 0) {
+                r1.appendChild(document.createTextNode(' · 共 '));
+                const s2 = document.createElement('strong'); s2.textContent = totalDays + ' 天';
                 r1.appendChild(s2);
             }
             r1.appendChild(document.createTextNode(' · 完成 '));
@@ -2538,15 +2540,15 @@ function _cdCheckArrivalAlert() {
         }
         // 日期行：用 grid 对齐标签与日期值
         const r2 = document.createElement('div');
-        r2.style.cssText = 'display:grid;grid-template-columns:3.5em 1fr;align-items:baseline;';
-        const r2L = document.createElement('span'); r2L.style.cssText = 'font-size:.7em;color:#aaa;font-weight:600;';
+        r2.style.cssText = 'display:grid;grid-template-columns:4em 1fr;align-items:baseline;gap:0 4px;';
+        const r2L = document.createElement('span'); r2L.style.cssText = 'color:#aaa;font-weight:400;';
         r2L.textContent = '公历';
         const r2V = document.createElement('span'); r2V.textContent = gDateStr;
         r2.appendChild(r2L); r2.appendChild(r2V);
         if (vDateStr) {
             const r3 = document.createElement('div');
-            r3.style.cssText = 'display:grid;grid-template-columns:3.5em 1fr;align-items:baseline;';
-            const r3L = document.createElement('span'); r3L.style.cssText = 'font-size:.7em;color:#aaa;font-weight:600;';
+            r3.style.cssText = 'display:grid;grid-template-columns:4em 1fr;align-items:baseline;gap:0 4px;';
+            const r3L = document.createElement('span'); r3L.style.cssText = 'color:#aaa;font-weight:400;';
             r3L.textContent = '更替历';
             const r3V = document.createElement('span'); r3V.textContent = vDateStr;
             r3.appendChild(r3L); r3.appendChild(r3V);
