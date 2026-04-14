@@ -870,14 +870,14 @@
     /* ── 倒计时卡片 ──────────────────────────────────────────────── */
     .cd-card {
         background: var(--surface); border-radius: 14px;
-        border: 1.5px solid #6B1010; padding: 10px 12px 12px;
+        border: 1.5px solid #854F0B; padding: 10px 12px 12px;
         display: flex; flex-direction: column; box-sizing: border-box;
         overflow-y: auto;
         scrollbar-width: none; -ms-overflow-style: none;
     }
     .cd-card::-webkit-scrollbar { display: none; }
     .cd-card-h {
-        font-size: .65rem; font-weight: 700; color: #6B1010;
+        font-size: .65rem; font-weight: 700; color: #854F0B;
         letter-spacing: 2px; border-bottom: 1.5px solid var(--muted);
         padding-bottom: 6px; margin-bottom: 8px;
     }
@@ -887,7 +887,7 @@
         transition: background .15s;
     }
     .cd-list-item:hover { background: var(--muted); }
-    .cd-list-item.cd-active { background: rgba(107,16,16,0.06); }
+    .cd-list-item.cd-active { background: rgba(133,79,11,0.06); }
     .cd-accent-bar { width: 3px; border-radius: 2px; flex-shrink: 0; align-self: stretch; min-height: 28px; }
     .cd-list-name { font-size: .68rem; font-weight: 700; color: var(--text); }
     .cd-list-name.cd-ended { color: #aaa; }
@@ -895,7 +895,7 @@
     .cd-ended-badge { font-size: .44rem; color: #888; background: var(--muted); border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
     .cd-list-days { font-size: .65rem; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
     .cd-divider   { height: .5px; background: var(--muted); margin: 3px 0; }
-    .cd-expand { background: rgba(107,16,16,0.04); border-radius: 7px; padding: 8px 9px; margin: 4px 0 2px; }
+    .cd-expand { background: rgba(133,79,11,0.04); border-radius: 7px; padding: 8px 9px; margin: 4px 0 2px; }
     .cd-expand-name  { font-size: .82rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
     .cd-expand-days  { display: flex; align-items: baseline; gap: 3px; margin-bottom: 1px; }
     .cd-expand-num   { font-size: 1.6rem; font-weight: 800; line-height: 1; }
@@ -910,14 +910,14 @@
     .cd-action-btn   { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 4px; background: var(--bg); cursor: pointer; transition: background .15s; }
     .cd-action-btn:hover { background: var(--muted); }
     .cd-action-btn span  { font-size: .52rem; font-weight: 700; color: var(--v-blue); white-space: nowrap; }
-    .cell.cd-range  { background: rgba(47,79,79,0.12) !important; }
-    .cell.cd-target { background: rgba(47,79,79,0.25) !important; outline: 2px solid var(--v-blue); outline-offset: -2px; }
+    .cell.cd-range  { background: var(--cd-color-range, rgba(47,79,79,0.08)) !important; }
+    .cell.cd-target { background: var(--cd-color-target, rgba(47,79,79,0.18)) !important; outline: 2px solid var(--cd-color-outline, #2F4F4F); outline-offset: -2px; }
     .cell.cd-target[data-cd-days]::after {
         content: attr(data-cd-days);
         position: absolute;
         top: 1px; left: 50%; transform: translateX(-50%);
         font-size: .44rem; font-weight: 700;
-        color: var(--v-blue);
+        color: var(--cd-color-outline, #2F4F4F);
         pointer-events: none;
         line-height: 1;
         white-space: nowrap;
@@ -1207,7 +1207,7 @@ const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治
 
 // ═══════════════════════════════════════════════════════════════
 //  倒计时系统 v2 — 服务器存储版
-//  权限：superadmin / admin / viewer（三级）
+//  权限：superadmin / admin / user（三级）
 //  数据：存储在 Cloudflare KV，通过 Worker API 读写
 //  身份：token 存在 localStorage，首次使用邀请码兑换
 // ═══════════════════════════════════════════════════════════════
@@ -1216,7 +1216,7 @@ const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治
 const CD_API = WORKER_BASE;
 
 // ── 颜色池 ──────────────────────────────────────────────────────
-const CD_COLORS = ['#6B1010','#2F4F4F','#02639D','#6B4E9B','#854F0B','#0F6E56','#993556'];
+const CD_COLORS = ['#7A1C1C','#2F4F4F','#02639D','#6B4E9B','#854F0B','#0F6E56','#993556'];
 
 // ── 本地状态 ────────────────────────────────────────────────────
 let _cdUser      = null;   // { token, role, name, tags }
@@ -1294,6 +1294,153 @@ function _cdVDate(gDate) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  弹窗：token 保存提示（兑换成功后显示）
+//  弹窗：姓名+密码登录（独立函数，供卡片调用）
+function _cdShowLoginModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+    const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '登录';
+    const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+    const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '姓名';
+    const nameInp = document.createElement('input'); nameInp.className = 'cd-admin-input'; nameInp.type = 'text'; nameInp.placeholder = '注册时填写的名字';
+    f1.appendChild(l1); f1.appendChild(nameInp);
+    const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '密码';
+    const pwdInp = document.createElement('input'); pwdInp.className = 'cd-admin-input'; pwdInp.type = 'password'; pwdInp.placeholder = '注册时设置的密码';
+    f2.appendChild(l2); f2.appendChild(pwdInp);
+    const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
+    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '登录';
+    const _doLogin = async () => {
+        const name = nameInp.value.trim();
+        const password = pwdInp.value;
+        if (!name || !password) { errDiv.textContent = '请填写姓名和密码'; return; }
+        submitBtn.disabled = true; submitBtn.textContent = '验证中…';
+        try {
+            const res = await fetch(CD_API + '/cd/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) { errDiv.textContent = data.error || '姓名或密码错误'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
+            _cdSaveToken(data.token);
+            _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
+            overlay.remove();
+            await _cdInit();
+            _buildCdCard(); _cdApplyCellColor();
+        } catch(_) {
+            errDiv.textContent = '网络错误，请重试';
+            submitBtn.disabled = false; submitBtn.textContent = '登录';
+        }
+    };
+    submitBtn.addEventListener('click', _doLogin);
+    [nameInp, pwdInp].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); }));
+    const regLink = document.createElement('div');
+    regLink.style.cssText = 'text-align:center;margin-top:10px;font-size:.58rem;color:#7f8c8d;';
+    const regBtn = document.createElement('span');
+    regBtn.style.cssText = 'color:var(--v-blue);cursor:pointer;text-decoration:underline;';
+    regBtn.textContent = '立即注册';
+    regLink.appendChild(document.createTextNode('没有账号？')); regLink.appendChild(regBtn);
+    regBtn.addEventListener('click', () => { overlay.remove(); _cdShowRegisterModal(); });
+    btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+    modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(f2); modal.appendChild(errDiv); modal.appendChild(btnRow); modal.appendChild(regLink);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    nameInp.focus();
+}
+
+//  弹窗：自助注册
+function _cdShowRegisterModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '注册';
+
+    const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+    const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '姓名';
+    const nameInp = document.createElement('input'); nameInp.className = 'cd-admin-input'; nameInp.type = 'text'; nameInp.placeholder = '设置你的名字';
+    f1.appendChild(l1); f1.appendChild(nameInp);
+
+    const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '密码';
+    const pwdInp = document.createElement('input'); pwdInp.className = 'cd-admin-input'; pwdInp.type = 'password'; pwdInp.placeholder = '至少6位';
+    f2.appendChild(l2); f2.appendChild(pwdInp);
+
+    const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
+    const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '确认密码';
+    const pwdConfirm = document.createElement('input'); pwdConfirm.className = 'cd-admin-input'; pwdConfirm.type = 'password'; pwdConfirm.placeholder = '再次输入密码';
+    f3.appendChild(l3); f3.appendChild(pwdConfirm);
+
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;margin-bottom:4px;';
+
+    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '注册';
+
+    const _doRegister = async () => {
+        const name = nameInp.value.trim();
+        const password = pwdInp.value;
+        const confirm = pwdConfirm.value;
+        if (!name) { errDiv.textContent = '请填写姓名'; return; }
+        if (!password || password.length < 6) { errDiv.textContent = '密码至少6位'; return; }
+        if (password !== confirm) { errDiv.textContent = '两次密码不一致'; return; }
+        submitBtn.disabled = true; submitBtn.textContent = '注册中…';
+        try {
+            const res = await fetch(CD_API + '/cd/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) { errDiv.textContent = data.error || '注册失败'; submitBtn.disabled = false; submitBtn.textContent = '注册'; return; }
+            _cdSaveToken(data.token);
+            _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
+            overlay.remove();
+            await _cdFetchTasks();
+            _buildCdCard(); _cdApplyCellColor();
+        } catch(_) {
+            errDiv.textContent = '网络错误，请重试';
+            submitBtn.disabled = false; submitBtn.textContent = '注册';
+        }
+    };
+
+    submitBtn.addEventListener('click', _doRegister);
+    [nameInp, pwdInp, pwdConfirm].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') _doRegister(); }));
+
+    // 已有账号？去登录
+    const loginLink = document.createElement('div');
+    loginLink.style.cssText = 'text-align:center;margin-top:10px;font-size:.58rem;color:#7f8c8d;';
+    const loginBtn = document.createElement('span');
+    loginBtn.style.cssText = 'color:var(--v-blue);cursor:pointer;text-decoration:underline;';
+    loginBtn.textContent = '去登录';
+    loginLink.appendChild(document.createTextNode('已有账号？'));
+    loginLink.appendChild(loginBtn);
+    loginBtn.addEventListener('click', () => {
+        overlay.remove();
+        _cdShowLoginModal();
+    });
+
+    btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+    modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(f2); modal.appendChild(f3);
+    modal.appendChild(errDiv); modal.appendChild(btnRow); modal.appendChild(loginLink);
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    nameInp.focus();
+}
+
 //  弹窗：兑换邀请码（首次使用）
 // ═══════════════════════════════════════════════════════════════
 function _cdShowRedeemModal() {
@@ -1333,6 +1480,24 @@ function _cdShowRedeemModal() {
     f2.appendChild(l2); f2.appendChild(nameInput);
     modal.appendChild(f2);
 
+    // 密码输入
+    const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
+    const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '设置密码';
+    const pwdInput = document.createElement('input');
+    pwdInput.className = 'cd-admin-input'; pwdInput.type = 'password';
+    pwdInput.placeholder = '至少6位，换浏览器时用于找回账号';
+    f3.appendChild(l3); f3.appendChild(pwdInput);
+    modal.appendChild(f3);
+
+    // 确认密码
+    const f4 = document.createElement('div'); f4.className = 'cd-admin-field';
+    const l4 = document.createElement('label'); l4.className = 'cd-admin-label'; l4.textContent = '确认密码';
+    const pwdConfirm = document.createElement('input');
+    pwdConfirm.className = 'cd-admin-input'; pwdConfirm.type = 'password';
+    pwdConfirm.placeholder = '再次输入密码';
+    f4.appendChild(l4); f4.appendChild(pwdConfirm);
+    modal.appendChild(f4);
+
     const errDiv = document.createElement('div');
     errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;margin-bottom:4px;';
     modal.appendChild(errDiv);
@@ -1347,19 +1512,22 @@ function _cdShowRedeemModal() {
     submitBtn.addEventListener('click', async () => {
         const code = codeInput.value.trim();
         const name = nameInput.value.trim();
+        const password = pwdInput.value;
+        const confirm = pwdConfirm.value;
         if (!code || !name) { errDiv.textContent = '邀请码和名字均为必填'; return; }
+        if (!password || password.length < 6) { errDiv.textContent = '密码至少6位'; return; }
+        if (password !== confirm) { errDiv.textContent = '两次密码不一致'; return; }
         submitBtn.disabled = true; submitBtn.textContent = '验证中…';
         try {
             const res = await fetch(CD_API + '/cd/invite/redeem', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, name }),
+                body: JSON.stringify({ code, name, password }),
             });
             const data = await res.json();
             if (!res.ok) { errDiv.textContent = data.error || '邀请码无效'; submitBtn.disabled = false; submitBtn.textContent = '加入'; return; }
             _cdSaveToken(data.token);
             _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
-            // 清除 URL 中的 invite 参数
             const u = new URL(window.location.href);
             u.searchParams.delete('invite');
             history.replaceState(null, '', u.toString());
@@ -1372,8 +1540,8 @@ function _cdShowRedeemModal() {
         }
     });
 
-    // Tab：codeInput ↔ nameInput 循环；Enter：任意框触发提交
-    [codeInput, nameInput].forEach((el, i, arr) => {
+    // Tab 循环；Enter 触发提交
+    [codeInput, nameInput, pwdInput, pwdConfirm].forEach((el, i, arr) => {
         el.addEventListener('keydown', e => {
             if (e.key === 'Tab') {
                 e.preventDefault();
@@ -1407,11 +1575,109 @@ function _parseDateInput(raw) {
     return { y, mo, d, iso: `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}` };
 }
 
+// ── 更替历日期输入解析（YYYYMMDD 或 YYYY-MM-DD）────────────────────
+function _parseVCalInput(raw) {
+    if (!raw.trim()) return null;
+    const nums = raw.match(/\d+/g);
+    if (!nums) return null;
+    const p = [];
+    nums.forEach(n => n.length === 8 ? p.push(n.slice(0,4), n.slice(4,6), n.slice(6,8)) : p.push(n));
+    if (p.length < 3) return null;
+    const vY = +p[0], m = +p[1], d = +p[2];
+    if (vY < 100 || vY > 9999 || m < 1 || m > 13 || d < 1 || d > 28) return null;
+    // 转换更替历到公历 iso（借用 _cdVDate 的逆向：找到该更替历年的春分日）
+    // 使用简化：vY 对应公历年份，更替历年从该年春分开始
+    // 春分大约是公历3月20日，精确值由 getShEq 计算，这里用近似
+    const gregYear = vY; // 更替历年号 = 公历年（春分起）
+    // 近似春分：3月20日，再加 (m-1)*28 + (d-1) 天
+    const approxEquinox = new Date(gregYear, 2, 20); // 3月20日
+    const dayOffset = (m - 1) * 28 + (d - 1);
+    const result = new Date(approxEquinox.getTime() + dayOffset * 86400000);
+    const ry = result.getFullYear(), rm = result.getMonth()+1, rd = result.getDate();
+    return {
+        vY, m, d,
+        iso: `${ry}-${String(rm).padStart(2,'0')}-${String(rd).padStart(2,'0')}`
+    };
+}
+
+// ── 计算周期下一个日期 ────────────────────────────────────────────
+function _cdNextCycleDate(currentIso, cycle) {
+    if (!cycle || cycle.type === 'none') return null;
+    const base = new Date(currentIso + 'T00:00:00');
+    let next = new Date(base);
+    const n = cycle.num || 1;
+    const isVCal = cycle.cal === 'vcal';
+    switch(cycle.type) {
+        case 'day':
+        case 'custom':
+            next.setDate(base.getDate() + n);
+            break;
+        case 'week':
+            next.setDate(base.getDate() + n * 7);
+            break;
+        case 'month':
+            if (isVCal) {
+                next.setDate(base.getDate() + n * 28);
+            } else {
+                next.setMonth(base.getMonth() + n);
+            }
+            break;
+        case 'year':
+            if (isVCal) {
+                // 更替历年 = 春分到春分，平均约365.25天，精确按实际春分计算
+                // 简化：加 n * 365 天，再校正到最近春分
+                next.setFullYear(base.getFullYear() + n);
+            } else {
+                next.setFullYear(base.getFullYear() + n);
+            }
+            break;
+    }
+    return next.getFullYear() + '-' +
+        String(next.getMonth()+1).padStart(2,'0') + '-' +
+        String(next.getDate()).padStart(2,'0');
+}
+
+// ── 页面加载时检测周期任务是否需要自动续期 ──────────────────────────
+async function _cdCheckCycleTasks() {
+    if (!_cdUser) return;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const toRenew = _cdTasks.filter(t => {
+        if (!t.cycle || t.cycle.type === 'none') return false;
+        const taskDate = new Date(t.date + 'T00:00:00');
+        return taskDate <= today;
+    });
+    if (!toRenew.length) return;
+    for (const task of toRenew) {
+        const nextDate = _cdNextCycleDate(task.date, task.cycle);
+        if (!nextDate) continue;
+        const nextTarget = new Date(nextDate + 'T00:00:00');
+        const totalDays = Math.round(Math.abs(nextTarget - today) / 86400000);
+        try {
+            await _cdFetch('/cd/tasks/add', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: task.name, date: nextDate,
+                    tags: task.tags || [],
+                    totalDays,
+                    taskType: task.taskType || 'countdown',
+                    useVCal: task.useVCal || false,
+                    cycle: task.cycle,
+                    cycleParent: task.id,
+                }),
+            });
+            // 删除旧任务
+            await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: task.id }) });
+        } catch(_) {}
+    }
+    // 有续期则重新拉取
+    await _cdFetchTasks();
+    _buildCdCard(); _cdApplyCellColor();
+}
+
 async function _cdShowAddTaskModal() {
     if (!_cdUser) return;
     document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
 
-    // 拉取可用标签
     let availTags = [];
     try {
         const res = await _cdFetch('/cd/tags');
@@ -1424,98 +1690,199 @@ async function _cdShowAddTaskModal() {
     modal.className = 'cd-admin-modal';
     modal.addEventListener('click', e => e.stopPropagation());
 
-    const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '新建倒计时';
-    modal.appendChild(hdr);
+    // ── 状态变量 ──────────────────────────────────────────────────
+    let isCountUp = false;      // 由系统根据日期自动判断
+    let useVCal   = false;      // false=公历   true=更替历
+    let cycleType = 'none';     // none/day/week/month/year/custom
+    let cycleNum  = 1;
 
-    // 名称
+    // ── 标题行 ────────────────────────────────────────────────────
+    const hdr = document.createElement('div');
+    hdr.className = 'cd-admin-modal-h';
+    modal.appendChild(hdr);
+    hdr.textContent = '新建任务';
+
+    // ── 名称 ──────────────────────────────────────────────────────
     const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
     const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '目标名称';
     const nameInput = document.createElement('input'); nameInput.className = 'cd-admin-input'; nameInput.type = 'text'; nameInput.placeholder = '例：Q2版本交付';
     f1.appendChild(l1); f1.appendChild(nameInput); modal.appendChild(f1);
 
-    // 日期
+    // ── 日期 ──────────────────────────────────────────────────────
     const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
     const l2wrap = document.createElement('div'); l2wrap.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;';
-    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.style.marginBottom = '0'; l2.textContent = '目标日期（公历）';
-    l2wrap.appendChild(l2);
-    const dateInput = document.createElement('input'); dateInput.className = 'cd-admin-input'; dateInput.type = 'text'; dateInput.placeholder = '例：20260801';
+    const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.style.marginBottom = '0'; l2.textContent = '日期（公历）';
+    const calSwitch = document.createElement('span');
+    calSwitch.style.cssText = 'font-size:.52rem;color:#2F4F4F;cursor:pointer;text-decoration:underline;';
+    calSwitch.textContent = '切换更替历';
+    l2wrap.appendChild(l2); l2wrap.appendChild(calSwitch);
+    const dateInput = document.createElement('input'); dateInput.className = 'cd-admin-input'; dateInput.type = 'text'; dateInput.placeholder = '例：20260801（未来=倒计时，过去=正计时）';
     const dateHint = document.createElement('div'); dateHint.style.cssText = 'font-size:.52rem;color:#aaa;margin-top:3px;min-height:1em;';
-    dateInput.addEventListener('input', () => {
-        const parsed = _parseDateInput(dateInput.value);
-        if (!dateInput.value.trim()) dateHint.textContent = '';
-        else if (parsed) { dateHint.style.color = '#4A5D23'; dateHint.textContent = `✓ ${parsed.y}年${parsed.mo}月${parsed.d}日`; }
-        else { dateHint.style.color = '#aaa'; dateHint.textContent = '继续输入…'; }
-    });
-    f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint); modal.appendChild(f2);
+    f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint);
+    modal.appendChild(f2);
 
-    // 标签多选（仅 admin / superadmin 可选标签，viewer 固定空标签仅自己可见）
+    // ── 标签 ──────────────────────────────────────────────────────
+    const isUser = _cdUser && _cdUser.role === 'user';
     const f3 = document.createElement('div'); f3.className = 'cd-admin-field';
-    const isViewer = _cdUser && _cdUser.role === 'viewer';
-    if (!isViewer) {
+    if (!isUser) {
         const l3 = document.createElement('label'); l3.className = 'cd-admin-label'; l3.textContent = '可见标签（可选，未选则仅自己可见）';
         f3.appendChild(l3);
         if (availTags.length > 0) {
             const tagWrap = document.createElement('div'); tagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;';
             availTags.forEach(tag => {
-                const btn = document.createElement('button');
-                btn.className = 'tag-pill-sel';
-                btn.textContent = tag;
-                btn.dataset.selected = '0';
-                btn.addEventListener('click', () => {
-                    const sel = btn.dataset.selected === '1';
-                    btn.dataset.selected = sel ? '0' : '1';
-                    btn.classList.toggle('selected', !sel);
-                });
+                const btn = document.createElement('button'); btn.className = 'tag-pill-sel'; btn.textContent = tag; btn.dataset.selected = '0';
+                btn.addEventListener('click', () => { const s = btn.dataset.selected==='1'; btn.dataset.selected=s?'0':'1'; btn.classList.toggle('selected',!s); });
                 tagWrap.appendChild(btn);
             });
             f3.appendChild(tagWrap);
         } else {
-            const hint = document.createElement('div');
-            hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;';
-            hint.textContent = '暂无可用标签，创建后仅自己可见';
-            f3.appendChild(hint);
+            const hint = document.createElement('div'); hint.style.cssText = 'font-size:.56rem;color:#aaa;margin-top:4px;'; hint.textContent = '暂无可用标签，创建后仅自己可见'; f3.appendChild(hint);
         }
-    } else {
-        // viewer：不显示标签区域
     }
     modal.appendChild(f3);
 
-    const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
-    modal.appendChild(errDiv);
+    // ── 任务周期 ──────────────────────────────────────────────────
+    const f4 = document.createElement('div'); f4.className = 'cd-admin-field';
+    const l4wrap = document.createElement('div'); l4wrap.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;';
+    const l4 = document.createElement('label'); l4.className = 'cd-admin-label'; l4.style.marginBottom='0'; l4.textContent = '任务周期（可选）';
+    const l4hint = document.createElement('span'); l4hint.style.cssText = 'font-size:.52rem;color:#aaa;'; l4hint.textContent = '不设置则为单次任务';
+    l4wrap.appendChild(l4); l4wrap.appendChild(l4hint);
+    f4.appendChild(l4wrap);
 
+    const cycleRow = document.createElement('div'); cycleRow.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;';
+    const cycleTypes = [
+        { key:'none', label:'不重复' },
+        { key:'day',  label:'天' },
+        { key:'week', label:'周' },
+        { key:'month',label:'月' },
+        { key:'year', label:'年' },
+    ];
+    const cycleBtns = {};
+    cycleTypes.forEach(ct => {
+        const btn = document.createElement('span');
+        btn.style.cssText = 'font-size:.6rem;padding:5px 14px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:#7f8c8d;cursor:pointer;transition:all .15s;white-space:nowrap;';
+        btn.textContent = ct.label;
+        if (ct.key === 'none') { btn.style.borderColor='#2F4F4F'; btn.style.background='rgba(47,79,79,0.08)'; btn.style.color='#2F4F4F'; btn.style.fontWeight='700'; }
+        btn.addEventListener('click', () => {
+            cycleType = ct.key;
+            Object.values(cycleBtns).forEach(b => { b.style.borderColor='var(--border)'; b.style.background='var(--bg)'; b.style.color='#7f8c8d'; b.style.fontWeight=''; });
+            btn.style.borderColor='#2F4F4F'; btn.style.background='rgba(47,79,79,0.08)'; btn.style.color='#2F4F4F'; btn.style.fontWeight='700';
+            _updateCycleDetail();
+        });
+        cycleBtns[ct.key] = btn;
+        cycleRow.appendChild(btn);
+    });
+    f4.appendChild(cycleRow);
+
+    // 周期数量输入行（不重复时隐藏）
+    const cycleDetail = document.createElement('div'); cycleDetail.style.cssText = 'display:none;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
+    const cyclePrefix = document.createElement('span'); cyclePrefix.style.cssText = 'font-size:.6rem;color:#7f8c8d;'; cyclePrefix.textContent = '每';
+    const cycleNumInput = document.createElement('input');
+    cycleNumInput.style.cssText = 'width:80px;padding:4px 6px;border:1px solid #2F4F4F;border-radius:6px;font-size:.65rem;text-align:center;background:var(--bg);color:var(--primary);box-sizing:border-box;';
+    cycleNumInput.type = 'text'; cycleNumInput.inputMode = 'numeric'; cycleNumInput.pattern = '[0-9]*'; cycleNumInput.min = '1'; cycleNumInput.value = '1';
+    cycleNumInput.addEventListener('input', () => { cycleNumInput.value = cycleNumInput.value.replace(/[^0-9]/g,''); cycleNum = Math.max(1, parseInt(cycleNumInput.value)||1); });
+    const cycleSuffix = document.createElement('span'); cycleSuffix.style.cssText = 'font-size:.6rem;color:#7f8c8d;'; cycleSuffix.textContent = '天重复一次';
+    cycleDetail.appendChild(cyclePrefix); cycleDetail.appendChild(cycleNumInput); cycleDetail.appendChild(cycleSuffix);
+    f4.appendChild(cycleDetail);
+
+    function _updateCycleDetail() {
+        if (cycleType === 'none') { cycleDetail.style.display = 'none'; return; }
+        cycleDetail.style.display = 'flex';
+        const unitMap = { day:'天', week:'周', month: useVCal?'月（更替历·28天）':'月（公历）', year: useVCal?'年（更替历·春分起算）':'年（公历）', custom:'天' };
+        cycleSuffix.textContent = `${unitMap[cycleType] || '天'}重复一次`;
+    }
+
+    modal.appendChild(f4);
+
+    // ── 错误提示 ──────────────────────────────────────────────────
+    const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;'; modal.appendChild(errDiv);
+
+    // ── 按钮行 ────────────────────────────────────────────────────
     const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
-    cancelBtn.addEventListener('click', () => { overlay.remove(); });
+    cancelBtn.addEventListener('click', () => overlay.remove());
     const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '确定';
+
+    // ── 日期输入事件 ──────────────────────────────────────────────
+    function _onDateInput() {
+        const v = dateInput.value;
+        if (!v.trim()) { dateHint.textContent = ''; isCountUp = false; return; }
+        const today0 = new Date(); today0.setHours(0,0,0,0);
+        if (useVCal) {
+            const parsed = _parseVCalInput(v);
+            if (parsed) {
+                const sel = new Date(parsed.iso + 'T00:00:00');
+                isCountUp = sel < today0;
+                const typeLabel = isCountUp ? '（正计时）' : '（倒计时）';
+                dateHint.style.color = '#4A5D23';
+                dateHint.textContent = `✓ 更替历 ${parsed.vY}年${String(parsed.m).padStart(2,'0')}月${String(parsed.d).padStart(2,'0')}日 ${typeLabel}`;
+            } else { dateHint.style.color='#aaa'; dateHint.textContent='继续输入…'; isCountUp = false; }
+        } else {
+            const parsed = _parseDateInput(v);
+            if (parsed) {
+                const sel = new Date(parsed.iso + 'T00:00:00');
+                isCountUp = sel < today0;
+                const typeLabel = isCountUp ? '（正计时）' : '（倒计时）';
+                dateHint.style.color = '#4A5D23';
+                dateHint.textContent = `✓ ${parsed.y}年${parsed.mo}月${parsed.d}日 ${typeLabel}`;
+            } else { dateHint.style.color='#aaa'; dateHint.textContent='继续输入…'; isCountUp = false; }
+        }
+    }
+    dateInput.addEventListener('input', _onDateInput);
+
+    // ── 切换公历/更替历 ────────────────────────────────────────────
+    calSwitch.addEventListener('click', () => {
+        useVCal = !useVCal;
+        l2.textContent = useVCal ? '日期（更替历）' : '日期（公历）';
+        calSwitch.textContent = useVCal ? '切换公历' : '切换更替历';
+        dateInput.value = ''; dateHint.textContent = ''; isCountUp = false;
+        dateInput.placeholder = useVCal ? '例：20250101（更替历）' : '例：20260801';
+        _updateCycleDetail();
+    });
+
+    // ── 提交 ──────────────────────────────────────────────────────
     submitBtn.addEventListener('click', async () => {
         const name = nameInput.value.trim();
-        const parsedDate = _parseDateInput(dateInput.value);
-        // viewer 强制空标签（仅自己可见），admin/superadmin 读取选中的标签
-        const selectedTags = isViewer
-            ? []
-            : (availTags.length > 0
-                ? [...modal.querySelectorAll('[data-selected="1"]')].map(b => b.textContent)
-                : []);
-        if (!name) { errDiv.textContent = '请填写目标名称'; nameInput.style.borderColor = '#B22222'; return; }
-        if (!parsedDate) { errDiv.textContent = '请填写有效的目标日期'; dateInput.style.borderColor = '#B22222'; return; }
-        // 若无可用标签（superadmin 还没建标签），暂时用空数组，Worker 会报错
+        if (!name) { errDiv.textContent = '请填写目标名称'; nameInput.style.borderColor='#B22222'; return; }
+
+        let isoDate = null;
+        if (useVCal) {
+            const vp = _parseVCalInput(dateInput.value);
+            if (!vp) { errDiv.textContent = '请填写有效的更替历日期'; dateInput.style.borderColor='#B22222'; return; }
+            isoDate = vp.iso;
+        } else {
+            const gp = _parseDateInput(dateInput.value);
+            if (!gp) { errDiv.textContent = '请填写有效的目标日期'; dateInput.style.borderColor='#B22222'; return; }
+            isoDate = gp.iso;
+        }
+
+        // 正计时校验：过去日期 | 倒计时校验：不做额外限制（系统自动判断）
+        // isCountUp 已在 _onDateInput 中根据日期自动设置
+
+        const selectedTags = isUser ? [] : (availTags.length > 0 ? [...modal.querySelectorAll('[data-selected="1"]')].map(b=>b.textContent) : []);
+        const today0 = new Date(); today0.setHours(0,0,0,0);
+        const targetDate = new Date(isoDate+'T00:00:00');
+        const totalDays = Math.round(Math.abs(targetDate - today0) / 86400000);
+
+        // 周期配置
+        let cycleConfig = null;
+        if (cycleType !== 'none') {
+            cycleNum = Math.max(1, parseInt(cycleNumInput.value)||1);
+            cycleConfig = { type: cycleType, num: cycleNum, cal: useVCal ? 'vcal' : 'greg' };
+        }
+
         submitBtn.disabled = true; submitBtn.textContent = '保存中…';
         try {
             const res = await _cdFetch('/cd/tasks/add', {
                 method: 'POST',
                 body: JSON.stringify({
-                    name,
-                    date: parsedDate.iso,
-                    tags: selectedTags,
-                    totalDays: (() => {
-                        const t = new Date(parsedDate.iso + 'T00:00:00');
-                        const n = new Date(); const today = new Date(n.getFullYear(), n.getMonth(), n.getDate());
-                        return Math.round((t - today) / 86400000);
-                    })(),
+                    name, date: isoDate, tags: selectedTags, totalDays,
+                    taskType: isCountUp ? 'countup' : 'countdown',
+                    useVCal, cycle: cycleConfig,
                 }),
             });
             const data = await res.json();
-            if (!res.ok) { errDiv.textContent = data.error || '保存失败'; submitBtn.disabled = false; submitBtn.textContent = '确定'; return; }
+            if (!res.ok) { errDiv.textContent = data.error||'保存失败'; submitBtn.disabled=false; submitBtn.textContent='确定'; return; }
             await _cdFetchTasks();
             overlay.remove();
             _buildCdCard(); _cdApplyCellColor();
@@ -1524,24 +1891,21 @@ async function _cdShowAddTaskModal() {
             submitBtn.disabled = false; submitBtn.textContent = '确定';
         }
     });
-    // Tab：nameInput ↔ dateInput 循环；Enter：任意输入框触发提交
+
     [nameInput, dateInput].forEach((el, i, arr) => {
         el.addEventListener('keydown', e => {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                e.stopPropagation();
-                arr[(i + (e.shiftKey ? arr.length - 1 : 1)) % arr.length].focus();
-            } else if (e.key === 'Enter') { submitBtn.click(); }
+            if (e.key==='Tab') { e.preventDefault(); e.stopPropagation(); arr[(i+(e.shiftKey?arr.length-1:1))%arr.length].focus(); }
+            else if (e.key==='Enter') submitBtn.click();
         });
     });
+
     btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
     modal.appendChild(btnRow);
     overlay.appendChild(modal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
     document.body.appendChild(overlay);
     nameInput.focus();
 }
-
 // ═══════════════════════════════════════════════════════════════
 //  注销确认弹窗（参考删除确认弹窗样式）
 // ═══════════════════════════════════════════════════════════════
@@ -1621,6 +1985,268 @@ function _cdShowRevokeConfirm(u, onConfirmed) {
 }
 //  包含：管理标签、生成邀请码
 // ═══════════════════════════════════════════════════════════════
+// 渲染单个用户行（全局函数，superadmin 和 admin 面板共用）
+// 渲染单个用户行
+// 布局：[名字(flex:1)] [role pill(固定宽)] [标签区(固定宽,超出隐藏)] [注销按钮]
+// 长按展开标签区 → 显示所有标签pill（可删）+ 「+」新增按钮
+function _buildUserRow(u, allTags, listWrap) {
+    const TAGS_MAX_W = 90; // 折叠时标签区最大宽度
+    const LONG_PRESS_MS = 400;
+    let expanded = false;
+    let longPressTimer = null;
+    let currentTags = [...(u.tags || [])];
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--muted);border-radius:8px;padding:5px 8px;cursor:default;user-select:none;';
+
+    // 名字
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.textContent = u.name;
+
+    // role pill（固定宽，对齐）
+    const roleTag = document.createElement('span');
+    const isAdmin = u.role === 'admin';
+    roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;width:44px;text-align:center;box-sizing:border-box;background:${isAdmin?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${isAdmin?'#6B1010':'#2F4F4F'};border:1px solid ${isAdmin?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
+    roleTag.textContent = u.role;
+
+    // 标签区容器
+    const tagsArea = document.createElement('div');
+    tagsArea.style.cssText = `display:flex;align-items:center;gap:3px;flex-shrink:0;width:${TAGS_MAX_W}px;overflow:hidden;transition:width .25s;`;
+
+    // 注销按钮
+    const revokeBtn = document.createElement('button');
+    revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;';
+    revokeBtn.textContent = '注销';
+    revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
+    revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
+    revokeBtn.addEventListener('click', () => {
+        _cdShowRevokeConfirm(u, async () => {
+            const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
+            if (r.ok) {
+                row.style.transition = 'opacity .2s'; row.style.opacity = '0';
+                setTimeout(() => {
+                    row.remove();
+                    if (!listWrap.children.length) {
+                        const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; listWrap.appendChild(e);
+                    }
+                }, 200);
+            } else {
+                revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222';
+                setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
+            }
+        });
+    });
+
+    // 保存标签到服务器
+    async function _saveTags() {
+        await _cdFetch('/cd/token/tags/update', { method: 'POST', body: JSON.stringify({ token: u.token, tags: currentTags }) });
+    }
+
+    // 渲染折叠态标签（向左拖动后右上角显示×才能删除）
+    function _renderCollapsed() {
+        tagsArea.style.width = TAGS_MAX_W + 'px';
+        tagsArea.style.overflow = 'hidden';
+        tagsArea.style.flexWrap = 'nowrap';
+        tagsArea.style.paddingTop = '0';
+        tagsArea.style.paddingBottom = '0';
+        tagsArea.textContent = '';
+        if (!currentTags.length) {
+            const empty = document.createElement('span'); empty.style.cssText = 'font-size:.48rem;color:#ccc;'; empty.textContent = '无标签';
+            tagsArea.appendChild(empty); return;
+        }
+        // 逐个渲染pill，支持向左滑动显示×删除按钮
+        currentTags.forEach(tag => {
+            const wrapper = document.createElement('span');
+            wrapper.style.cssText = 'position:relative;display:inline-flex;align-items:center;flex-shrink:0;';
+
+            const pill = document.createElement('span');
+            pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px;white-space:nowrap;flex-shrink:0;cursor:default;display:inline-block;transform:translateX(0);transition:transform .2s ease;user-select:none;-webkit-user-select:none;';
+            pill.textContent = tag;
+
+            // × 删除按钮（默认隐藏，滑动后显示）
+            const delBtn = document.createElement('span');
+            delBtn.textContent = '×';
+            delBtn.style.cssText = 'position:absolute;top:-5px;right:-3px;width:10px;height:10px;background:#B22222;color:#fff;border-radius:50%;font-size:.45rem;line-height:10px;text-align:center;cursor:pointer;opacity:0;transition:opacity .2s ease;z-index:10;display:flex;align-items:center;justify-content:center;';
+
+            // 滑动状态
+            let swiped = false;
+            let startX = 0;
+            let startTime = 0;
+            const SWIPE_THRESHOLD = 18; // 触发阈值px
+
+            function _showDel() {
+                swiped = true;
+                pill.style.transform = 'translateX(-6px)';
+                delBtn.style.opacity = '1';
+            }
+            function _hideDel() {
+                swiped = false;
+                pill.style.transform = 'translateX(0)';
+                delBtn.style.opacity = '0';
+            }
+
+            // ── 鼠标拖拽支持 ──
+            pill.addEventListener('mousedown', (e) => {
+                startX = e.clientX;
+                startTime = Date.now();
+                const onMove = (me) => {
+                    const dx = me.clientX - startX;
+                    if (dx < -SWIPE_THRESHOLD) { _showDel(); document.removeEventListener('mousemove', onMove); }
+                    else if (dx > SWIPE_THRESHOLD && swiped) { _hideDel(); document.removeEventListener('mousemove', onMove); }
+                };
+                const onUp = () => {
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+
+            // ── 触摸滑动支持 ──
+            pill.addEventListener('touchstart', (e) => {
+                startX = e.touches[0].clientX;
+                startTime = Date.now();
+            }, { passive: true });
+            pill.addEventListener('touchmove', (e) => {
+                const dx = e.touches[0].clientX - startX;
+                if (dx < -SWIPE_THRESHOLD && !swiped) _showDel();
+                else if (dx > SWIPE_THRESHOLD && swiped) _hideDel();
+            }, { passive: true });
+
+            // 点击其他pill时收回已展开的×
+            tagsArea.addEventListener('click', (e) => {
+                if (!wrapper.contains(e.target) && swiped) _hideDel();
+            });
+
+            // × 按钮点击删除
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                currentTags = currentTags.filter(t => t !== tag);
+                await _saveTags();
+                _renderCollapsed();
+            });
+
+            wrapper.appendChild(pill);
+            wrapper.appendChild(delBtn);
+            tagsArea.appendChild(wrapper);
+        });
+
+        // 点击标签区外部时收回所有已展开的×
+        setTimeout(() => {
+            document.addEventListener('click', function _collapseAll(e) {
+                if (!tagsArea.contains(e.target)) {
+                    tagsArea.querySelectorAll('span[style*="translateX(-6px)"]').forEach(p => {
+                        p.style.transform = 'translateX(0)';
+                        const del = p.parentElement?.querySelector('span:last-child');
+                        if (del) del.style.opacity = '0';
+                    });
+                    document.removeEventListener('click', _collapseAll);
+                }
+            });
+        }, 0);
+    }
+
+    // 渲染展开态（所有标签pill可删 + 「+」新增）
+    function _renderExpanded() {
+        tagsArea.style.width = '100%';
+        tagsArea.style.overflow = 'visible';
+        tagsArea.style.flexWrap = 'wrap';
+        tagsArea.textContent = '';
+        // 可删标签pill
+        currentTags.forEach(tag => {
+            const pill = document.createElement('span');
+            pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px 0 5px;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;cursor:pointer;transition:all .15s;';
+            const lbl = document.createElement('span'); lbl.textContent = tag;
+            const del = document.createElement('span'); del.textContent = '×'; del.style.cssText = 'font-size:.55rem;color:#aaa;line-height:1;';
+            pill.appendChild(lbl); pill.appendChild(del);
+            pill.addEventListener('mouseenter', () => { pill.style.background='#FCEBEB'; pill.style.borderColor='#B22222'; lbl.style.color='#B22222'; del.style.color='#B22222'; });
+            pill.addEventListener('mouseleave', () => { pill.style.background='var(--bg)'; pill.style.borderColor='var(--border)'; lbl.style.color='#7f8c8d'; del.style.color='#aaa'; });
+            pill.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                currentTags = currentTags.filter(t => t !== tag);
+                await _saveTags();
+                _renderExpanded();
+            });
+            tagsArea.appendChild(pill);
+        });
+        // 「+」新增按钮：下拉从 allTags 中选未拥有的
+        const addableTags = allTags.filter(t => !currentTags.includes(t));
+        if (addableTags.length) {
+            const addBtn = document.createElement('span');
+            addBtn.style.cssText = 'font-size:.48rem;color:#4A5D23;background:rgba(74,93,35,0.08);border:1px dashed #4A5D23;border-radius:20px;padding:0 6px;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;';
+            addBtn.textContent = '+ 添加';
+            addBtn.addEventListener('mouseenter', () => { addBtn.style.background='rgba(74,93,35,0.16)'; });
+            addBtn.addEventListener('mouseleave', () => { addBtn.style.background='rgba(74,93,35,0.08)'; });
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // 下拉弹出标签选择
+                const existing = tagsArea.querySelector('.tag-picker');
+                if (existing) { existing.remove(); return; }
+                const picker = document.createElement('div');
+                picker.className = 'tag-picker';
+                picker.style.cssText = 'position:absolute;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;display:flex;flex-wrap:wrap;gap:3px;box-shadow:0 2px 8px rgba(0,0,0,.1);margin-top:2px;';
+                addableTags.forEach(tag => {
+                    const opt = document.createElement('span');
+                    opt.style.cssText = 'font-size:.46rem;color:#4A5D23;background:rgba(74,93,35,0.08);border:1px solid rgba(74,93,35,0.3);border-radius:20px;padding:1px 7px;cursor:pointer;white-space:nowrap;transition:all .15s;';
+                    opt.textContent = tag;
+                    opt.addEventListener('mouseenter', () => { opt.style.background='rgba(74,93,35,0.2)'; });
+                    opt.addEventListener('mouseleave', () => { opt.style.background='rgba(74,93,35,0.08)'; });
+                    opt.addEventListener('click', async (e2) => {
+                        e2.stopPropagation();
+                        currentTags.push(tag);
+                        await _saveTags();
+                        picker.remove();
+                        _renderExpanded();
+                    });
+                    picker.appendChild(opt);
+                });
+                // 点击外部关闭
+                setTimeout(() => {
+                    document.addEventListener('click', function _close() {
+                        picker.remove(); document.removeEventListener('click', _close);
+                    });
+                }, 0);
+                tagsArea.style.position = 'relative';
+                tagsArea.appendChild(picker);
+            });
+            tagsArea.appendChild(addBtn);
+        }
+    }
+
+    // 切换展开/折叠
+    function _toggleExpand() {
+        expanded = !expanded;
+        if (expanded) {
+            _renderExpanded();
+            row.style.background = '#f0ece0';
+            row.style.alignItems = 'flex-start';
+        } else {
+            _renderCollapsed();
+            row.style.background = 'var(--muted)';
+            row.style.alignItems = 'center';
+        }
+    }
+
+    // 长按展开（移动端 + 桌面端）
+    row.addEventListener('mousedown', (e) => {
+        if (e.target === revokeBtn || revokeBtn.contains(e.target)) return;
+        longPressTimer = setTimeout(_toggleExpand, LONG_PRESS_MS);
+    });
+    row.addEventListener('mouseup',    () => { clearTimeout(longPressTimer); });
+    row.addEventListener('mouseleave', () => { clearTimeout(longPressTimer); });
+    row.addEventListener('touchstart', (e) => {
+        if (e.target === revokeBtn || revokeBtn.contains(e.target)) return;
+        longPressTimer = setTimeout(_toggleExpand, LONG_PRESS_MS);
+    }, { passive: true });
+    row.addEventListener('touchend',    () => { clearTimeout(longPressTimer); }, { passive: true });
+    row.addEventListener('touchmove',   () => { clearTimeout(longPressTimer); }, { passive: true });
+
+    _renderCollapsed();
+    row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsArea); row.appendChild(revokeBtn);
+    return row;
+}
+
 async function _cdShowAdminPanel() {
     // 仅 superadmin 可访问
     if (!_cdUser || _cdUser.role !== 'superadmin') return;
@@ -1751,266 +2377,6 @@ async function _cdShowAdminPanel() {
     userSec.appendChild(userH);
     const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
 
-    // 渲染单个用户行
-    // 布局：[名字(flex:1)] [role pill(固定宽)] [标签区(固定宽,超出隐藏)] [注销按钮]
-    // 长按展开标签区 → 显示所有标签pill（可删）+ 「+」新增按钮
-    function _buildUserRow(u, allTags) {
-        const TAGS_MAX_W = 90; // 折叠时标签区最大宽度
-        const LONG_PRESS_MS = 400;
-        let expanded = false;
-        let longPressTimer = null;
-        let currentTags = [...(u.tags || [])];
-
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--muted);border-radius:8px;padding:5px 8px;cursor:default;user-select:none;';
-
-        // 名字
-        const nameSpan = document.createElement('span');
-        nameSpan.style.cssText = 'font-size:.62rem;font-weight:700;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        nameSpan.textContent = u.name;
-
-        // role pill（固定宽，对齐）
-        const roleTag = document.createElement('span');
-        const isAdmin = u.role === 'admin';
-        roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;width:44px;text-align:center;box-sizing:border-box;background:${isAdmin?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${isAdmin?'#6B1010':'#2F4F4F'};border:1px solid ${isAdmin?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
-        roleTag.textContent = u.role;
-
-        // 标签区容器
-        const tagsArea = document.createElement('div');
-        tagsArea.style.cssText = `display:flex;align-items:center;gap:3px;flex-shrink:0;width:${TAGS_MAX_W}px;overflow:hidden;transition:width .25s;`;
-
-        // 注销按钮
-        const revokeBtn = document.createElement('button');
-        revokeBtn.style.cssText = 'font-size:.5rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px;background:var(--bg);flex-shrink:0;transition:color .15s,border-color .15s;';
-        revokeBtn.textContent = '注销';
-        revokeBtn.addEventListener('mouseenter', () => { revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222'; });
-        revokeBtn.addEventListener('mouseleave', () => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; });
-        revokeBtn.addEventListener('click', () => {
-            _cdShowRevokeConfirm(u, async () => {
-                const r = await _cdFetch('/cd/token/revoke', { method: 'POST', body: JSON.stringify({ token: u.token }) });
-                if (r.ok) {
-                    row.style.transition = 'opacity .2s'; row.style.opacity = '0';
-                    setTimeout(() => {
-                        row.remove();
-                        if (!userListWrap.children.length) {
-                            const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无用户'; userListWrap.appendChild(e);
-                        }
-                    }, 200);
-                } else {
-                    revokeBtn.style.color='#B22222'; revokeBtn.style.borderColor='#B22222';
-                    setTimeout(() => { revokeBtn.style.color='#aaa'; revokeBtn.style.borderColor='var(--border)'; }, 1500);
-                }
-            });
-        });
-
-        // 保存标签到服务器
-        async function _saveTags() {
-            await _cdFetch('/cd/token/tags/update', { method: 'POST', body: JSON.stringify({ token: u.token, tags: currentTags }) });
-        }
-
-        // 渲染折叠态标签（向左拖动后右上角显示×才能删除）
-        function _renderCollapsed() {
-            tagsArea.style.width = TAGS_MAX_W + 'px';
-            tagsArea.style.overflow = 'hidden';
-            tagsArea.style.flexWrap = 'nowrap';
-            tagsArea.style.paddingTop = '0';
-            tagsArea.style.paddingBottom = '0';
-            tagsArea.textContent = '';
-            if (!currentTags.length) {
-                const empty = document.createElement('span'); empty.style.cssText = 'font-size:.48rem;color:#ccc;'; empty.textContent = '无标签';
-                tagsArea.appendChild(empty); return;
-            }
-            // 逐个渲染pill，支持向左滑动显示×删除按钮
-            currentTags.forEach(tag => {
-                const wrapper = document.createElement('span');
-                wrapper.style.cssText = 'position:relative;display:inline-flex;align-items:center;flex-shrink:0;';
-
-                const pill = document.createElement('span');
-                pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px;white-space:nowrap;flex-shrink:0;cursor:default;display:inline-block;transform:translateX(0);transition:transform .2s ease;user-select:none;-webkit-user-select:none;';
-                pill.textContent = tag;
-
-                // × 删除按钮（默认隐藏，滑动后显示）
-                const delBtn = document.createElement('span');
-                delBtn.textContent = '×';
-                delBtn.style.cssText = 'position:absolute;top:-5px;right:-3px;width:10px;height:10px;background:#B22222;color:#fff;border-radius:50%;font-size:.45rem;line-height:10px;text-align:center;cursor:pointer;opacity:0;transition:opacity .2s ease;z-index:10;display:flex;align-items:center;justify-content:center;';
-
-                // 滑动状态
-                let swiped = false;
-                let startX = 0;
-                let startTime = 0;
-                const SWIPE_THRESHOLD = 18; // 触发阈值px
-
-                function _showDel() {
-                    swiped = true;
-                    pill.style.transform = 'translateX(-6px)';
-                    delBtn.style.opacity = '1';
-                }
-                function _hideDel() {
-                    swiped = false;
-                    pill.style.transform = 'translateX(0)';
-                    delBtn.style.opacity = '0';
-                }
-
-                // ── 鼠标拖拽支持 ──
-                pill.addEventListener('mousedown', (e) => {
-                    startX = e.clientX;
-                    startTime = Date.now();
-                    const onMove = (me) => {
-                        const dx = me.clientX - startX;
-                        if (dx < -SWIPE_THRESHOLD) { _showDel(); document.removeEventListener('mousemove', onMove); }
-                        else if (dx > SWIPE_THRESHOLD && swiped) { _hideDel(); document.removeEventListener('mousemove', onMove); }
-                    };
-                    const onUp = () => {
-                        document.removeEventListener('mousemove', onMove);
-                        document.removeEventListener('mouseup', onUp);
-                    };
-                    document.addEventListener('mousemove', onMove);
-                    document.addEventListener('mouseup', onUp);
-                });
-
-                // ── 触摸滑动支持 ──
-                pill.addEventListener('touchstart', (e) => {
-                    startX = e.touches[0].clientX;
-                    startTime = Date.now();
-                }, { passive: true });
-                pill.addEventListener('touchmove', (e) => {
-                    const dx = e.touches[0].clientX - startX;
-                    if (dx < -SWIPE_THRESHOLD && !swiped) _showDel();
-                    else if (dx > SWIPE_THRESHOLD && swiped) _hideDel();
-                }, { passive: true });
-
-                // 点击其他pill时收回已展开的×
-                tagsArea.addEventListener('click', (e) => {
-                    if (!wrapper.contains(e.target) && swiped) _hideDel();
-                });
-
-                // × 按钮点击删除
-                delBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    currentTags = currentTags.filter(t => t !== tag);
-                    await _saveTags();
-                    _renderCollapsed();
-                });
-
-                wrapper.appendChild(pill);
-                wrapper.appendChild(delBtn);
-                tagsArea.appendChild(wrapper);
-            });
-
-            // 点击标签区外部时收回所有已展开的×
-            setTimeout(() => {
-                document.addEventListener('click', function _collapseAll(e) {
-                    if (!tagsArea.contains(e.target)) {
-                        tagsArea.querySelectorAll('span[style*="translateX(-6px)"]').forEach(p => {
-                            p.style.transform = 'translateX(0)';
-                            const del = p.parentElement?.querySelector('span:last-child');
-                            if (del) del.style.opacity = '0';
-                        });
-                        document.removeEventListener('click', _collapseAll);
-                    }
-                });
-            }, 0);
-        }
-
-        // 渲染展开态（所有标签pill可删 + 「+」新增）
-        function _renderExpanded() {
-            tagsArea.style.width = '100%';
-            tagsArea.style.overflow = 'visible';
-            tagsArea.style.flexWrap = 'wrap';
-            tagsArea.textContent = '';
-            // 可删标签pill
-            currentTags.forEach(tag => {
-                const pill = document.createElement('span');
-                pill.style.cssText = 'font-size:.46rem;color:#7f8c8d;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:0 5px 0 5px;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;cursor:pointer;transition:all .15s;';
-                const lbl = document.createElement('span'); lbl.textContent = tag;
-                const del = document.createElement('span'); del.textContent = '×'; del.style.cssText = 'font-size:.55rem;color:#aaa;line-height:1;';
-                pill.appendChild(lbl); pill.appendChild(del);
-                pill.addEventListener('mouseenter', () => { pill.style.background='#FCEBEB'; pill.style.borderColor='#B22222'; lbl.style.color='#B22222'; del.style.color='#B22222'; });
-                pill.addEventListener('mouseleave', () => { pill.style.background='var(--bg)'; pill.style.borderColor='var(--border)'; lbl.style.color='#7f8c8d'; del.style.color='#aaa'; });
-                pill.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    currentTags = currentTags.filter(t => t !== tag);
-                    await _saveTags();
-                    _renderExpanded();
-                });
-                tagsArea.appendChild(pill);
-            });
-            // 「+」新增按钮：下拉从 allTags 中选未拥有的
-            const addableTags = allTags.filter(t => !currentTags.includes(t));
-            if (addableTags.length) {
-                const addBtn = document.createElement('span');
-                addBtn.style.cssText = 'font-size:.48rem;color:#4A5D23;background:rgba(74,93,35,0.08);border:1px dashed #4A5D23;border-radius:20px;padding:0 6px;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;';
-                addBtn.textContent = '+ 添加';
-                addBtn.addEventListener('mouseenter', () => { addBtn.style.background='rgba(74,93,35,0.16)'; });
-                addBtn.addEventListener('mouseleave', () => { addBtn.style.background='rgba(74,93,35,0.08)'; });
-                addBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    // 下拉弹出标签选择
-                    const existing = tagsArea.querySelector('.tag-picker');
-                    if (existing) { existing.remove(); return; }
-                    const picker = document.createElement('div');
-                    picker.className = 'tag-picker';
-                    picker.style.cssText = 'position:absolute;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;display:flex;flex-wrap:wrap;gap:3px;box-shadow:0 2px 8px rgba(0,0,0,.1);margin-top:2px;';
-                    addableTags.forEach(tag => {
-                        const opt = document.createElement('span');
-                        opt.style.cssText = 'font-size:.46rem;color:#4A5D23;background:rgba(74,93,35,0.08);border:1px solid rgba(74,93,35,0.3);border-radius:20px;padding:1px 7px;cursor:pointer;white-space:nowrap;transition:all .15s;';
-                        opt.textContent = tag;
-                        opt.addEventListener('mouseenter', () => { opt.style.background='rgba(74,93,35,0.2)'; });
-                        opt.addEventListener('mouseleave', () => { opt.style.background='rgba(74,93,35,0.08)'; });
-                        opt.addEventListener('click', async (e2) => {
-                            e2.stopPropagation();
-                            currentTags.push(tag);
-                            await _saveTags();
-                            picker.remove();
-                            _renderExpanded();
-                        });
-                        picker.appendChild(opt);
-                    });
-                    // 点击外部关闭
-                    setTimeout(() => {
-                        document.addEventListener('click', function _close() {
-                            picker.remove(); document.removeEventListener('click', _close);
-                        });
-                    }, 0);
-                    tagsArea.style.position = 'relative';
-                    tagsArea.appendChild(picker);
-                });
-                tagsArea.appendChild(addBtn);
-            }
-        }
-
-        // 切换展开/折叠
-        function _toggleExpand() {
-            expanded = !expanded;
-            if (expanded) {
-                _renderExpanded();
-                row.style.background = '#f0ece0';
-                row.style.alignItems = 'flex-start';
-            } else {
-                _renderCollapsed();
-                row.style.background = 'var(--muted)';
-                row.style.alignItems = 'center';
-            }
-        }
-
-        // 长按展开（移动端 + 桌面端）
-        row.addEventListener('mousedown', (e) => {
-            if (e.target === revokeBtn || revokeBtn.contains(e.target)) return;
-            longPressTimer = setTimeout(_toggleExpand, LONG_PRESS_MS);
-        });
-        row.addEventListener('mouseup',    () => { clearTimeout(longPressTimer); });
-        row.addEventListener('mouseleave', () => { clearTimeout(longPressTimer); });
-        row.addEventListener('touchstart', (e) => {
-            if (e.target === revokeBtn || revokeBtn.contains(e.target)) return;
-            longPressTimer = setTimeout(_toggleExpand, LONG_PRESS_MS);
-        }, { passive: true });
-        row.addEventListener('touchend',    () => { clearTimeout(longPressTimer); }, { passive: true });
-        row.addEventListener('touchmove',   () => { clearTimeout(longPressTimer); }, { passive: true });
-
-        _renderCollapsed();
-        row.appendChild(nameSpan); row.appendChild(roleTag); row.appendChild(tagsArea); row.appendChild(revokeBtn);
-        return row;
-    }
 
     async function _refreshUserList() {
         userListWrap.textContent = '';
@@ -2022,7 +2388,7 @@ async function _cdShowAdminPanel() {
             // 拉取全部标签供新增使用
             let allTags = [];
             try { const tr = await _cdFetch('/cd/tags'); if (tr.ok) { const td = await tr.json(); allTags = td.tags || []; } } catch(_) {}
-            users.forEach(u => userListWrap.appendChild(_buildUserRow(u, allTags)));
+            users.forEach(u => userListWrap.appendChild(_buildUserRow(u, allTags, userListWrap)));
         } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
     }
     await _refreshUserList();
@@ -2034,16 +2400,16 @@ async function _cdShowAdminPanel() {
 
     // ── 邀请码生成 ─────────────────────────────────────────
     const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
-    const invH = document.createElement('div'); invH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:8px;'; invH.textContent = '生成邀请链接';
+    const invH = document.createElement('div'); invH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:8px;'; invH.textContent = '生成邀请码';
     invSec.appendChild(invH);
 
     // 角色选择
     const roleRow = document.createElement('div'); roleRow.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
-    let _selRole = 'viewer';
-    ['viewer','admin'].forEach(r => {
+    let _selRole = 'user';
+    ['user','admin'].forEach(r => {
         const btn = document.createElement('button');
-        btn.style.cssText = `flex:1;padding:5px;border-radius:8px;font-size:.65rem;font-weight:700;cursor:pointer;transition:all .15s;border:1px solid ${r==='viewer'?'#6B1010':'var(--border)'};background:${r==='viewer'?'rgba(107,16,16,0.08)':'var(--muted)'};color:${r==='viewer'?'#6B1010':'var(--primary)'};`;
-        btn.textContent = r === 'viewer' ? '只读 viewer' : '管理员 admin';
+        btn.style.cssText = `flex:1;padding:5px;border-radius:8px;font-size:.65rem;font-weight:700;cursor:pointer;transition:all .15s;border:1px solid ${r==='user'?'#6B1010':'var(--border)'};background:${r==='user'?'rgba(107,16,16,0.08)':'var(--muted)'};color:${r==='user'?'#6B1010':'var(--primary)'};`;
+        btn.textContent = r === 'user' ? '用户 user' : '管理员 admin';
         btn.dataset.role = r;
         btn.addEventListener('click', () => {
             _selRole = r;
@@ -2086,7 +2452,7 @@ async function _cdShowAdminPanel() {
     invSec.appendChild(invTagWrap);
 
     const invResultDiv = document.createElement('div'); invResultDiv.className = 'cd-admin-result'; invResultDiv.style.display = 'none';
-    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-top:10px;margin-bottom:10px;'; genBtn.textContent = '生成邀请链接';
+    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-top:10px;margin-bottom:10px;'; genBtn.textContent = '生成邀请码';
     genBtn.addEventListener('click', async () => {
         const selectedTags = [...invTagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
         if (!selectedTags.length) {
@@ -2101,26 +2467,37 @@ async function _cdShowAdminPanel() {
                 body: JSON.stringify({ role: _selRole, tags: selectedTags }),
             });
             const data = await res.json();
-            if (!res.ok) { genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; invResultDiv.style.display='block'; invResultDiv.textContent=''; const errSpan=document.createElement('span'); errSpan.className='cd-inline-err'; errSpan.textContent='⚠ '+(data.error||'生成失败，请重试'); invResultDiv.appendChild(errSpan); return; }
-            const u = new URL(window.location.href);
-            u.searchParams.set('invite', data.code);
-            const inviteUrl = u.toString();
+            if (!res.ok) { genBtn.disabled = false; genBtn.textContent = '生成邀请码'; invResultDiv.style.display='block'; invResultDiv.textContent=''; const errSpan=document.createElement('span'); errSpan.className='cd-inline-err'; errSpan.textContent='⚠ '+(data.error||'生成失败，请重试'); invResultDiv.appendChild(errSpan); return; }
             invResultDiv.style.display = 'block';
             invResultDiv.textContent = '';
-            const copyBtn = document.createElement('button'); copyBtn.className = 'cd-admin-copy'; copyBtn.textContent = '点击复制链接';
-            copyBtn.addEventListener('click', () => {
-                navigator.clipboard?.writeText(inviteUrl).catch(() => {});
-                copyBtn.textContent = '✓ 已复制！';
-                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
+            const codeBox2 = document.createElement('div');
+            codeBox2.style.cssText = 'background:var(--muted);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+            const codeText2 = document.createElement('code');
+            codeText2.style.cssText = 'font-size:.75rem;font-weight:700;color:var(--primary);flex:1;letter-spacing:1px;text-align:center;';
+            codeText2.textContent = data.code;
+            const copyBtn2 = document.createElement('button');
+            copyBtn2.style.cssText = 'flex-shrink:0;padding:4px 10px;font-size:.6rem;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:all .15s;white-space:nowrap;';
+            copyBtn2.textContent = '复制';
+            copyBtn2.addEventListener('click', () => {
+                navigator.clipboard?.writeText(data.code).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = data.code; ta.style.position='fixed'; ta.style.opacity='0';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+                    document.body.removeChild(ta);
+                });
+                copyBtn2.textContent = '已复制 ✓';
+                copyBtn2.style.color = '#4A5D23'; copyBtn2.style.borderColor = '#4A5D23';
+                setTimeout(() => { copyBtn2.textContent = '复制'; copyBtn2.style.color=''; copyBtn2.style.borderColor=''; }, 2000);
             });
-            const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;'; expNote.textContent = '链接 24 小时有效，用完即失效';
-            invResultDiv.appendChild(copyBtn); invResultDiv.appendChild(expNote);
+            codeBox2.appendChild(codeText2); codeBox2.appendChild(copyBtn2);
+            const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;'; expNote.textContent = '邀请码 24 小时有效，使用一次后失效';
+            invResultDiv.appendChild(codeBox2); invResultDiv.appendChild(expNote);
         } catch(_) {
             invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
             const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ 网络错误，请重试';
             invResultDiv.appendChild(e);
         }
-        genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
+        genBtn.disabled = false; genBtn.textContent = '生成邀请码';
     });
     // Enter 触发生成邀请链接
     modal.addEventListener('keydown', e => {
@@ -2146,6 +2523,143 @@ async function _cdShowAdminPanel() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  弹窗：admin 管理面板（我邀请的用户 + 生成邀请码）
+// ═══════════════════════════════════════════════════════════════
+async function _cdShowAdminMgmtPanel() {
+    if (!_cdUser || _cdUser.role !== 'admin') return;
+    document.querySelectorAll('.cd-admin-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-admin-overlay';
+    const modal = document.createElement('div');
+    modal.className = 'cd-admin-modal';
+    modal.style.maxHeight = '80vh';
+    modal.style.overflowY = 'auto';
+    modal.style.overflowX = 'hidden';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理面板';
+    modal.appendChild(hdr);
+
+    // ── 我邀请的用户 ───────────────────────────────────────────
+    const userSec = document.createElement('div'); userSec.style.marginBottom = '6px';
+    const userH = document.createElement('div'); userH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:6px;'; userH.textContent = '我邀请的用户';
+    userSec.appendChild(userH);
+    const userListWrap = document.createElement('div'); userListWrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+
+    async function _refreshAdminUserList() {
+        userListWrap.textContent = '';
+        try {
+            const res = await _cdFetch('/cd/users');
+            if (!res.ok) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '加载失败'; userListWrap.appendChild(e); return; }
+            const { users } = await res.json();
+            if (!users.length) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '暂无邀请的用户'; userListWrap.appendChild(e); return; }
+            let allTags = [];
+            try { const tr = await _cdFetch('/cd/tags'); if (tr.ok) { const td = await tr.json(); allTags = td.tags || []; } } catch(_) {}
+            // 只显示自己标签范围内的标签
+            const myTags = _cdUser.tags || [];
+            const availTags = allTags.filter(t => myTags.includes(t));
+            users.forEach(u => userListWrap.appendChild(_buildUserRow(u, availTags, userListWrap)));
+        } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
+    }
+    await _refreshAdminUserList();
+    userSec.appendChild(userListWrap);
+    modal.appendChild(userSec);
+
+    const divA = document.createElement('div'); divA.style.cssText = 'height:1px;background:var(--muted);margin:6px 0;'; modal.appendChild(divA);
+
+    // ── 生成邀请码 ─────────────────────────────────────────────
+    const invSec = document.createElement('div'); invSec.style.marginBottom = '10px';
+    const invH = document.createElement('div'); invH.style.cssText = 'font-size:.6rem;font-weight:700;color:#aaa;letter-spacing:1px;margin-bottom:8px;'; invH.textContent = '生成邀请码';
+    invSec.appendChild(invH);
+
+    const invTagLabel = document.createElement('div'); invTagLabel.style.cssText = 'font-size:.56rem;color:#888;margin-bottom:5px;font-weight:600;letter-spacing:.5px;'; invTagLabel.textContent = '分配标签（可见范围，至少选一个）';
+    invSec.appendChild(invTagLabel);
+    const invTagWrap = document.createElement('div'); invTagWrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;min-height:24px;';
+
+    // 只能分配自己拥有的标签
+    const myTags2 = _cdUser.tags || [];
+    if (!myTags2.length) {
+        const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '你暂无可用标签，请联系超级管理员分配';
+        invTagWrap.appendChild(e);
+    } else {
+        myTags2.forEach(tag => {
+            const btn = document.createElement('button');
+            btn.className = 'tag-pill-sel';
+            btn.textContent = tag; btn.dataset.selected = '0';
+            btn.addEventListener('click', () => {
+                const s = btn.dataset.selected === '1';
+                btn.dataset.selected = s ? '0' : '1';
+                btn.classList.toggle('selected', !s);
+            });
+            invTagWrap.appendChild(btn);
+        });
+    }
+    invSec.appendChild(invTagWrap);
+
+    const invResultDiv = document.createElement('div'); invResultDiv.className = 'cd-admin-result'; invResultDiv.style.display = 'none';
+    const genBtn = document.createElement('button'); genBtn.className = 'cd-admin-submit'; genBtn.style.cssText = 'width:100%;margin-top:0;margin-bottom:10px;'; genBtn.textContent = '生成邀请码';
+    genBtn.addEventListener('click', async () => {
+        const selectedTags = [...invTagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
+        if (!selectedTags.length) {
+            invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
+            const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '请至少选择一个标签';
+            invResultDiv.appendChild(e); return;
+        }
+        genBtn.disabled = true; genBtn.textContent = '生成中…';
+        try {
+            const res = await _cdFetch('/cd/invite/create', {
+                method: 'POST',
+                body: JSON.stringify({ role: 'user', tags: selectedTags }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
+                const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ ' + (data.error || '生成失败');
+                invResultDiv.appendChild(e);
+                genBtn.disabled = false; genBtn.textContent = '生成邀请码'; return;
+            }
+            invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
+            const codeBox = document.createElement('div');
+            codeBox.style.cssText = 'background:var(--muted);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+            const codeText = document.createElement('code');
+            codeText.style.cssText = 'font-size:.75rem;font-weight:700;color:var(--primary);flex:1;letter-spacing:1px;text-align:center;';
+            codeText.textContent = data.code;
+            const copyBtn = document.createElement('button');
+            copyBtn.style.cssText = 'flex-shrink:0;padding:4px 10px;font-size:.6rem;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:all .15s;white-space:nowrap;';
+            copyBtn.textContent = '复制';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard?.writeText(data.code).catch(() => {
+                    const ta = document.createElement('textarea'); ta.value = data.code; ta.style.cssText = 'position:fixed;opacity:0;';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+                });
+                copyBtn.textContent = '已复制 ✓'; copyBtn.style.color = '#4A5D23'; copyBtn.style.borderColor = '#4A5D23';
+                setTimeout(() => { copyBtn.textContent = '复制'; copyBtn.style.color = ''; copyBtn.style.borderColor = ''; }, 2000);
+            });
+            codeBox.appendChild(codeText); codeBox.appendChild(copyBtn);
+            const expNote = document.createElement('div'); expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;'; expNote.textContent = '邀请码 24 小时有效，使用一次后失效';
+            invResultDiv.appendChild(codeBox); invResultDiv.appendChild(expNote);
+        } catch(_) {
+            invResultDiv.style.display = 'block'; invResultDiv.textContent = '';
+            const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ 网络错误，请重试';
+            invResultDiv.appendChild(e);
+        }
+        genBtn.disabled = false; genBtn.textContent = '生成邀请码';
+    });
+    invSec.appendChild(genBtn); invSec.appendChild(invResultDiv);
+    modal.appendChild(invSec);
+
+    const closeDivider = document.createElement('div'); closeDivider.style.cssText = 'height:1px;background:var(--muted);margin:0 0 10px;'; modal.appendChild(closeDivider);
+    const closeBtn = document.createElement('button'); closeBtn.className = 'cd-admin-cancel'; closeBtn.style.cssText = 'display:block;margin:0 auto;padding:6px 32px;'; closeBtn.textContent = '关闭';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    modal.appendChild(closeBtn);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
 //  弹窗：admin 专属"生成邀请链接"（只能邀请 viewer，标签限自己拥有的）
 // ═══════════════════════════════════════════════════════════════
 async function _cdShowAdminInviteModal() {
@@ -2160,7 +2674,7 @@ async function _cdShowAdminInviteModal() {
 
     const hdr = document.createElement('div');
     hdr.className = 'cd-admin-modal-h';
-    hdr.textContent = '生成邀请链接';
+    hdr.textContent = '生成邀请码';
     modal.appendChild(hdr);
 
     // 标签多选（仅显示自己有的标签，来自 /cd/tags 接口的过滤结果）
@@ -2213,7 +2727,7 @@ async function _cdShowAdminInviteModal() {
     cancelBtn.addEventListener('click', () => overlay.remove());
 
     const genBtn = document.createElement('button');
-    genBtn.className = 'cd-admin-submit'; genBtn.textContent = '生成邀请链接';
+    genBtn.className = 'cd-admin-submit'; genBtn.textContent = '生成邀请码';
     genBtn.addEventListener('click', async () => {
         const selectedTags = [...tagWrap.querySelectorAll('[data-selected="1"]')].map(b => b.textContent);
         if (!selectedTags.length) {
@@ -2225,37 +2739,48 @@ async function _cdShowAdminInviteModal() {
         try {
             const res = await _cdFetch('/cd/invite/create', {
                 method: 'POST',
-                body: JSON.stringify({ role: 'viewer', tags: selectedTags }),
+                body: JSON.stringify({ role: 'user', tags: selectedTags }),
             });
             const data = await res.json();
             if (!res.ok) {
                 resultDiv.style.display = 'block'; resultDiv.textContent = '';
                 const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ ' + (data.error || '生成失败，请重试');
                 resultDiv.appendChild(e);
-                genBtn.disabled = false; genBtn.textContent = '生成邀请链接'; return;
+                genBtn.disabled = false; genBtn.textContent = '生成邀请码'; return;
             }
-            const u = new URL(window.location.href);
-            u.searchParams.set('invite', data.code);
-            const inviteUrl = u.toString();
             resultDiv.style.display = 'block';
             resultDiv.textContent = '';
+            // 邀请码展示
+            const codeBox = document.createElement('div');
+            codeBox.style.cssText = 'background:var(--muted);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+            const codeText = document.createElement('code');
+            codeText.style.cssText = 'font-size:.75rem;font-weight:700;color:var(--primary);flex:1;letter-spacing:1px;text-align:center;';
+            codeText.textContent = data.code;
             const copyBtn = document.createElement('button');
-            copyBtn.className = 'cd-admin-copy'; copyBtn.textContent = '点击复制链接';
+            copyBtn.style.cssText = 'flex-shrink:0;padding:4px 10px;font-size:.6rem;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:all .15s;white-space:nowrap;';
+            copyBtn.textContent = '复制';
             copyBtn.addEventListener('click', () => {
-                navigator.clipboard?.writeText(inviteUrl).catch(() => {});
-                copyBtn.textContent = '✓ 已复制！';
-                setTimeout(() => { copyBtn.textContent = '点击复制链接'; }, 2000);
+                navigator.clipboard?.writeText(data.code).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = data.code; ta.style.position='fixed'; ta.style.opacity='0';
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+                    document.body.removeChild(ta);
+                });
+                copyBtn.textContent = '已复制 ✓';
+                copyBtn.style.color = '#4A5D23'; copyBtn.style.borderColor = '#4A5D23';
+                setTimeout(() => { copyBtn.textContent = '复制'; copyBtn.style.color=''; copyBtn.style.borderColor=''; }, 2000);
             });
+            codeBox.appendChild(codeText); codeBox.appendChild(copyBtn);
             const expNote = document.createElement('div');
             expNote.style.cssText = 'font-size:.52rem;color:#aaa;text-align:center;margin-top:4px;letter-spacing:.3px;';
-            expNote.textContent = '链接 24 小时有效，用完即失效';
-            resultDiv.appendChild(copyBtn); resultDiv.appendChild(expNote);
+            expNote.textContent = '邀请码 24 小时有效，使用一次后失效';
+            resultDiv.appendChild(codeBox); resultDiv.appendChild(expNote);
         } catch(_) {
             resultDiv.style.display = 'block'; resultDiv.textContent = '';
             const e = document.createElement('span'); e.className = 'cd-inline-err'; e.textContent = '⚠ 网络错误，请重试';
             resultDiv.appendChild(e);
         }
-        genBtn.disabled = false; genBtn.textContent = '生成邀请链接';
+        genBtn.disabled = false; genBtn.textContent = '生成邀请码';
     });
 
     // Enter 触发生成；Escape 关闭
@@ -2360,42 +2885,48 @@ function _cdShowDeleteConfirm(item, diffDays, onConfirmed) {
 // ═══════════════════════════════════════════════════════════════
 //  _buildCdCard 子函数（#6：拆分超长函数）
 // ═══════════════════════════════════════════════════════════════
-function _renderCdLogin(card, view) {
-    const loginBtn = document.createElement('button');
-    loginBtn.className = 'cd-admin-btn';
-    loginBtn.textContent = '用邀请码加入';
-    loginBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowRedeemModal(); });
-    return loginBtn;
-}
+function _renderCdLogin() { return document.createElement('div'); } // 已弃用，逻辑移至 _buildCdCard
 
 function _renderCdEmpty(card, isAdmin) {
     const empty = document.createElement('div');
     empty.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:16px 0;';
-    const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#6B1010;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
+    const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#854F0B;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
     const txt  = document.createElement('div'); txt.style.cssText  = 'font-size:.6rem;color:#aaa;text-align:center;margin-bottom:4px;'; txt.textContent = '暂无倒计时';
     const sub  = document.createElement('div'); sub.style.cssText  = 'font-size:.54rem;color:#ccc;text-align:center;'; sub.textContent = isAdmin ? '点击右上角「新建」创建' : '管理员尚未添加任务';
     empty.appendChild(icon); empty.appendChild(txt); empty.appendChild(sub);
     return empty;
 }
 
-function _renderCdProgress(item, diffDays, color) {
-    const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
-    let totalDays = parseInt(localStorage.getItem(_cdKey) || '0');
-    if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
-    const passedDays = totalDays - diffDays;
-    const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
+function _renderCdProgress(item, diffDays, color, isCountUp) {
     const wrap = document.createElement('div'); wrap.style.cssText = 'margin-bottom:7px;';
-    const labels = document.createElement('div'); labels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
-    const lL = document.createElement('span'); lL.textContent = `已过 ${passedDays} 天`;
-    const lR = document.createElement('span'); lR.textContent = `共 ${totalDays} 天`;
-    labels.appendChild(lL); labels.appendChild(lR);
-    const track = document.createElement('div'); track.className = 'cd-prog-track';
-    const fill  = document.createElement('div'); fill.className  = 'cd-prog-fill'; fill.style.background = color; fill.style.width = pct + '%';
-    track.appendChild(fill); wrap.appendChild(labels); wrap.appendChild(track);
+    if (isCountUp) {
+        // 正计时：无终点，只显示已过天数的进度（以7天为一格的无限进度条）
+        const pct = ((diffDays % 7) / 7) * 100;
+        const labels = document.createElement('div'); labels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
+        const lL = document.createElement('span'); lL.textContent = `本周期已过 ${diffDays % 7} 天`;
+        const lR = document.createElement('span'); lR.textContent = `第 ${Math.floor(diffDays / 7) + 1} 周`;
+        labels.appendChild(lL); labels.appendChild(lR);
+        const track = document.createElement('div'); track.className = 'cd-prog-track';
+        const fill  = document.createElement('div'); fill.className  = 'cd-prog-fill'; fill.style.background = color; fill.style.width = Math.max(2, pct) + '%';
+        track.appendChild(fill); wrap.appendChild(labels); wrap.appendChild(track);
+    } else {
+        const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
+        let totalDays = parseInt(localStorage.getItem(_cdKey) || '0');
+        if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
+        const passedDays = totalDays - diffDays;
+        const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
+        const labels = document.createElement('div'); labels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
+        const lL = document.createElement('span'); lL.textContent = `已过 ${passedDays} 天`;
+        const lR = document.createElement('span'); lR.textContent = `共 ${totalDays} 天`;
+        labels.appendChild(lL); labels.appendChild(lR);
+        const track = document.createElement('div'); track.className = 'cd-prog-track';
+        const fill  = document.createElement('div'); fill.className  = 'cd-prog-fill'; fill.style.background = color; fill.style.width = pct + '%';
+        track.appendChild(fill); wrap.appendChild(labels); wrap.appendChild(track);
+    }
     return wrap;
 }
 
-function _renderCdDateRow(item) {
+function _renderCdDateRow(item, isCountUp) {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:3em 1fr;row-gap:2px;align-items:baseline;';
     const tDate = new Date(item.date + 'T12:00:00');
@@ -2407,7 +2938,7 @@ function _renderCdDateRow(item) {
     v2.textContent = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
     r2.appendChild(l2); r2.appendChild(v2); wrap.appendChild(r2);
     if (vd) {
-        const r1 = document.createElement('div'); r1.className = 'cd-arrival-info-row-main';
+        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
         const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
         const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}`;
         r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
@@ -2415,15 +2946,17 @@ function _renderCdDateRow(item) {
     return wrap;
 }
 
-function _renderCdMetrics(diffDays, color) {
+function _renderCdMetrics(diffDays, color, isCountUp) {
     const weeks = Math.floor(diffDays / 7), days2 = diffDays % 7;
     const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px;';
     const mL = document.createElement('div'); mL.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
-    const mLL = document.createElement('div'); mLL.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mLL.textContent = '剩余天数';
+    const mLL = document.createElement('div'); mLL.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;';
+    mLL.textContent = isCountUp ? '已过天数' : '剩余天数';
     const mLV = document.createElement('div'); mLV.style.cssText = `font-size:1.5rem;font-weight:800;line-height:1.1;color:${color};`; mLV.textContent = diffDays;
     mL.appendChild(mLL); mL.appendChild(mLV);
     const mR = document.createElement('div'); mR.style.cssText = 'background:var(--muted);border-radius:8px;padding:7px 10px;';
-    const mRL = document.createElement('div'); mRL.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;'; mRL.textContent = '剩余完整周';
+    const mRL = document.createElement('div'); mRL.style.cssText = 'font-size:.48rem;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:3px;';
+    mRL.textContent = isCountUp ? '已过完整周' : '剩余完整周';
     const mRV = document.createElement('div'); mRV.style.cssText = 'font-size:1.1rem;font-weight:800;line-height:1.2;color:var(--primary);'; mRV.textContent = weeks > 0 ? `${weeks} 周${days2 > 0 ? ' ' + days2 + ' 天' : ''}` : `${days2} 天`;
     mR.appendChild(mRL); mR.appendChild(mRV);
     grid.appendChild(mL); grid.appendChild(mR);
@@ -2529,7 +3062,7 @@ function _cdCheckArrivalAlert() {
             s1.textContent = (weeks > 0 ? weeks + ' 周' + (remainDays > 0 ? ' ' + remainDays + ' 天' : '') : totalDays + ' 天');
             r1.appendChild(s1);
             if (weeks > 0) {
-                r1.appendChild(document.createTextNode(' · 共 '));
+                r1.appendChild(document.createTextNode(' · 共'));
                 const s2 = document.createElement('strong'); s2.textContent = totalDays + ' 天';
                 r1.appendChild(s2);
             }
@@ -2598,8 +3131,7 @@ function _buildCdCard() {
     const view = DOM.calView;
     view.querySelectorAll('.cd-card').forEach(el => el.remove());
 
-    // 未登录 且 没有任务 → 不渲染（避免空卡）
-    if (!_cdUser && !_cdTasks.length) return;
+    // 未登录时仍渲染卡片，显示注册/登录入口
 
     const list  = _cdSortedTasks();
     const total = list.length;
@@ -2621,32 +3153,70 @@ function _buildCdCard() {
     hdr.textContent = '倒计时';
     hdrWrap.appendChild(hdr);
 
-    // 未登录提示按钮
+    // 未登录：沙漏图标 + 说明 + 注册/登录并排 + 邀请码虚线
     if (!_cdUser) {
-        hdrWrap.appendChild(_renderCdLogin());
         card.appendChild(hdrWrap);
-        const tip = document.createElement('div');
-        tip.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#ccc;padding:20px 0;';
-        tip.textContent = '使用邀请码加入后可查看倒计时';
-        card.appendChild(tip);
+        const body = document.createElement('div');
+        body.style.cssText = 'display:flex;flex-direction:column;align-items:center;padding:22px 14px 20px;';
+
+        // 沙漏 SVG 图标
+        const iconWrap = document.createElement('div');
+        iconWrap.style.cssText = 'margin-bottom:10px;opacity:.18;';
+        iconWrap.innerHTML = '<svg width="32" height="32" viewBox="0 0 36 36" fill="none"><rect x="8" y="4" width="20" height="3" rx="1.5" fill="#2C3E50"/><rect x="8" y="29" width="20" height="3" rx="1.5" fill="#2C3E50"/><path d="M10 7 C10 7 10 16 18 18 C26 20 26 29 26 29" stroke="#2C3E50" stroke-width="1.5" fill="none"/><path d="M26 7 C26 7 26 16 18 18 C10 20 10 29 10 29" stroke="#2C3E50" stroke-width="1.5" fill="none"/><circle cx="18" cy="24" r="2.5" fill="#B22222" opacity="0.8"/></svg>';
+
+        const tip = document.createElement('p');
+        tip.style.cssText = 'font-size:.58rem;color:#aaa;margin:0 0 16px;text-align:center;line-height:1.6;';
+        tip.textContent = '登录后即可创建和查看倒计时';
+
+        // 注册 + 登录 并排
+        const rowWrap = document.createElement('div');
+        rowWrap.style.cssText = 'display:flex;gap:7px;width:100%;margin-bottom:7px;';
+
+        const registerBtn = document.createElement('button');
+        registerBtn.style.cssText = 'flex:1;padding:8px 0;background:#2C3E50;color:white;border:none;border-radius:8px;font-size:.65rem;font-weight:700;cursor:pointer;font-family:inherit;transition:filter .15s;';
+        registerBtn.textContent = '注册';
+        registerBtn.addEventListener('mouseenter', () => { registerBtn.style.filter = 'brightness(1.15)'; });
+        registerBtn.addEventListener('mouseleave', () => { registerBtn.style.filter = ''; });
+        registerBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowRegisterModal(); });
+
+        const loginBtn = document.createElement('button');
+        loginBtn.style.cssText = 'flex:1;padding:8px 0;background:transparent;color:#2C3E50;border:1.5px solid #2C3E50;border-radius:8px;font-size:.65rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;';
+        loginBtn.textContent = '登录';
+        loginBtn.addEventListener('mouseenter', () => { loginBtn.style.background='rgba(44,62,80,0.06)'; });
+        loginBtn.addEventListener('mouseleave', () => { loginBtn.style.background='transparent'; });
+        loginBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowLoginModal(); });
+
+        rowWrap.appendChild(registerBtn); rowWrap.appendChild(loginBtn);
+
+        // 邀请码虚线按钮
+        const inviteBtn = document.createElement('button');
+        inviteBtn.style.cssText = 'width:100%;padding:6px 0;background:transparent;color:#aaa;border:1px dashed #DCD3BC;border-radius:8px;font-size:.6rem;cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s;';
+        inviteBtn.textContent = '用邀请码加入';
+        inviteBtn.addEventListener('mouseenter', () => { inviteBtn.style.color='#7f8c8d'; inviteBtn.style.borderColor='#aaa'; });
+        inviteBtn.addEventListener('mouseleave', () => { inviteBtn.style.color='#aaa'; inviteBtn.style.borderColor='#DCD3BC'; });
+        inviteBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowRedeemModal(); });
+
+        body.appendChild(iconWrap); body.appendChild(tip);
+        body.appendChild(rowWrap); body.appendChild(inviteBtn);
+        card.appendChild(body);
         view.appendChild(card);
         _applyCardHeight(card, view);
         return;
     }
 
-    // 所有登录用户均可新建（viewer 新建的任务无标签，仅自己可见）
+    // 所有登录用户均可新建（user 新建的任务无标签，仅自己可见）
     const addBtn = document.createElement('button');
     addBtn.className = 'cd-admin-btn';
-    addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#6B1010" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
+    addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#854F0B" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
     addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAddTaskModal(); });
     hdrWrap.appendChild(addBtn);
-    // admin 专属：生成邀请链接（只能邀请 viewer）
+    // admin 专属：管理面板（含邀请 + 用户管理）
     if (isAdmin && !isSA) {
         const invBtn = document.createElement('button');
         invBtn.className = 'cd-admin-btn';
         invBtn.style.marginLeft = '0';
-        invBtn.textContent = '邀请';
-        invBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminInviteModal(); });
+        invBtn.textContent = '管理';
+        invBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminMgmtPanel(); });
         hdrWrap.appendChild(invBtn);
     }
     if (isSA) {
@@ -2672,9 +3242,26 @@ function _buildCdCard() {
     const color   = CD_COLORS[_cdActiveIdx % CD_COLORS.length];
     const _dp2    = item.date.split('-').map(Number);
     const targetMs = new Date(_dp2[0], _dp2[1]-1, _dp2[2]).getTime();
-    const diffDays = Math.round((targetMs - todayMs) / 86400000);
-    const ended    = diffDays < 0;
-    const isPinned = _cdGetPinned() === item.name;
+    const isCountUp = item.taskType === 'countup';
+    const diffDays  = Math.round((targetMs - todayMs) / 86400000);
+    // 正计时主色 #2F4F4F（周六色）；倒计时主色 #B22222（周日色）
+    const themeColor = isCountUp ? '#2F4F4F' : '#854F0B';
+    const themeBgAlpha = isCountUp ? 'rgba(47,79,79,0.06)' : 'rgba(133,79,11,0.04)';
+    const themeBorderAlpha = isCountUp ? '#2F4F4F' : '#854F0B';
+    if (isCountUp) {
+        hdr.textContent = '正计时';
+        hdr.style.color = themeColor;
+        hdrWrap.style.borderBottomColor = 'rgba(47,79,79,0.2)';
+        card.style.borderColor = themeBorderAlpha;
+        card.style.background = '#FAFCFA';
+    } else {
+        hdr.style.color = themeColor;
+        card.style.borderColor = themeBorderAlpha;
+    }
+    // 正计时：diffDays 为负数（过去日期），取绝对值为"已过天数"
+    // 倒计时：diffDays 为正数，负数表示已结束
+    const ended     = isCountUp ? false : diffDays < 0;
+    const isPinned  = _cdGetPinned() === item.name;
 
     // ── 导航行（箭头 + 名称 + 图钉）────────────────────────────
     const navRow = document.createElement('div');
@@ -2713,12 +3300,11 @@ function _buildCdCard() {
         card.appendChild(dots);
     }
 
-    // 已结束
+    // 已结束（仅倒计时）
     if (ended) {
         const endedDiv = document.createElement('div');
         endedDiv.style.cssText = 'text-align:center;padding:16px 0 8px;font-size:.72rem;color:#aaa;font-weight:700;letter-spacing:1px;';
         endedDiv.textContent = '已结束';
-        // admin 或自己创建的任务可删除
         if (isAdmin || item.createdBy === _cdGetToken()) {
             const delBtn = document.createElement('button');
             delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:3px 10px;background:var(--muted);';
@@ -2740,9 +3326,11 @@ function _buildCdCard() {
         return;
     }
 
-    card.appendChild(_renderCdMetrics(diffDays, color));
-    card.appendChild(_renderCdProgress(item, diffDays, color));
-    card.appendChild(_renderCdDateRow(item));
+    // 正计时：显示已过天数；倒计时：显示剩余天数
+    const displayDays = isCountUp ? Math.abs(diffDays) : diffDays;
+    card.appendChild(_renderCdMetrics(displayDays, color, isCountUp));
+    card.appendChild(_renderCdProgress(item, displayDays, color, isCountUp));
+    card.appendChild(_renderCdDateRow(item, isCountUp));
 
     // ── 操作行：标签显示 + 创建者（superadmin）+ 删除（admin） ──
     const actRow = document.createElement('div');
@@ -2753,6 +3341,19 @@ function _buildCdCard() {
             t.style.cssText = 'font-size:.5rem;color:#7f8c8d;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;';
             t.textContent = tag; actRow.appendChild(t);
         });
+    }
+    // 周期标识
+    if (item.cycle && item.cycle.type !== 'none') {
+        const unitMap = { day:'天', week:'周', month:'月', year:'年' };
+        const n = item.cycle.num || 1;
+        const unit = unitMap[item.cycle.type] || '天';
+        const cycleLabel = n > 1 ? `每${n}${unit}` : `每${unit}`;
+        const cyclePill = document.createElement('span');
+        cyclePill.style.cssText = `font-size:.48rem;font-weight:700;color:${themeColor};background:${isCountUp?'rgba(47,79,79,0.08)':'rgba(133,79,11,0.07)'};border:1px solid ${isCountUp?'rgba(47,79,79,0.25)':'rgba(133,79,11,0.25)'};border-radius:20px;padding:1px 7px;display:inline-flex;align-items:center;gap:2px;flex-shrink:0;`;
+        const cycleIcon = document.createElement('span'); cycleIcon.textContent = '↻'; cycleIcon.style.cssText = 'font-size:.6rem;line-height:1;';
+        const cycleText = document.createElement('span'); cycleText.textContent = cycleLabel;
+        cyclePill.appendChild(cycleIcon); cyclePill.appendChild(cycleText);
+        actRow.appendChild(cyclePill);
     }
     // 创建者用户名：仅 superadmin 可见
     // creatorName 由新版后端写入；旧任务无此字段时显示"未知"兜底
@@ -2819,10 +3420,14 @@ function _applyCardHeight(card, view) {
     }
 }
 
-// ── 日历格染色（跟随当前激活的倒计时）──────────────────────────
+// ── 日历格染色（跟随当前激活的倒计时/正计时）──────────────────────────
 function _cdApplyCellColor() {
     _cellCache.forEach(({ cell }) => { cell.classList.remove('cd-range', 'cd-target'); delete cell.dataset.cdDays; });
     _extraCache.forEach(cell => { if (cell) { cell.classList.remove('cd-range', 'cd-target'); delete cell.dataset.cdDays; } });
+    // 清除旧的主题色 CSS 变量
+    DOM.calView.style.removeProperty('--cd-color-range');
+    DOM.calView.style.removeProperty('--cd-color-target');
+    DOM.calView.style.removeProperty('--cd-color-outline');
     const list = _cdSortedTasks();
     if (!list.length) return;
     const item = list[_cdActiveIdx];
@@ -2831,17 +3436,47 @@ function _cdApplyCellColor() {
     const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const _dp = item.date.split('-').map(Number);
     const targetMs = new Date(_dp[0], _dp[1]-1, _dp[2]).getTime();
-    if (targetMs <= todayMs) return;
-    const diffDaysTotal = Math.round((targetMs - todayMs) / DAY_MS);
-    const applyColor = cell => {
-        const data = _cellDataMap.get(cell); if (!data) return;
-        const nums = data.gStr.match(/\d+/g); if (!nums) return;
-        const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
-        if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
-        else if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
-    };
-    _cellCache.forEach(({ cell }) => applyColor(cell));
-    _extraCache.forEach(cell => { if (cell) applyColor(cell); });
+    const isCountUp = item.taskType === 'countup';
+    // 与卡片保持一致：正计时 #2F4F4F，倒计时 #B22222
+    const themeColor = isCountUp ? '#2F4F4F' : '#854F0B';
+    const themeR = isCountUp ? '47,79,79' : '133,79,11';
+    DOM.calView.style.setProperty('--cd-color-range',   `rgba(${themeR},0.08)`);
+    DOM.calView.style.setProperty('--cd-color-target',  `rgba(${themeR},0.18)`);
+    DOM.calView.style.setProperty('--cd-color-outline', themeColor);
+
+    if (isCountUp) {
+        // 正计时：item.date 是起点（过去），今天是终点
+        // 起点在未来则无需高亮
+        if (targetMs >= todayMs) return;
+        const diffDaysTotal = Math.round((todayMs - targetMs) / DAY_MS);
+        const applyColor = cell => {
+            const data = _cellDataMap.get(cell); if (!data) return;
+            const nums = data.gStr.match(/\d+/g); if (!nums) return;
+            const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
+            // 起点格：cd-target（显示已过天数）
+            if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
+            // 起点到今天之间的格：cd-range（不含今天，今天沿用 is-today 样式）
+            else if (cellMs > targetMs && cellMs < todayMs) cell.classList.add('cd-range');
+        };
+        _cellCache.forEach(({ cell }) => applyColor(cell));
+        _extraCache.forEach(cell => { if (cell) applyColor(cell); });
+    } else {
+        // 倒计时：item.date 是终点（未来），今天是起点
+        // 目标日已过则无需高亮
+        if (targetMs <= todayMs) return;
+        const diffDaysTotal = Math.round((targetMs - todayMs) / DAY_MS);
+        const applyColor = cell => {
+            const data = _cellDataMap.get(cell); if (!data) return;
+            const nums = data.gStr.match(/\d+/g); if (!nums) return;
+            const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
+            // 今天到目标日之间的格：cd-range（不含今天，今天沿用 is-today 样式）
+            if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
+            // 目标格：cd-target（显示剩余天数）
+            else if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
+        };
+        _cellCache.forEach(({ cell }) => applyColor(cell));
+        _extraCache.forEach(cell => { if (cell) applyColor(cell); });
+    }
 }
 const NOMINATIM_HEADERS = { 'Accept-Language': 'zh', 'User-Agent': 'GengTiLi-Calendar/1.0 (https://alaricpolum.github.io/calendar/)' };
 const VC_COND_MAP = {
@@ -3647,7 +4282,7 @@ function showTooltip(e, data) {
     if (isFocus) {
         const gKey = data.gStr;
 
-        // ── 便签区（仅 superadmin / admin / viewer 可见）────────
+        // ── 便签区（仅 superadmin / admin / user 可见）────────
         if (_cdUser) {
             const noteSection = document.createElement('div');
             noteSection.className = 'tt-note-section';
@@ -3749,7 +4384,7 @@ function showTooltip(e, data) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  年度回顾弹窗（仅 superadmin / admin / viewer 可见）
+//  年度回顾弹窗（仅 superadmin / admin / user 可见）
 // ═══════════════════════════════════════════════════════════════
 function _showYearReview(vYear, extraData) {
     if (extraData) _lastYearReviewExtraData = extraData;
@@ -5256,17 +5891,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // ── 倒计时系统后台初始化（验证 token，拉取任务，不阻塞日历）──
     // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
-    _cdInit().then(() => {
+    _cdInit().then(async () => {
         // token 验证 + 任务拉取完成后，追加渲染倒计时卡片
         _buildCdCard();
         _cdApplyCellColor();
+        await _cdCheckCycleTasks(); // 页面首次加载：检测周期任务自动续期
         _cdCheckArrivalAlert(); // 页面首次加载：检查今日是否有到达的倒计时
-        const _urlInvite = new URLSearchParams(window.location.search).get('invite');
         const _urlGo     = new URLSearchParams(window.location.search).get('go');
 
-        // ── superadmin 快捷登录入口（?go=login）────────────────────
+        // ── 普通用户登录（?go=login）— 姓名+密码 ──────────────────
         if (_urlGo === 'login') {
-            // 清除 URL 参数，避免输入框反复弹出
             const _uGo = new URL(window.location.href);
             _uGo.searchParams.delete('go');
             history.replaceState(null, '', _uGo.toString());
@@ -5276,26 +5910,34 @@ window.addEventListener('DOMContentLoaded', async () => {
                 const modal = document.createElement('div');
                 modal.className = 'cd-admin-modal';
                 modal.addEventListener('click', e => e.stopPropagation());
-                const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理员登录';
+                const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '登录';
                 const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
-                const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = 'Token';
-                const inp = document.createElement('input'); inp.className = 'cd-admin-input'; inp.type = 'password'; inp.placeholder = '输入管理员 Token';
+                const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '姓名';
+                const nameInp = document.createElement('input'); nameInp.className = 'cd-admin-input'; nameInp.type = 'text'; nameInp.placeholder = '注册时填写的名字';
+                f1.appendChild(l1); f1.appendChild(nameInp);
+                const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
+                const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '密码';
+                const pwdInp = document.createElement('input'); pwdInp.className = 'cd-admin-input'; pwdInp.type = 'password'; pwdInp.placeholder = '注册时设置的密码';
+                f2.appendChild(l2); f2.appendChild(pwdInp);
                 const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
-                f1.appendChild(l1); f1.appendChild(inp); f1.appendChild(errDiv);
                 const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
                 const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
                 cancelBtn.addEventListener('click', () => overlay.remove());
                 const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '登录';
                 const _doLogin = async () => {
-                    const tk = inp.value.trim();
-                    if (!tk) { errDiv.textContent = '请输入 Token'; return; }
+                    const name = nameInp.value.trim();
+                    const password = pwdInp.value;
+                    if (!name || !password) { errDiv.textContent = '请填写姓名和密码'; return; }
                     submitBtn.disabled = true; submitBtn.textContent = '验证中…';
                     try {
-                        const res = await fetch(CD_API + '/cd/token/info', {
-                            headers: { 'Authorization': 'Bearer ' + tk }
+                        const res = await fetch(CD_API + '/cd/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name, password }),
                         });
-                        if (!res.ok) { errDiv.textContent = 'Token 无效'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
-                        _cdSaveToken(tk);
+                        const data = await res.json();
+                        if (!res.ok) { errDiv.textContent = data.error || '姓名或密码错误'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
+                        _cdSaveToken(data.token);
                         overlay.remove();
                         await _cdInit();
                         _buildCdCard(); _cdApplyCellColor();
@@ -5305,7 +5947,65 @@ window.addEventListener('DOMContentLoaded', async () => {
                     }
                 };
                 submitBtn.addEventListener('click', _doLogin);
-                inp.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); });
+                [nameInp, pwdInp].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); }));
+                btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
+                // 注册入口
+                const regLink = document.createElement('div');
+                regLink.style.cssText = 'text-align:center;margin-top:10px;font-size:.58rem;color:#7f8c8d;';
+                const regBtn = document.createElement('span');
+                regBtn.style.cssText = 'color:var(--v-blue);cursor:pointer;text-decoration:underline;';
+                regBtn.textContent = '立即注册';
+                regLink.appendChild(document.createTextNode('没有账号？'));
+                regLink.appendChild(regBtn);
+                regBtn.addEventListener('click', () => { overlay.remove(); _cdShowRegisterModal(); });
+                modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(f2); modal.appendChild(errDiv); modal.appendChild(btnRow); modal.appendChild(regLink);
+                overlay.appendChild(modal);
+                overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+                document.body.appendChild(overlay);
+                nameInp.focus();
+            }, 300);
+
+        // ── superadmin 隐藏登录入口（?go=superadmin）— Token 直接登录 ──
+        } else if (_urlGo === 'superadmin') {
+            const _uGo = new URL(window.location.href);
+            _uGo.searchParams.delete('go');
+            history.replaceState(null, '', _uGo.toString());
+            setTimeout(() => {
+                const overlay = document.createElement('div');
+                overlay.className = 'cd-admin-overlay';
+                const modal = document.createElement('div');
+                modal.className = 'cd-admin-modal';
+                modal.addEventListener('click', e => e.stopPropagation());
+                const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '身份验证';
+                const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
+                const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = 'Token';
+                const inp = document.createElement('input'); inp.className = 'cd-admin-input'; inp.type = 'password'; inp.placeholder = '输入 Token';
+                const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
+                f1.appendChild(l1); f1.appendChild(inp); f1.appendChild(errDiv);
+                const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+                const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
+                cancelBtn.addEventListener('click', () => overlay.remove());
+                const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '验证';
+                const _doSALogin = async () => {
+                    const tk = inp.value.trim();
+                    if (!tk) { errDiv.textContent = '请输入 Token'; return; }
+                    submitBtn.disabled = true; submitBtn.textContent = '验证中…';
+                    try {
+                        const res = await fetch(CD_API + '/cd/token/info', {
+                            headers: { 'Authorization': 'Bearer ' + tk }
+                        });
+                        if (!res.ok) { errDiv.textContent = 'Token 无效'; submitBtn.disabled = false; submitBtn.textContent = '验证'; return; }
+                        _cdSaveToken(tk);
+                        overlay.remove();
+                        await _cdInit();
+                        _buildCdCard(); _cdApplyCellColor();
+                    } catch(_) {
+                        errDiv.textContent = '网络错误，请重试';
+                        submitBtn.disabled = false; submitBtn.textContent = '验证';
+                    }
+                };
+                submitBtn.addEventListener('click', _doSALogin);
+                inp.addEventListener('keydown', e => { if (e.key === 'Enter') _doSALogin(); });
                 btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
                 modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(btnRow);
                 overlay.appendChild(modal);
@@ -5313,9 +6013,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 document.body.appendChild(overlay);
                 inp.focus();
             }, 300);
-        } else if (_urlInvite && !_cdGetToken()) {
-            // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
-            setTimeout(() => _cdShowRedeemModal(), 300);
+
         }
     });
 
