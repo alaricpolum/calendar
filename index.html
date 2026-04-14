@@ -870,14 +870,14 @@
     /* ── 倒计时卡片 ──────────────────────────────────────────────── */
     .cd-card {
         background: var(--surface); border-radius: 14px;
-        border: 1.5px solid #854F0B; padding: 10px 12px 12px;
+        border: 1.5px solid #2F4F4F; padding: 10px 12px 12px;
         display: flex; flex-direction: column; box-sizing: border-box;
         overflow-y: auto;
         scrollbar-width: none; -ms-overflow-style: none;
     }
     .cd-card::-webkit-scrollbar { display: none; }
     .cd-card-h {
-        font-size: .65rem; font-weight: 700; color: #854F0B;
+        font-size: .65rem; font-weight: 700; color: #2F4F4F;
         letter-spacing: 2px; border-bottom: 1.5px solid var(--muted);
         padding-bottom: 6px; margin-bottom: 8px;
     }
@@ -887,7 +887,7 @@
         transition: background .15s;
     }
     .cd-list-item:hover { background: var(--muted); }
-    .cd-list-item.cd-active { background: rgba(133,79,11,0.06); }
+    .cd-list-item.cd-active { background: rgba(47,79,79,0.06); }
     .cd-accent-bar { width: 3px; border-radius: 2px; flex-shrink: 0; align-self: stretch; min-height: 28px; }
     .cd-list-name { font-size: .68rem; font-weight: 700; color: var(--text); }
     .cd-list-name.cd-ended { color: #aaa; }
@@ -895,7 +895,7 @@
     .cd-ended-badge { font-size: .44rem; color: #888; background: var(--muted); border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
     .cd-list-days { font-size: .65rem; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
     .cd-divider   { height: .5px; background: var(--muted); margin: 3px 0; }
-    .cd-expand { background: rgba(133,79,11,0.04); border-radius: 7px; padding: 8px 9px; margin: 4px 0 2px; }
+    .cd-expand { background: rgba(47,79,79,0.04); border-radius: 7px; padding: 8px 9px; margin: 4px 0 2px; }
     .cd-expand-name  { font-size: .82rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
     .cd-expand-days  { display: flex; align-items: baseline; gap: 3px; margin-bottom: 1px; }
     .cd-expand-num   { font-size: 1.6rem; font-weight: 800; line-height: 1; }
@@ -1812,7 +1812,7 @@ async function _cdShowAddTaskModal() {
             const parsed = _parseVCalInput(v);
             if (parsed) {
                 const sel = new Date(parsed.iso + 'T00:00:00');
-                isCountUp = sel < today0;
+                isCountUp = sel <= today0;
                 const typeLabel = isCountUp ? '（正计时）' : '（倒计时）';
                 dateHint.style.color = '#4A5D23';
                 dateHint.textContent = `✓ 更替历 ${parsed.vY}年${String(parsed.m).padStart(2,'0')}月${String(parsed.d).padStart(2,'0')}日 ${typeLabel}`;
@@ -1821,7 +1821,7 @@ async function _cdShowAddTaskModal() {
             const parsed = _parseDateInput(v);
             if (parsed) {
                 const sel = new Date(parsed.iso + 'T00:00:00');
-                isCountUp = sel < today0;
+                isCountUp = sel <= today0;
                 const typeLabel = isCountUp ? '（正计时）' : '（倒计时）';
                 dateHint.style.color = '#4A5D23';
                 dateHint.textContent = `✓ ${parsed.y}年${parsed.mo}月${parsed.d}日 ${typeLabel}`;
@@ -2890,7 +2890,7 @@ function _renderCdLogin() { return document.createElement('div'); } // 已弃用
 function _renderCdEmpty(card, isAdmin) {
     const empty = document.createElement('div');
     empty.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:16px 0;';
-    const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#854F0B;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
+    const icon = document.createElement('div'); icon.style.cssText = 'font-size:2rem;opacity:.15;color:#2F4F4F;line-height:1;margin-bottom:12px;'; icon.textContent = '⏳';
     const txt  = document.createElement('div'); txt.style.cssText  = 'font-size:.6rem;color:#aaa;text-align:center;margin-bottom:4px;'; txt.textContent = '暂无倒计时';
     const sub  = document.createElement('div'); sub.style.cssText  = 'font-size:.54rem;color:#ccc;text-align:center;'; sub.textContent = isAdmin ? '点击右上角「新建」创建' : '管理员尚未添加任务';
     empty.appendChild(icon); empty.appendChild(txt); empty.appendChild(sub);
@@ -3244,14 +3244,14 @@ function _buildCdCard() {
     const targetMs = new Date(_dp2[0], _dp2[1]-1, _dp2[2]).getTime();
     const isCountUp = item.taskType === 'countup';
     const diffDays  = Math.round((targetMs - todayMs) / 86400000);
-    // 正计时主色 #2F4F4F（周六色）；倒计时主色 #B22222（周日色）
-    const themeColor = isCountUp ? '#2F4F4F' : '#854F0B';
-    const themeBgAlpha = isCountUp ? 'rgba(47,79,79,0.06)' : 'rgba(133,79,11,0.04)';
-    const themeBorderAlpha = isCountUp ? '#2F4F4F' : '#854F0B';
+    // 正计时主色 #854F0B（棕色）；倒计时主色 #2F4F4F（深青绿）
+    const themeColor = isCountUp ? '#854F0B' : '#2F4F4F';
+    const themeBgAlpha = isCountUp ? 'rgba(133,79,11,0.06)' : 'rgba(47,79,79,0.04)';
+    const themeBorderAlpha = isCountUp ? '#854F0B' : '#2F4F4F';
     if (isCountUp) {
         hdr.textContent = '正计时';
         hdr.style.color = themeColor;
-        hdrWrap.style.borderBottomColor = 'rgba(47,79,79,0.2)';
+        hdrWrap.style.borderBottomColor = 'rgba(133,79,11,0.2)';
         card.style.borderColor = themeBorderAlpha;
         card.style.background = '#FAFCFA';
     } else {
@@ -3349,7 +3349,7 @@ function _buildCdCard() {
         const unit = unitMap[item.cycle.type] || '天';
         const cycleLabel = n > 1 ? `每${n}${unit}` : `每${unit}`;
         const cyclePill = document.createElement('span');
-        cyclePill.style.cssText = `font-size:.48rem;font-weight:700;color:${themeColor};background:${isCountUp?'rgba(47,79,79,0.08)':'rgba(133,79,11,0.07)'};border:1px solid ${isCountUp?'rgba(47,79,79,0.25)':'rgba(133,79,11,0.25)'};border-radius:20px;padding:1px 7px;display:inline-flex;align-items:center;gap:2px;flex-shrink:0;`;
+        cyclePill.style.cssText = `font-size:.48rem;font-weight:700;color:${themeColor};background:${isCountUp?'rgba(133,79,11,0.08)':'rgba(47,79,79,0.07)'};border:1px solid ${isCountUp?'rgba(133,79,11,0.25)':'rgba(47,79,79,0.25)'};border-radius:20px;padding:1px 7px;display:inline-flex;align-items:center;gap:2px;flex-shrink:0;`;
         const cycleIcon = document.createElement('span'); cycleIcon.textContent = '↻'; cycleIcon.style.cssText = 'font-size:.6rem;line-height:1;';
         const cycleText = document.createElement('span'); cycleText.textContent = cycleLabel;
         cyclePill.appendChild(cycleIcon); cyclePill.appendChild(cycleText);
@@ -3437,9 +3437,9 @@ function _cdApplyCellColor() {
     const _dp = item.date.split('-').map(Number);
     const targetMs = new Date(_dp[0], _dp[1]-1, _dp[2]).getTime();
     const isCountUp = item.taskType === 'countup';
-    // 与卡片保持一致：正计时 #2F4F4F，倒计时 #B22222
-    const themeColor = isCountUp ? '#2F4F4F' : '#854F0B';
-    const themeR = isCountUp ? '47,79,79' : '133,79,11';
+    // 与卡片保持一致：正计时 #854F0B，倒计时 #2F4F4F
+    const themeColor = isCountUp ? '#854F0B' : '#2F4F4F';
+    const themeR = isCountUp ? '133,79,11' : '47,79,79';
     DOM.calView.style.setProperty('--cd-color-range',   `rgba(${themeR},0.08)`);
     DOM.calView.style.setProperty('--cd-color-target',  `rgba(${themeR},0.18)`);
     DOM.calView.style.setProperty('--cd-color-outline', themeColor);
