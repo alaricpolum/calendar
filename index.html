@@ -1787,7 +1787,7 @@ async function _cdShowAddTaskModal() {
 
     const cycleRow = document.createElement('div'); cycleRow.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;';
     const cycleTypes = [
-        { key:'none', label:'不重复' },
+        { key:'none', label:'无' },
         { key:'day',  label:'天' },
         { key:'week', label:'周' },
         { key:'month',label:'月' },
@@ -1810,7 +1810,7 @@ async function _cdShowAddTaskModal() {
     });
     f4.appendChild(cycleRow);
 
-    // 周期数量输入行（不重复时隐藏）
+    // 周期数量输入行（无时隐藏）
     const cycleDetail = document.createElement('div'); cycleDetail.style.cssText = 'display:none;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
     const cyclePrefix = document.createElement('span'); cyclePrefix.style.cssText = 'font-size:.6rem;color:#7f8c8d;'; cyclePrefix.textContent = '每';
     const cycleNumInput = document.createElement('input');
