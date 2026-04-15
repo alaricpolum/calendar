@@ -1641,15 +1641,51 @@ function _cdNextCycleDate(currentIso, cycle) {
 async function _cdCheckCycleTasks() {
     if (!_cdUser) return;
     const today = new Date(); today.setHours(0,0,0,0);
+
+    // 需要续期的任务：
+    //   正计时（countup）+ 有周期 → 总是需要找下一个目标日（建倒计时卡）
+    //   倒计时（countdown）+ 有周期 + 目标日 < 今天（严格小于，当天不触发）
     const toRenew = _cdTasks.filter(t => {
         if (!t.cycle || t.cycle.type === 'none') return false;
+        if (t.taskType === 'countup') return true;  // 正计时 + 周期：始终处理
         const taskDate = new Date(t.date + 'T00:00:00');
-        return taskDate <= today;
+        return taskDate < today;  // 倒计时：严格小于（目标日当天不续期）
     });
     if (!toRenew.length) return;
+
     for (const task of toRenew) {
-        const nextDate = _cdNextCycleDate(task.date, task.cycle);
+        let nextDate = null;
+        let nextTaskType = 'countdown';
+
+        if (task.taskType === 'countup') {
+            // ── 正计时 + 周期：以输入日期（task.date）为起点，
+            //    追赶到最小的 targetDate = date + n×cycle ≥ today
+            //    targetDate == today → 正计时卡；targetDate > today → 倒计时卡
+            let cur = task.date;
+            while (true) {
+                const candidate = _cdNextCycleDate(cur, task.cycle);
+                if (!candidate) break;
+                const candidateDate = new Date(candidate + 'T00:00:00');
+                if (candidateDate > today) { nextDate = candidate; break; }
+                cur = candidate;
+            }
+            if (nextDate) {
+                nextTaskType = 'countdown';
+            }
+        } else {            // ── 倒计时 + 周期：while 追赶到 > today 的最近周期
+            let cur = task.date;
+            while (true) {
+                const candidate = _cdNextCycleDate(cur, task.cycle);
+                if (!candidate) break;
+                const candidateDate = new Date(candidate + 'T00:00:00');
+                cur = candidate;
+                if (candidateDate > today) { nextDate = cur; break; }
+            }
+            nextTaskType = 'countdown';
+        }
+
         if (!nextDate) continue;
+
         const nextTarget = new Date(nextDate + 'T00:00:00');
         const totalDays = Math.round(Math.abs(nextTarget - today) / 86400000);
         try {
@@ -1659,7 +1695,7 @@ async function _cdCheckCycleTasks() {
                     name: task.name, date: nextDate,
                     tags: task.tags || [],
                     totalDays,
-                    taskType: task.taskType || 'countdown',
+                    taskType: nextTaskType,
                     useVCal: task.useVCal || false,
                     cycle: task.cycle,
                     cycleParent: task.id,
@@ -3062,7 +3098,7 @@ function _cdCheckArrivalAlert() {
             s1.textContent = (weeks > 0 ? weeks + ' 周' + (remainDays > 0 ? ' ' + remainDays + ' 天' : '') : totalDays + ' 天');
             r1.appendChild(s1);
             if (weeks > 0) {
-                r1.appendChild(document.createTextNode(' · 共'));
+                r1.appendChild(document.createTextNode(' · 共 '));
                 const s2 = document.createElement('strong'); s2.textContent = totalDays + ' 天';
                 r1.appendChild(s2);
             }
