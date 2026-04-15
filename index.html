@@ -1289,7 +1289,8 @@ function _cdVDate(gDate) {
     if (off < 0) return null;
     const m = Math.floor(off / 28) + 1;
     const d = (off % 28) + 1;
-    const wkIdx = (gDate.getDay() + 6) % 7;
+    // 更替历星期：用相对于当年春分的偏移量取模，与全局 getDayDiff 统一
+    const wkIdx = off % 7;
     return { vY, m, d, wk: WKS[wkIdx], off };
 }
 
@@ -3022,7 +3023,7 @@ function _renderCdProgress(item, diffDays, color, isCountUp) {
         // 正计时：无终点，只显示已过天数的进度（以7天为一格的无限进度条）
         const pct = ((diffDays % 7) / 7) * 100;
         const labels = document.createElement('div'); labels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
-        const lL = document.createElement('span'); lL.textContent = `本周期已过 ${diffDays % 7} 天`;
+        const lL = document.createElement('span'); lL.textContent = `本周已过 ${diffDays % 7} 天`;
         const lR = document.createElement('span'); lR.textContent = `第 ${Math.floor(diffDays / 7) + 1} 周`;
         labels.appendChild(lL); labels.appendChild(lR);
         const track = document.createElement('div'); track.className = 'cd-prog-track';
@@ -3136,7 +3137,13 @@ function _cdCheckArrivalAlert() {
         const gWk        = WKS[(tDate.getDay() + 6) % 7];
         const gDateStr   = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
         const vd         = _cdVDate(tDate);
-        const vDateStr   = vd ? `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}` : null;
+        // 更替历星期：统一用 getDayDiff(当年春分, 目标日) % 7 → WKS 索引，与 _renderCdDateRow 保持一致
+        const vDateStr   = vd ? (() => {
+            const vEq  = getShEq(vd.vY);
+            const vOff = getDayDiff(vEq, tDate);
+            const vWk  = WKS[vOff % 7];
+            return `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vWk}`;
+        })() : null;
         // 已历时：直接读任务创建时写入的 totalDays 字段
         let totalDays = (typeof item.totalDays === 'number' && item.totalDays > 0) ? item.totalDays : null;
         // fallback：老任务没有 totalDays，从 localStorage 读
