@@ -1604,18 +1604,21 @@ function _parseVCalInput(raw) {
 function _cdNextCycleDate(currentIso, cycle) {
     if (!cycle || cycle.type === 'none') return null;
     const base = new Date(currentIso + 'T00:00:00');
-    let next = new Date(base);
+    let next;
     const n = cycle.num || 1;
     const isVCal = cycle.cal === 'vcal';
     switch(cycle.type) {
         case 'day':
         case 'custom':
+            next = new Date(base);
             next.setDate(base.getDate() + n);
             break;
         case 'week':
+            next = new Date(base);
             next.setDate(base.getDate() + n * 7);
             break;
         case 'month':
+            next = new Date(base);
             if (isVCal) {
                 next.setDate(base.getDate() + n * 28);
             } else {
@@ -1624,12 +1627,24 @@ function _cdNextCycleDate(currentIso, cycle) {
             break;
         case 'year':
             if (isVCal) {
-                // 更替历年 = 春分到春分，平均约365.25天，精确按实际春分计算
-                // 简化：加 n * 365 天，再校正到最近春分
-                next.setFullYear(base.getFullYear() + n);
+                // 更替历年精确位移：保持相对于当年春分的偏移量不变，禁止 setFullYear
+                const gY = base.getFullYear();
+                const vY = base < getShEq(gY) ? gY - 1 : gY;
+                const targetVY = vY + n;
+                const cEq = getShEq(vY);
+                const off = getDayDiff(cEq, base);
+                const targetEq = getShEq(targetVY);
+                const targetYearDays = isLeapYearV(targetVY);
+                // 边界保护：偏移超出目标年总天数时，锚定到最后一天（更替日 A）
+                const safeOff = Math.min(off, targetYearDays - 1);
+                next = new Date(targetEq.getTime() + safeOff * 86400000);
             } else {
+                next = new Date(base);
                 next.setFullYear(base.getFullYear() + n);
             }
+            break;
+        default:
+            next = new Date(base);
             break;
     }
     return next.getFullYear() + '-' +
@@ -1688,6 +1703,7 @@ async function _cdCheckCycleTasks() {
 
         const nextTarget = new Date(nextDate + 'T00:00:00');
         const totalDays = Math.round(Math.abs(nextTarget - today) / 86400000);
+        const nowTs = Date.now();  // 新周期的 createTime = 当前续期时刻
         try {
             await _cdFetch('/cd/tasks/add', {
                 method: 'POST',
@@ -1699,6 +1715,7 @@ async function _cdCheckCycleTasks() {
                     useVCal: task.useVCal || false,
                     cycle: task.cycle,
                     cycleParent: task.id,
+                    createdAt: nowTs,
                 }),
             });
             // 删除旧任务
@@ -1804,6 +1821,7 @@ async function _cdShowAddTaskModal() {
             Object.values(cycleBtns).forEach(b => { b.style.borderColor='var(--border)'; b.style.background='var(--bg)'; b.style.color='#7f8c8d'; b.style.fontWeight=''; });
             btn.style.borderColor='#2F4F4F'; btn.style.background='rgba(47,79,79,0.08)'; btn.style.color='#2F4F4F'; btn.style.fontWeight='700';
             _updateCycleDetail();
+            _onDateInput(); // 周期类型变化时刷新预警提示
         });
         cycleBtns[ct.key] = btn;
         cycleRow.appendChild(btn);
@@ -1816,7 +1834,7 @@ async function _cdShowAddTaskModal() {
     const cycleNumInput = document.createElement('input');
     cycleNumInput.style.cssText = 'width:80px;padding:4px 6px;border:1px solid #2F4F4F;border-radius:6px;font-size:.65rem;text-align:center;background:var(--bg);color:var(--primary);box-sizing:border-box;';
     cycleNumInput.type = 'text'; cycleNumInput.inputMode = 'numeric'; cycleNumInput.pattern = '[0-9]*'; cycleNumInput.min = '1'; cycleNumInput.value = '1';
-    cycleNumInput.addEventListener('input', () => { cycleNumInput.value = cycleNumInput.value.replace(/[^0-9]/g,''); cycleNum = Math.max(1, parseInt(cycleNumInput.value)||1); });
+    cycleNumInput.addEventListener('input', () => { cycleNumInput.value = cycleNumInput.value.replace(/[^0-9]/g,''); cycleNum = Math.max(1, parseInt(cycleNumInput.value)||1); _onDateInput(); });
     const cycleSuffix = document.createElement('span'); cycleSuffix.style.cssText = 'font-size:.6rem;color:#7f8c8d;'; cycleSuffix.textContent = '天重复一次';
     cycleDetail.appendChild(cyclePrefix); cycleDetail.appendChild(cycleNumInput); cycleDetail.appendChild(cycleSuffix);
     f4.appendChild(cycleDetail);
@@ -1843,24 +1861,61 @@ async function _cdShowAddTaskModal() {
     function _onDateInput() {
         const v = dateInput.value;
         if (!v.trim()) { dateHint.textContent = ''; isCountUp = false; return; }
+
+        // ── 高精度门槛：仅在满足条件 A 或 B 时启动检测，否则静默等待 ──
+        // 条件 A：纯数字且长度正好等于 8（如 20260801）
+        // 条件 B：含日期特征字符（-/. 年 空格）且含至少 6 个数字
+        const digitsOnly = /^\d+$/.test(v);
+        const hasDateChar = /[-\/.\u5E74 ]/.test(v);
+        const digitCount  = (v.match(/\d/g) || []).length;
+        if (!( (digitsOnly && v.length === 8) || (hasDateChar && digitCount >= 6) )) {
+            dateHint.style.color = '#aaa';
+            dateHint.textContent = '继续输入…';
+            return;
+        }
+
         const today0 = new Date(); today0.setHours(0,0,0,0);
         if (useVCal) {
             const parsed = _parseVCalInput(v);
             if (parsed) {
                 const sel = new Date(parsed.iso + 'T00:00:00');
                 isCountUp = sel <= today0;
-                const typeLabel = isCountUp ? '（正计时）' : '（倒计时）';
+                const inputLabel = `更替历 ${parsed.vY}年${String(parsed.m).padStart(2,'0')}月${String(parsed.d).padStart(2,'0')}日`;
                 dateHint.style.color = '#4A5D23';
-                dateHint.textContent = `✓ 更替历 ${parsed.vY}年${String(parsed.m).padStart(2,'0')}月${String(parsed.d).padStart(2,'0')}日 ${typeLabel}`;
+                // 已过期 + 有周期 → 预推算下一周期点
+                if (isCountUp && cycleType !== 'none') {
+                    const nextIso = _cdNextCycleDate(parsed.iso, { type: cycleType, num: Math.max(1, parseInt(cycleNumInput.value)||1), cal: 'vcal' });
+                    if (nextIso) {
+                        const np = new Date(nextIso + 'T00:00:00');
+                        const npLabel = `${np.getFullYear()}年${String(np.getMonth()+1).padStart(2,'0')}月${String(np.getDate()).padStart(2,'0')}日`;
+                        dateHint.textContent = `✓ ${inputLabel} (已过期，自动周期点：${npLabel} 倒计时)`;
+                    } else {
+                        dateHint.textContent = `✓ ${inputLabel}（正计时）`;
+                    }
+                } else {
+                    dateHint.textContent = `✓ ${inputLabel}${isCountUp ? '（正计时）' : '（倒计时）'}`;
+                }
             } else { dateHint.style.color='#aaa'; dateHint.textContent='继续输入…'; isCountUp = false; }
         } else {
             const parsed = _parseDateInput(v);
             if (parsed) {
                 const sel = new Date(parsed.iso + 'T00:00:00');
                 isCountUp = sel <= today0;
-                const typeLabel = isCountUp ? '（正计时）' : '（倒计时）';
+                const inputLabel = `${parsed.y}年${parsed.mo}月${parsed.d}日`;
                 dateHint.style.color = '#4A5D23';
-                dateHint.textContent = `✓ ${parsed.y}年${parsed.mo}月${parsed.d}日 ${typeLabel}`;
+                // 已过期 + 有周期 → 预推算下一周期点
+                if (isCountUp && cycleType !== 'none') {
+                    const nextIso = _cdNextCycleDate(parsed.iso, { type: cycleType, num: Math.max(1, parseInt(cycleNumInput.value)||1), cal: 'greg' });
+                    if (nextIso) {
+                        const np = new Date(nextIso + 'T00:00:00');
+                        const npLabel = `${np.getFullYear()}年${String(np.getMonth()+1).padStart(2,'0')}月${String(np.getDate()).padStart(2,'0')}日`;
+                        dateHint.textContent = `✓ ${inputLabel} (已过期，自动周期点：${npLabel} 倒计时)`;
+                    } else {
+                        dateHint.textContent = `✓ ${inputLabel}（正计时）`;
+                    }
+                } else {
+                    dateHint.textContent = `✓ ${inputLabel}${isCountUp ? '（正计时）' : '（倒计时）'}`;
+                }
             } else { dateHint.style.color='#aaa'; dateHint.textContent='继续输入…'; isCountUp = false; }
         }
     }
@@ -1896,9 +1951,6 @@ async function _cdShowAddTaskModal() {
         // isCountUp 已在 _onDateInput 中根据日期自动设置
 
         const selectedTags = isUser ? [] : (availTags.length > 0 ? [...modal.querySelectorAll('[data-selected="1"]')].map(b=>b.textContent) : []);
-        const today0 = new Date(); today0.setHours(0,0,0,0);
-        const targetDate = new Date(isoDate+'T00:00:00');
-        const totalDays = Math.round(Math.abs(targetDate - today0) / 86400000);
 
         // 周期配置
         let cycleConfig = null;
@@ -1907,14 +1959,45 @@ async function _cdShowAddTaskModal() {
             cycleConfig = { type: cycleType, num: cycleNum, cal: useVCal ? 'vcal' : 'greg' };
         }
 
+        // ── 提交拦截：过期任务 + 有周期 → 前置推进到未来目标日 ──────
+        let submitDate = isoDate;
+        let submitIsCountUp = isCountUp;
+        let submitCreatedAt = undefined;  // 默认由服务端取 Date.now()
+
+        if (isCountUp && cycleConfig) {
+            const today0 = new Date(); today0.setHours(0,0,0,0);
+            // 追赶：找到最近的 > today 的目标日
+            let cur = isoDate;
+            let futureDate = null;
+            while (true) {
+                const candidate = _cdNextCycleDate(cur, cycleConfig);
+                if (!candidate) break;
+                const candidateDate = new Date(candidate + 'T00:00:00');
+                if (candidateDate > today0) { futureDate = candidate; break; }
+                cur = candidate;
+            }
+            if (futureDate) {
+                submitDate = futureDate;
+                submitIsCountUp = false;      // 替换为倒计时
+                submitCreatedAt = Date.now(); // 锚点重置为当前时间
+            }
+        }
+
+        const today0 = new Date(); today0.setHours(0,0,0,0);
+        const targetDate = new Date(submitDate + 'T00:00:00');
+        const anchorTs = submitCreatedAt || Date.now();
+        // 计算公式统一：总天数 = 目标日 - createTime（以天为单位）
+        const totalDays = Math.round(Math.abs(targetDate - today0) / 86400000);
+
         submitBtn.disabled = true; submitBtn.textContent = '保存中…';
         try {
             const res = await _cdFetch('/cd/tasks/add', {
                 method: 'POST',
                 body: JSON.stringify({
-                    name, date: isoDate, tags: selectedTags, totalDays,
-                    taskType: isCountUp ? 'countup' : 'countdown',
+                    name, date: submitDate, tags: selectedTags, totalDays,
+                    taskType: submitIsCountUp ? 'countup' : 'countdown',
                     useVCal, cycle: cycleConfig,
+                    ...(submitCreatedAt ? { createdAt: submitCreatedAt } : {}),
                 }),
             });
             const data = await res.json();
@@ -2946,10 +3029,23 @@ function _renderCdProgress(item, diffDays, color, isCountUp) {
         const fill  = document.createElement('div'); fill.className  = 'cd-prog-fill'; fill.style.background = color; fill.style.width = Math.max(2, pct) + '%';
         track.appendChild(fill); wrap.appendChild(labels); wrap.appendChild(track);
     } else {
-        const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
-        let totalDays = parseInt(localStorage.getItem(_cdKey) || '0');
-        if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
-        const passedDays = totalDays - diffDays;
+        // 核心公式：已过天数 = 今日 - createTime；总天数 = 目标日 - createTime
+        const today0 = new Date(); today0.setHours(0,0,0,0);
+        let totalDays, passedDays;
+        if (item.createdAt) {
+            const createDay = new Date(item.createdAt); createDay.setHours(0,0,0,0);
+            const targetDay = new Date(item.date + 'T00:00:00');
+            totalDays  = Math.max(1, Math.round((targetDay - createDay) / 86400000));
+            passedDays = Math.max(0, Math.round((today0 - createDay) / 86400000));
+        } else {
+            // 旧任务无 createdAt：fallback 到 totalDays 字段 / localStorage
+            const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
+            totalDays = (typeof item.totalDays === 'number' && item.totalDays > 0)
+                ? item.totalDays
+                : (parseInt(localStorage.getItem(_cdKey) || '0') || diffDays);
+            if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
+            passedDays = totalDays - diffDays;
+        }
         const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
         const labels = document.createElement('div'); labels.style.cssText = 'display:flex;justify-content:space-between;font-size:.46rem;color:#aaa;margin-bottom:3px;';
         const lL = document.createElement('span'); lL.textContent = `已过 ${passedDays} 天`;
@@ -2964,7 +3060,7 @@ function _renderCdProgress(item, diffDays, color, isCountUp) {
 
 function _renderCdDateRow(item, isCountUp) {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:3em 1fr;row-gap:2px;align-items:baseline;';
+    wrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:4em 1fr;row-gap:2px;align-items:baseline;';
     const tDate = new Date(item.date + 'T12:00:00');
     const vd = _cdVDate(tDate);
     const r2 = document.createElement('div'); r2.className = 'cd-date-row';
@@ -2976,7 +3072,12 @@ function _renderCdDateRow(item, isCountUp) {
     if (vd) {
         const r1 = document.createElement('div'); r1.className = 'cd-date-row';
         const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
-        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.textContent = `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vd.wk}`;
+        const v1 = document.createElement('span'); v1.className = 'cd-date-val';
+        // 统一调用全局 getDayDiff 计算相对于当年春分的偏移量，再取 WKS[off % 7]
+        const vEq = getShEq(vd.vY);
+        const vOff = getDayDiff(vEq, tDate);
+        const vWk = WKS[vOff % 7];
+        v1.textContent = `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vWk}`;
         r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
     }
     return wrap;
