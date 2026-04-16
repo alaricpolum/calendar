@@ -292,7 +292,7 @@
     .is-full-moon::before { content:""; position:absolute; width:28px; height:28px; border:2px solid #B8860B; border-radius:50%; z-index:1; pointer-events:none; opacity:.5; }
     .is-wangshu::before   { content:""; position:absolute; width:28px; height:28px; border:2px solid #DF1B12; border-radius:50%; z-index:1; pointer-events:none; opacity:.8; }
 
-    .v-num   { font-size: 1.12rem; font-weight: 800; line-height: 1.1; position: relative; z-index: 2; pointer-events: none; margin-bottom: -1px; }
+    .v-num   { font-size: 1.12rem; font-weight: 800; line-height: 1.1; position: relative; z-index: 2; pointer-events: none; margin-bottom: -1px; font-variant-numeric: tabular-nums; }
     .g-info  { font-size: .52rem; color: #6e7e7e; line-height: 1; font-weight: 600; position: relative; z-index: 2; pointer-events: none; margin-top: 1px; width: 100%; text-align: center; overflow: hidden; white-space: nowrap; }
     .term-tag { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: .9rem; font-weight: 900; opacity: .2; width: 1em; line-height: 1; text-align: center; z-index: 0; pointer-events: none; letter-spacing: -2px; }
     .major-red  { color: var(--accent) !important; opacity: .8 !important; }
@@ -338,7 +338,7 @@
     .tt-item  { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
     .tt-item:last-child { margin-bottom:0; }
     .tt-label { color:#7f8c8d; font-size:.65rem; font-weight:600; }
-    .tt-val   { color:var(--primary); font-weight:700; font-size:.75rem; font-family:'Segoe UI',system-ui,sans-serif; }
+    .tt-val   { color:var(--primary); font-weight:700; font-size:.75rem; font-family:'Segoe UI',system-ui,sans-serif; font-variant-numeric: tabular-nums; }
     .tt-val.term-val { color:var(--accent); }
     .extra-box { border:1.5px solid var(--accent); background:#fffcf0; box-shadow:0 4px 15px rgba(178,34,34,.1); }
 
@@ -905,7 +905,7 @@
     .cd-prog-fill    { height: 100%; border-radius: 2px; transition: width .4s; }
     .cd-date-row     { display: contents; }
     .cd-date-lbl     { font-size: .48rem; color: #aaa; font-weight: 600; letter-spacing: 1px; }
-    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); text-align: right; }
+    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
     .cd-action-row   { display: flex; gap: 5px; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--muted); }
     .cd-action-btn   { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 4px; background: var(--bg); cursor: pointer; transition: background .15s; }
     .cd-action-btn:hover { background: var(--muted); }
@@ -1006,7 +1006,7 @@
         transition: color .15s;
     }
     .cd-admin-del:hover { color: #B22222; border-color: #B22222; }
-    .cd-admin-btns { display: flex; gap: 8px; margin-top: 4px; }
+    .cd-admin-btns { display: flex; gap: 8px; margin-top: 0; }
     .cd-admin-submit {
         flex: 1; padding: 8px; background: #6B1010; color: #fff;
         border: none; border-radius: 10px; font-size: .72rem; font-weight: 700;
@@ -1104,7 +1104,7 @@
                 <button class="mode-btn"        id="btnModeV">更替 ➔ 公历</button>
             </div>
             <div style="display:flex;gap:10px;">
-                <input type="text" id="convIn" placeholder="例：20260314">
+                <input type="text" id="convIn" placeholder="例：20260315、2026.3.15、2026/3/15">
                 <button class="btn-act" id="btnConv">转换</button>
             </div>
             <div id="convOut" style="margin-top:10px;font-weight:700;color:var(--accent);font-size:.9rem;transition:all .3s;">➡ 输入公历日期或更替历日期，即可完成双历互转</div>
@@ -1759,8 +1759,9 @@ async function _cdShowAddTaskModal() {
     // ── 名称 ──────────────────────────────────────────────────────
     const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
     const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '目标名称';
-    const nameInput = document.createElement('input'); nameInput.className = 'cd-admin-input'; nameInput.type = 'text'; nameInput.placeholder = '例：Q2版本交付';
-    f1.appendChild(l1); f1.appendChild(nameInput); modal.appendChild(f1);
+    const nameInput = document.createElement('input'); nameInput.className = 'cd-admin-input'; nameInput.type = 'text'; nameInput.placeholder = '例：我的生日、旅行计划';
+    const nameHint = document.createElement('div'); nameHint.style.cssText = 'font-size:.52rem;color:#B22222;min-height:0;margin-top:3px;';
+    f1.appendChild(l1); f1.appendChild(nameInput); f1.appendChild(nameHint); modal.appendChild(f1);
 
     // ── 日期 ──────────────────────────────────────────────────────
     const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
@@ -1770,7 +1771,8 @@ async function _cdShowAddTaskModal() {
     calSwitch.style.cssText = 'font-size:.52rem;color:#2F4F4F;cursor:pointer;text-decoration:underline;';
     calSwitch.textContent = '切换更替历';
     l2wrap.appendChild(l2); l2wrap.appendChild(calSwitch);
-    const dateInput = document.createElement('input'); dateInput.className = 'cd-admin-input'; dateInput.type = 'text'; dateInput.placeholder = '例：20260801（未来=倒计时，过去=正计时）';
+    const dateInput = document.createElement('input'); dateInput.className = 'cd-admin-input'; dateInput.type = 'text';
+    dateInput.placeholder = '例：20260315、2026.3.15、2026/3/15';
     const dateHint = document.createElement('div'); dateHint.style.cssText = 'font-size:.52rem;color:#aaa;margin-top:3px;min-height:1em;';
     f2.appendChild(l2wrap); f2.appendChild(dateInput); f2.appendChild(dateHint);
     modal.appendChild(f2);
@@ -1829,8 +1831,8 @@ async function _cdShowAddTaskModal() {
     });
     f4.appendChild(cycleRow);
 
-    // 周期数量输入行（无时隐藏）
-    const cycleDetail = document.createElement('div'); cycleDetail.style.cssText = 'display:none;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
+    // 周期数量输入行（无时透明占位，保持弹窗高度不变）
+    const cycleDetail = document.createElement('div'); cycleDetail.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;opacity:0;pointer-events:none;transition:opacity .2s;';
     const cyclePrefix = document.createElement('span'); cyclePrefix.style.cssText = 'font-size:.6rem;color:#7f8c8d;'; cyclePrefix.textContent = '每';
     const cycleNumInput = document.createElement('input');
     cycleNumInput.style.cssText = 'width:80px;padding:4px 6px;border:1px solid #2F4F4F;border-radius:6px;font-size:.65rem;text-align:center;background:var(--bg);color:var(--primary);box-sizing:border-box;';
@@ -1841,8 +1843,13 @@ async function _cdShowAddTaskModal() {
     f4.appendChild(cycleDetail);
 
     function _updateCycleDetail() {
-        if (cycleType === 'none') { cycleDetail.style.display = 'none'; return; }
-        cycleDetail.style.display = 'flex';
+        if (cycleType === 'none') {
+            cycleDetail.style.opacity = '0';
+            cycleDetail.style.pointerEvents = 'none';
+            return;
+        }
+        cycleDetail.style.opacity = '1';
+        cycleDetail.style.pointerEvents = '';
         const unitMap = { day:'天', week:'周', month: useVCal?'月（更替历·28天）':'月（公历）', year: useVCal?'年（更替历·春分起算）':'年（公历）', custom:'天' };
         cycleSuffix.textContent = `${unitMap[cycleType] || '天'}重复一次`;
     }
@@ -1850,10 +1857,10 @@ async function _cdShowAddTaskModal() {
     modal.appendChild(f4);
 
     // ── 错误提示 ──────────────────────────────────────────────────
-    const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;'; modal.appendChild(errDiv);
+    const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:0;'; modal.appendChild(errDiv);
 
     // ── 按钮行 ────────────────────────────────────────────────────
-    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
+    const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns'; btnRow.style.marginTop = '0';
     const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
     cancelBtn.addEventListener('click', () => overlay.remove());
     const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '确定';
@@ -1920,31 +1927,36 @@ async function _cdShowAddTaskModal() {
             } else { dateHint.style.color='#aaa'; dateHint.textContent='继续输入…'; isCountUp = false; }
         }
     }
-    dateInput.addEventListener('input', _onDateInput);
+    nameInput.addEventListener('input', () => { nameHint.textContent = ''; nameInput.style.borderColor = ''; });
+    dateInput.addEventListener('input', () => { dateInput.style.borderColor=''; _onDateInput(); });
 
     // ── 切换公历/更替历 ────────────────────────────────────────────
     calSwitch.addEventListener('click', () => {
+        // 首次点击时锁定弹窗高度，防止切换时界面跳动
+        if (!modal.style.minHeight) modal.style.minHeight = modal.offsetHeight + 'px';
         useVCal = !useVCal;
         l2.textContent = useVCal ? '日期（更替历）' : '日期（公历）';
         calSwitch.textContent = useVCal ? '切换公历' : '切换更替历';
         dateInput.value = ''; dateHint.textContent = ''; isCountUp = false;
-        dateInput.placeholder = useVCal ? '例：20250101（更替历）' : '例：20260801';
+        dateInput.placeholder = useVCal
+            ? '例：2026 1 1、20260101、2026年1月1日'
+            : '例：20260315、2026.3.15、2026/3/15';
         _updateCycleDetail();
     });
 
     // ── 提交 ──────────────────────────────────────────────────────
     submitBtn.addEventListener('click', async () => {
         const name = nameInput.value.trim();
-        if (!name) { errDiv.textContent = '请填写目标名称'; nameInput.style.borderColor='#B22222'; return; }
+        if (!name) { nameHint.textContent = '请填写目标名称'; nameInput.style.borderColor='#B22222'; return; }
 
         let isoDate = null;
         if (useVCal) {
             const vp = _parseVCalInput(dateInput.value);
-            if (!vp) { errDiv.textContent = '请填写有效的更替历日期'; dateInput.style.borderColor='#B22222'; return; }
+            if (!vp) { dateHint.style.color='#B22222'; dateHint.textContent='请填写有效的更替历日期'; dateInput.style.borderColor='#B22222'; return; }
             isoDate = vp.iso;
         } else {
             const gp = _parseDateInput(dateInput.value);
-            if (!gp) { errDiv.textContent = '请填写有效的目标日期'; dateInput.style.borderColor='#B22222'; return; }
+            if (!gp) { dateHint.style.color='#B22222'; dateHint.textContent='请填写有效的目标日期'; dateInput.style.borderColor='#B22222'; return; }
             isoDate = gp.iso;
         }
 
@@ -3064,22 +3076,21 @@ function _renderCdDateRow(item, isCountUp) {
     wrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:5px;margin-top:0;margin-bottom:6px;display:grid;grid-template-columns:4em 1fr;row-gap:2px;align-items:baseline;';
     const tDate = new Date(item.date + 'T12:00:00');
     const vd = _cdVDate(tDate);
-    const r2 = document.createElement('div'); r2.className = 'cd-date-row';
+    // 公历行
     const l2 = document.createElement('span'); l2.className = 'cd-date-lbl'; l2.textContent = '公历';
-    const v2 = document.createElement('span'); v2.className = 'cd-date-val';
+    const v2 = document.createElement('span'); v2.className = 'cd-date-val'; v2.style.textAlign = 'right';
     const gWk = WKS[(tDate.getDay() + 6) % 7];
     v2.textContent = `${tDate.getFullYear()}年${String(tDate.getMonth()+1).padStart(2,'0')}月${String(tDate.getDate()).padStart(2,'0')}日 ${gWk}`;
-    r2.appendChild(l2); r2.appendChild(v2); wrap.appendChild(r2);
+    wrap.appendChild(l2); wrap.appendChild(v2);
     if (vd) {
-        const r1 = document.createElement('div'); r1.className = 'cd-date-row';
         const l1 = document.createElement('span'); l1.className = 'cd-date-lbl'; l1.textContent = '更替历';
-        const v1 = document.createElement('span'); v1.className = 'cd-date-val';
+        const v1 = document.createElement('span'); v1.className = 'cd-date-val'; v1.style.textAlign = 'right';
         // 统一调用全局 getDayDiff 计算相对于当年春分的偏移量，再取 WKS[off % 7]
         const vEq = getShEq(vd.vY);
         const vOff = getDayDiff(vEq, tDate);
         const vWk = WKS[vOff % 7];
         v1.textContent = `${vd.vY}年${String(vd.m).padStart(2,'0')}月${String(vd.d).padStart(2,'0')}日 ${vWk}`;
-        r1.appendChild(l1); r1.appendChild(v1); wrap.appendChild(r1);
+        wrap.appendChild(l1); wrap.appendChild(v1);
     }
     return wrap;
 }
@@ -5641,7 +5652,7 @@ function setMode(mode, focus=false) {
     currentMode=mode;
     const i=DOM.convIn, t=DOM.modeToggle;
     t.classList.toggle('v-mode',mode==='V');
-    i.placeholder=mode==='V'?"例：2026年3月14日":"例：20260314 或 2026-3-14";
+    i.placeholder=mode==='V'?"例：2026 1 1、20260101、2026年1月1日":"例：20260315、2026.3.15、2026/3/15";
     document.querySelectorAll('.mode-btn').forEach((b,idx)=>{
         b.classList.toggle('active',(idx===1&&mode==='V')||(idx===0&&mode==='G'));
     });
