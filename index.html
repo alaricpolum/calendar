@@ -278,10 +278,25 @@
     .cell.range-preview:hover { background: rgba(47,79,79,0.07) !important; }
     .cell:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     /* outline 不参与盒模型，不撑高格子；outline-offset:-2px 向内收避免超出边界 */
-    .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 10px rgba(178,34,34,.2); z-index: 50; animation: pulse-today 2s infinite ease-in-out; }
+    /* OPT-10: 用 ::after + opacity/transform 替代 box-shadow 动画，强制 GPU 合成层处理 */
+    .cell.is-today { background: #FFFDF7 !important; outline: 2.5px solid var(--accent); outline-offset: -2px; z-index: 50; }
+    .cell.is-today::after {
+        content: ''; position: absolute; inset: -4px; border-radius: 12px;
+        border: 2px solid rgba(178,34,34,.45);
+        opacity: 0; transform: scale(0.88);
+        will-change: opacity, transform;
+        animation: pulse-today-gpu 2s infinite ease-in-out;
+        pointer-events: none;
+    }
     .cell.is-today .v-num  { color: var(--accent) !important; }
-    .cell.is-today:focus { outline: 2.5px solid var(--accent); outline-offset: -2px; box-shadow: 0 0 0 2px var(--accent), 0 0 10px rgba(178,34,34,.2); animation: none; }
-    @keyframes pulse-today { 0% { box-shadow: 0 0 0 0 rgba(178,34,34,.5); } 70% { box-shadow: 0 0 0 6px rgba(178,34,34,0); } 100% { box-shadow: 0 0 0 0 rgba(178,34,34,0); } }
+    .cell.is-today:focus { outline: 2.5px solid var(--accent); outline-offset: -2px; }
+    .cell.is-today:focus::after { animation: none; opacity: 0; }
+    @keyframes pulse-today-gpu {
+        0%   { opacity: 0;   transform: scale(0.88); }
+        25%  { opacity: 0.9; transform: scale(1.0);  }
+        70%  { opacity: 0;   transform: scale(1.12); }
+        100% { opacity: 0;   transform: scale(0.88); }
+    }
     @keyframes highlight-jump { 0% { box-shadow:0 0 0 0 rgba(47,79,79,.6); background:var(--muted); } 30% { box-shadow:0 0 0 6px rgba(47,79,79,.15); background:#e8f0e8; } 100% { box-shadow:0 0 0 0 rgba(47,79,79,0); background:transparent; } }
     .cell-highlight { animation: highlight-jump 1.8s ease-out forwards !important; }
     /* 移动端（粗指针/触屏）：高亮动画延长至 4s，便于观察 */
@@ -305,9 +320,24 @@
     .m-winter .m-title { color: var(--s-winter); font-size: 1.05rem; }
 
     /* 春分节点 */
-    @keyframes pulse-equinox { 0% { box-shadow:0 0 0 0 rgba(184,134,11,.9); } 70% { box-shadow:0 0 0 12px rgba(184,134,11,0); } 100% { box-shadow:0 0 0 0 rgba(184,134,11,0); } }
-    .cell.is-equinox-today { background:#FFFDF7 !important; outline:2.5px solid #B8860B; outline-offset:-2px; animation:pulse-equinox 1.6s infinite ease-out !important; }
-    .cell.is-equinox-today:focus { outline:2.5px solid #B8860B; outline-offset:-2px; box-shadow: 0 0 0 2px #B8860B; animation: none; }
+    /* OPT-10: 春分节点脉冲同样用 ::after GPU 合成，移除主线程 box-shadow */
+    .cell.is-equinox-today { background:#FFFDF7 !important; outline:2.5px solid #B8860B; outline-offset:-2px; }
+    .cell.is-equinox-today::after {
+        content: ''; position: absolute; inset: -5px; border-radius: 13px;
+        border: 2.5px solid rgba(184,134,11,.75);
+        opacity: 0; transform: scale(0.84);
+        will-change: opacity, transform;
+        animation: pulse-equinox-gpu 1.6s infinite ease-out !important;
+        pointer-events: none;
+    }
+    .cell.is-equinox-today:focus { outline:2.5px solid #B8860B; outline-offset:-2px; }
+    .cell.is-equinox-today:focus::after { animation: none; opacity: 0; }
+    @keyframes pulse-equinox-gpu {
+        0%   { opacity: 0;    transform: scale(0.84); }
+        15%  { opacity: 1;    transform: scale(1.0);  }
+        70%  { opacity: 0;    transform: scale(1.18); }
+        100% { opacity: 0;    transform: scale(0.84); }
+    }
     .cell.is-equinox-today .v-num { color:#DF1B12 !important; }
     .equinox-rings { position:absolute; inset:0; z-index:0; pointer-events:none; overflow:hidden; border-radius:8px; }
     .equinox-yuan  { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.5rem; font-weight:900; color:#B8860B; opacity:.35; z-index:0; pointer-events:none; line-height:1; }
@@ -643,7 +673,7 @@
     }
     .tt-note-save:hover { opacity: .85; }
 
-    /* 更替日"年度回顾"徽章：默认隐藏，专注模式且有权限时悬停/选中显示 */
+    /* 更替日"年度回顾"徽章：默认隐藏，专注模式时悬停/选中显示 */
     .extra-review-badge {
         display: none;
         position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
@@ -652,8 +682,12 @@
         padding: 1px 6px; border-radius: 6px;
         white-space: nowrap; letter-spacing: .5px; pointer-events: none;
     }
-    .focus-mode.has-cd-user .cell:hover .extra-review-badge,
-    .focus-mode.has-cd-user .cell:focus .extra-review-badge { display: block; }
+    .focus-mode .cell:hover .extra-review-badge,
+    .focus-mode .cell:focus .extra-review-badge { display: block; }
+    /* 移动端无 hover，专注模式下始终显示"年度回顾"徽章 */
+    @media (hover: none) {
+        .focus-mode .extra-review-badge { display: block; }
+    }
 
     /* ── 年度回顾弹窗 ─────────────────────────────────────────── */
     #yearReviewOverlay {
@@ -718,10 +752,6 @@
         font-size: .72rem; letter-spacing: .5px;
     }
     .yr-export-btn:hover { filter: brightness(.95); }
-    .yr-export-btn {
-        display: block; width: 100%; margin-top: 10px;
-        font-size: .72rem; letter-spacing: .5px;
-    }
     .yr-footer {
         padding: 10px 18px 14px; border-top: 1px solid var(--muted);
         display: flex; gap: 8px; justify-content: space-between;
@@ -1031,6 +1061,13 @@
     }
     .cd-admin-copy:hover { background: rgba(107,16,16,0.10); }
 
+
+    /* ── 性能补丁：GPU 合成层，减少 CPU 光栅化 ─────────────────── */
+    #daySide, #terminatorLine, #earthAxis, #moonNode, #moonVisualPhase {
+        will-change: transform;
+    }
+    #solidOrbitPath { will-change: stroke-dasharray; }
+    /* .cell.is-today 的脉冲动画已改为 ::after opacity/transform GPU 合成，此处 will-change: box-shadow 无效，已删除 */
 </style>
 </head>
 
@@ -1204,6 +1241,12 @@ const WK_COLORS  = ['#DF1B12','#FFC600','#02639D','#708090','#6B4E9B','#2F4F4F',
 const MOON_NAMES = ["新月","娥眉月","上弦月","盈凸月","满月","亏凸月","下弦月","残月"];
 const SEASON_COLORS = { spring:'#5F9EA0', summer:'#CD5C5C', autumn:'#B8860B', winter:'#708090' };
 const ADMIN_KEYWORDS = /省|自治区|直辖市|特别行政区|地级市|自治州|地区|盟|地级|县级市|市辖区|自治县|旗|自治旗|街道|办事处|乡|镇|村|居委会|社区|县|区|市/;
+// 公共函数：解析 Nominatim display_name → 简短可读地名（_searchCity 和 _doGeolocate 共用）
+function _parseDisplayName(res, fallback) {
+    const raw = res.display_name || res.name;
+    if (!raw) return fallback || null;
+    return raw.split(',').map(s => s.trim()).filter(s => s && ADMIN_KEYWORDS.test(s)).slice(0, 2).join('，') || res.name || fallback || null;
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  倒计时系统 v2 — 服务器存储版
@@ -1223,14 +1266,35 @@ let _cdUser      = null;   // { token, role, name, tags }
 let _cdTasks     = [];     // 从服务器拉取的任务列表
 let _cdActiveIdx = 0;      // 当前显示的任务索引
 
+// ── localStorage 内存缓存层 ────────────────────────────────────
+// 读操作命中缓存直接返回，写操作同步更新缓存后再持久化，避免重复 JSON.parse / IO
+const _lsCache = {};
+function _lsGet(key) {
+    if (key in _lsCache) return _lsCache[key];
+    try { return (_lsCache[key] = localStorage.getItem(key) || null); } catch(_) { return null; }
+}
+function _lsSet(key, val) {
+    _lsCache[key] = val;
+    try { if (val !== null) localStorage.setItem(key, val); else localStorage.removeItem(key); } catch(_) {}
+}
+function _lsRemove(key) { _lsSet(key, null); }
+function _lsGetJSON(key) {
+    if (key in _lsCache) return _lsCache[key];
+    try { return (_lsCache[key] = JSON.parse(localStorage.getItem(key)) || null); } catch(_) { return null; }
+}
+function _lsSetJSON(key, val) {
+    _lsCache[key] = val;
+    try { localStorage.setItem(key, JSON.stringify(val)); } catch(_) {}
+}
+
 // ── token 读写 ──────────────────────────────────────────────────
-function _cdGetToken()       { try { return localStorage.getItem('cdToken') || null; } catch(_) { return null; } }
-function _cdSaveToken(tk)    { try { localStorage.setItem('cdToken', tk); } catch(_) {} }
-function _cdClearToken()     { try { localStorage.removeItem('cdToken'); } catch(_) {} }
+function _cdGetToken()       { return _lsGet('cdToken'); }
+function _cdSaveToken(tk)    { _lsSet('cdToken', tk); }
+function _cdClearToken()     { _lsRemove('cdToken'); }
 
 // ── 图钉置顶 ───────────────────────────────────────────────────
-function _cdGetPinned()      { try { return localStorage.getItem('cdPinned') || null; } catch(_) { return null; } }
-function _cdSetPinned(name)  { try { if(name) localStorage.setItem('cdPinned', name); else localStorage.removeItem('cdPinned'); } catch(_) {} }
+function _cdGetPinned()      { return _lsGet('cdPinned'); }
+function _cdSetPinned(name)  { _lsSet('cdPinned', name || null); }
 
 // ── 带 token 的 fetch 封装 ──────────────────────────────────────
 async function _cdFetch(path, options = {}) {
@@ -1334,7 +1398,7 @@ function _cdShowLoginModal() {
             _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
             overlay.remove();
             await _cdInit();
-            _buildCdCard(); _cdApplyCellColor();
+            _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
             submitBtn.disabled = false; submitBtn.textContent = '登录';
@@ -1410,7 +1474,7 @@ function _cdShowRegisterModal() {
             _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
             overlay.remove();
             await _cdFetchTasks();
-            _buildCdCard(); _cdApplyCellColor();
+            _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
             submitBtn.disabled = false; submitBtn.textContent = '注册';
@@ -1534,7 +1598,7 @@ function _cdShowRedeemModal() {
             history.replaceState(null, '', u.toString());
             overlay.remove();
             await _cdFetchTasks();
-            _buildCdCard(); _cdApplyCellColor();
+            _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
             submitBtn.disabled = false; submitBtn.textContent = '加入';
@@ -1725,7 +1789,7 @@ async function _cdCheckCycleTasks() {
     }
     // 有续期则重新拉取
     await _cdFetchTasks();
-    _buildCdCard(); _cdApplyCellColor();
+    _cdRefresh('force');
 }
 
 async function _cdShowAddTaskModal() {
@@ -2017,7 +2081,7 @@ async function _cdShowAddTaskModal() {
             if (!res.ok) { errDiv.textContent = data.error||'保存失败'; submitBtn.disabled=false; submitBtn.textContent='确定'; return; }
             await _cdFetchTasks();
             overlay.remove();
-            _buildCdCard(); _cdApplyCellColor();
+            _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
             submitBtn.disabled = false; submitBtn.textContent = '确定';
@@ -3055,8 +3119,8 @@ function _renderCdProgress(item, diffDays, color, isCountUp) {
             const _cdKey = 'cdTotal_' + encodeURIComponent(item.name);
             totalDays = (typeof item.totalDays === 'number' && item.totalDays > 0)
                 ? item.totalDays
-                : (parseInt(localStorage.getItem(_cdKey) || '0') || diffDays);
-            if (!totalDays || totalDays < diffDays) { totalDays = diffDays; try { localStorage.setItem(_cdKey, totalDays); } catch(_) {} }
+                : (parseInt(_lsGet(_cdKey) || '0') || diffDays);
+            if (!totalDays || totalDays < diffDays) { totalDays = diffDays; _lsSet(_cdKey, String(totalDays)); }
             passedDays = totalDays - diffDays;
         }
         const pct = totalDays > 0 ? Math.max(2, Math.round(passedDays / totalDays * 100)) : 2;
@@ -3131,7 +3195,7 @@ function _cdCheckArrivalAlert() {
         const targetMs = new Date(dp[0], dp[1]-1, dp[2]).getTime();
         if (targetMs !== todayMs) return false;
         const key = 'cdAlert_' + (item.id || encodeURIComponent(item.name)) + '_' + todayKey;
-        return !localStorage.getItem(key);
+        return !_lsGet(key);
     });
 
     if (!queue.length) return;
@@ -3141,7 +3205,7 @@ function _cdCheckArrivalAlert() {
         if (idx >= queue.length) return;
         const item  = queue[idx];
         const key   = 'cdAlert_' + (item.id || encodeURIComponent(item.name)) + '_' + todayKey;
-        try { localStorage.setItem(key, '1'); } catch(_) {}
+        _lsSet(key, '1');
 
         // 计算摘要信息
         const tDate      = new Date(item.date + 'T12:00:00');
@@ -3160,7 +3224,7 @@ function _cdCheckArrivalAlert() {
         // fallback：老任务没有 totalDays，从 localStorage 读
         if (!totalDays) {
             const cdKey = 'cdTotal_' + encodeURIComponent(item.name);
-            totalDays = parseInt(localStorage.getItem(cdKey) || '0') || null;
+            totalDays = parseInt(_lsGet(cdKey) || '0') || null;
         }
         const weeks = totalDays ? Math.floor(totalDays / 7) : null;
 
@@ -3425,7 +3489,7 @@ function _buildCdCard() {
     btnPrev.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;opacity:${total>1?1:.25};`;
     btnPrev.innerHTML = '<svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M5 1.5L2.5 4 5 6.5" stroke="#2C3E50" stroke-width="1.3" stroke-linecap="round"/></svg>';
     btnPrev.disabled = total <= 1;
-    btnPrev.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = (_cdActiveIdx - 1 + total) % total; _buildCdCard(); _cdApplyCellColor(); });
+    btnPrev.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = (_cdActiveIdx - 1 + total) % total; _cdRefresh('toggle'); });
     const navName = document.createElement('div');
     navName.style.cssText = 'flex:1;text-align:center;font-size:.82rem;font-weight:700;color:var(--primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
     navName.textContent = item.name;
@@ -3433,12 +3497,12 @@ function _buildCdCard() {
 
     pinBtn.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid ${isPinned?'#6B1010':'var(--border)'};background:${isPinned?'rgba(107,16,16,0.08)':'var(--muted)'};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;`;
     pinBtn.innerHTML = `<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M9.5 1.5L14.5 6.5L11 10L9 8L5.5 11.5L4.5 10.5L8 7L6 5L9.5 1.5Z" fill="${isPinned?'#6B1010':'#aaa'}"/><path d="M1.5 14.5L5.5 10.5" stroke="${isPinned?'#6B1010':'#aaa'}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-    pinBtn.addEventListener('click', e => { e.stopPropagation(); _cdSetPinned(isPinned ? null : item.name); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor(); });
+    pinBtn.addEventListener('click', e => { e.stopPropagation(); _cdSetPinned(isPinned ? null : item.name); _cdActiveIdx = 0; _cdRefresh('toggle'); });
     const btnNext = document.createElement('button');
     btnNext.style.cssText = `width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;opacity:${total>1?1:.25};`;
     btnNext.innerHTML = '<svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M3 1.5L5.5 4 3 6.5" stroke="#2C3E50" stroke-width="1.3" stroke-linecap="round"/></svg>';
     btnNext.disabled = total <= 1;
-    btnNext.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = (_cdActiveIdx + 1) % total; _buildCdCard(); _cdApplyCellColor(); });
+    btnNext.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = (_cdActiveIdx + 1) % total; _cdRefresh('toggle'); });
     navRow.appendChild(btnPrev); navRow.appendChild(navName); navRow.appendChild(pinBtn); navRow.appendChild(btnNext);
     card.appendChild(navRow);
 
@@ -3449,7 +3513,7 @@ function _buildCdCard() {
             const dot = document.createElement('div');
             const isActive = i === _cdActiveIdx;
             dot.style.cssText = `width:${isActive?14:5}px;height:5px;border-radius:3px;background:${isActive?color:'#DCD3BC'};cursor:pointer;transition:all .25s;`;
-            dot.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = i; _buildCdCard(); _cdApplyCellColor(); });
+            dot.addEventListener('click', e => { e.stopPropagation(); _cdActiveIdx = i; _cdRefresh('toggle'); });
             dots.appendChild(dot);
         }
         card.appendChild(dots);
@@ -3470,7 +3534,7 @@ function _buildCdCard() {
                 e.stopPropagation();
                 _cdShowDeleteConfirm(item, 0, async () => {
                     await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
-                    await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+                    await _cdFetchTasks(); _cdActiveIdx = 0; _cdRefresh('data');
                 });
             });
             endedDiv.appendChild(delBtn);
@@ -3531,7 +3595,7 @@ function _buildCdCard() {
             e.stopPropagation();
             _cdShowDeleteConfirm(item, diffDays, async () => {
                 await _cdFetch('/cd/tasks/delete', { method: 'POST', body: JSON.stringify({ id: item.id }) });
-                await _cdFetchTasks(); _cdActiveIdx = 0; _buildCdCard(); _cdApplyCellColor();
+                await _cdFetchTasks(); _cdActiveIdx = 0; _cdRefresh('data');
             });
         });
         actRow.appendChild(delBtn);
@@ -3543,23 +3607,18 @@ function _buildCdCard() {
 }
 
 // ── 倒计时卡高度限制：不超过同行月份卡高度，超出内部滚动 ──────────
+// 修复：不再 removeChild 再 insertBefore，避免 DOM 移除导致的页面抖动。
+// month-box 与 cd-card 是网格兄弟节点，month-box 的高度不受 cd-card 内容影响，
+// 直接读取 getBoundingClientRect 即可，无需将 cd-card 临时移出 DOM。
 let _cdResizeObserver = null;
 function _applyCardHeight(card, view) {
     function _sync() {
-        const parent = card.parentNode;
-        const next   = card.nextSibling;
-        if (parent) parent.removeChild(card);
-
-        const allBoxes = [...view.querySelectorAll('.month-box')];
+        // 排除 extra-box（岁末更替期）：其高度在平年↔闰年切换时会发生突变，
+        // 若纳入计算会导致 cd-card 高度跟随抖动，产生闪烁
+        const allBoxes = [...view.querySelectorAll('.month-box:not(.extra-box)')];
         const maxH = allBoxes.length
             ? Math.max(...allBoxes.map(b => b.getBoundingClientRect().height))
             : 0;
-
-        if (parent) {
-            if (next) parent.insertBefore(card, next);
-            else parent.appendChild(card);
-        }
-
         if (maxH > 0) {
             card.style.height    = maxH + 'px';
             card.style.maxHeight = maxH + 'px';
@@ -3570,69 +3629,159 @@ function _applyCardHeight(card, view) {
     if (_cdResizeObserver) { _cdResizeObserver.disconnect(); _cdResizeObserver = null; }
     if (window.ResizeObserver) {
         _cdResizeObserver = new ResizeObserver(() => requestAnimationFrame(_sync));
-        const ref = [...view.querySelectorAll('.month-box')].pop();
+        const ref = [...view.querySelectorAll('.month-box:not(.extra-box)')].pop();
         if (ref) _cdResizeObserver.observe(ref);
     }
 }
 
 // ── 日历格染色（跟随当前激活的倒计时/正计时）──────────────────────────
-function _cdApplyCellColor() {
-    _cellCache.forEach(({ cell }) => { cell.classList.remove('cd-range', 'cd-target'); delete cell.dataset.cdDays; });
-    _extraCache.forEach(cell => { if (cell) { cell.classList.remove('cd-range', 'cd-target'); delete cell.dataset.cdDays; } });
-    // 清除旧的主题色 CSS 变量
-    DOM.calView.style.removeProperty('--cd-color-range');
-    DOM.calView.style.removeProperty('--cd-color-target');
-    DOM.calView.style.removeProperty('--cd-color-outline');
-    const list = _cdSortedTasks();
-    if (!list.length) return;
-    const item = list[_cdActiveIdx];
-    if (!item) return;
-    const now = new Date();
-    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const _dp = item.date.split('-').map(Number);
-    const targetMs = new Date(_dp[0], _dp[1]-1, _dp[2]).getTime();
-    const isCountUp = item.taskType === 'countup';
-    // 与卡片保持一致：正计时 #854F0B，倒计时 #2F4F4F
-    const themeColor = isCountUp ? '#854F0B' : '#2F4F4F';
-    const themeR = isCountUp ? '133,79,11' : '47,79,79';
-    DOM.calView.style.setProperty('--cd-color-range',   `rgba(${themeR},0.08)`);
-    DOM.calView.style.setProperty('--cd-color-target',  `rgba(${themeR},0.18)`);
-    DOM.calView.style.setProperty('--cd-color-outline', themeColor);
+// ── OPT-7：差集染色 —— [prevLo, prevHi] 记录上次范围，仅清除旧、写入新的边界格 ──
+let _cdPrevLo = -1, _cdPrevHi = -1, _cdPrevTarget = -1; // 上次着色范围（offset 索引）
 
-    if (isCountUp) {
-        // 正计时：item.date 是起点（过去），今天是终点
-        // 起点在未来则无需高亮
-        if (targetMs >= todayMs) return;
-        const diffDaysTotal = Math.round((todayMs - targetMs) / DAY_MS);
-        const applyColor = cell => {
-            const data = _cellDataMap.get(cell); if (!data) return;
-            const nums = data.gStr.match(/\d+/g); if (!nums) return;
-            const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
-            // 起点格：cd-target（显示已过天数）
-            if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
-            // 起点到今天之间的格：cd-range（不含今天，今天沿用 is-today 样式）
-            else if (cellMs > targetMs && cellMs < todayMs) cell.classList.add('cd-range');
-        };
-        _cellCache.forEach(({ cell }) => applyColor(cell));
-        _extraCache.forEach(cell => { if (cell) applyColor(cell); });
-    } else {
-        // 倒计时：item.date 是终点（未来），今天是起点
-        // 目标日已过则无需高亮
-        if (targetMs <= todayMs) return;
-        const diffDaysTotal = Math.round((targetMs - todayMs) / DAY_MS);
-        const applyColor = cell => {
-            const data = _cellDataMap.get(cell); if (!data) return;
-            const nums = data.gStr.match(/\d+/g); if (!nums) return;
-            const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
-            // 今天到目标日之间的格：cd-range（不含今天，今天沿用 is-today 样式）
-            if (cellMs > todayMs && cellMs < targetMs) cell.classList.add('cd-range');
-            // 目标格：cd-target（显示剩余天数）
-            else if (cellMs === targetMs) { cell.classList.add('cd-target'); cell.dataset.cdDays = diffDaysTotal; }
-        };
-        _cellCache.forEach(({ cell }) => applyColor(cell));
-        _extraCache.forEach(cell => { if (cell) applyColor(cell); });
+function _cdApplyCellColor() {
+    const cv = DOM.calView.style;
+    const list = _cdSortedTasks(); 
+    if (!list.length) {
+        // 无任务：仅清除上次范围，跳过全量遍历
+        if (_cdPrevLo >= 0) {
+            for (let i = _cdPrevLo; i <= _cdPrevHi; i++) {
+                const c = _cellCache[i]?.cell; if (!c) continue;
+                if (c.classList.contains('cd-range') || c.classList.contains('cd-target')) {
+                    c.classList.remove('cd-range', 'cd-target'); delete c.dataset.cdDays;
+                }
+            }
+            _extraCache.forEach(cell => { if (cell) { cell.classList.remove('cd-range','cd-target'); delete cell.dataset.cdDays; } });
+            _cdPrevLo = _cdPrevHi = _cdPrevTarget = -1;
+            cv.removeProperty('--cd-color-range'); cv.removeProperty('--cd-color-target'); cv.removeProperty('--cd-color-outline');
+        }
+        return;
     }
+    const item = list[_cdActiveIdx]; if (!item) return;
+    const todayMs = _cachedTodayMs();
+    const _dp = item.date.split('-');
+    const targetMs = new Date(+_dp[0], +_dp[1]-1, +_dp[2]).getTime();
+    const isCountUp = item.taskType === 'countup';
+    const themeColor = isCountUp ? '#854F0B' : '#2F4F4F';
+    const themeR     = isCountUp ? '133,79,11' : '47,79,79';
+
+    // 计算新的 lo/hi（基于 offset 索引，与 _cellCache 对齐）
+    let newLo = -1, newHi = -1, newTarget = -1;
+    if (isCountUp) {
+        if (targetMs < todayMs) {
+            for (let i = 0; i < _cellCache.length; i++) {
+                const d = _cellDataMap.get(_cellCache[i]?.cell); if (!d) continue;
+                if (d.cellMs === targetMs) { if (newLo < 0) newLo = i; newTarget = i; }
+                else if (d.cellMs > targetMs && d.cellMs < todayMs) { if (newLo < 0) newLo = i; newHi = i; }
+            }
+        }
+    } else {
+        if (targetMs > todayMs) {
+            for (let i = 0; i < _cellCache.length; i++) {
+                const d = _cellDataMap.get(_cellCache[i]?.cell); if (!d) continue;
+                if (d.cellMs > todayMs && d.cellMs < targetMs) { if (newLo < 0) newLo = i; newHi = i; }
+                else if (d.cellMs === targetMs) { if (newLo < 0) newLo = i; newTarget = i; newHi = i; }
+            }
+        }
+    }
+
+    // 差集：清除旧范围中不在新范围内的格子
+    if (_cdPrevLo >= 0) {
+        for (let i = _cdPrevLo; i <= _cdPrevHi; i++) {
+            if (i >= newLo && i <= newHi) continue; // 新范围内保留
+            const c = _cellCache[i]?.cell; if (!c) continue;
+            const hasCd = c.classList.contains('cd-range') || c.classList.contains('cd-target');
+            if (hasCd) { c.classList.remove('cd-range', 'cd-target'); delete c.dataset.cdDays; }
+        }
+        _extraCache.forEach(cell => { if (cell) { cell.classList.remove('cd-range','cd-target'); delete cell.dataset.cdDays; } });
+    }
+
+    if (newLo < 0 && newHi < 0 && newTarget < 0) {
+        // 新范围为空
+        cv.removeProperty('--cd-color-range'); cv.removeProperty('--cd-color-target'); cv.removeProperty('--cd-color-outline');
+        _cdPrevLo = _cdPrevHi = _cdPrevTarget = -1;
+        return;
+    }
+
+    // 更新 CSS 自定义属性（脏检查，避免重复写）
+    const newRangeVal  = `rgba(${themeR},0.08)`;
+    const newTargetVal = `rgba(${themeR},0.18)`;
+    if (cv.getPropertyValue('--cd-color-range') !== newRangeVal)   cv.setProperty('--cd-color-range',   newRangeVal);
+    if (cv.getPropertyValue('--cd-color-target') !== newTargetVal)  cv.setProperty('--cd-color-target',  newTargetVal);
+    if (cv.getPropertyValue('--cd-color-outline') !== themeColor)   cv.setProperty('--cd-color-outline', themeColor);
+
+    // 增量写入：只对新范围中尚未着色的格子操作
+    const diff = isCountUp
+        ? Math.round((todayMs - targetMs) / DAY_MS)
+        : Math.round((targetMs - todayMs) / DAY_MS);
+
+    const lo = Math.max(0, newLo < 0 ? newTarget : newLo);
+    const hi = Math.max(lo, newHi < 0 ? newTarget : newHi);
+    for (let i = lo; i <= hi; i++) {
+        const c = _cellCache[i]?.cell; if (!c) continue;
+        const d = _cellDataMap.get(c); if (!d || d.cellMs === undefined) continue;
+        const isTarget = d.cellMs === targetMs;
+        const inRange  = isCountUp
+            ? (d.cellMs > targetMs && d.cellMs < todayMs)
+            : (d.cellMs > todayMs  && d.cellMs < targetMs);
+        if (isTarget) {
+            if (!c.classList.contains('cd-target')) c.classList.add('cd-target');
+            c.dataset.cdDays = diff;
+        } else if (inRange) {
+            if (!c.classList.contains('cd-range')) c.classList.add('cd-range');
+        }
+    }
+    // 更替日（少量，直接全量处理）
+    _extraCache.forEach(cell => {
+        if (!cell) return;
+        const d = _cellDataMap.get(cell); if (!d || d.cellMs === undefined) return;
+        const isTarget = d.cellMs === targetMs;
+        const inRange  = isCountUp ? (d.cellMs > targetMs && d.cellMs < todayMs) : (d.cellMs > todayMs && d.cellMs < targetMs);
+        if (isTarget) { cell.classList.add('cd-target'); cell.dataset.cdDays = diff; }
+        else if (inRange) { cell.classList.add('cd-range'); }
+    });
+
+    _cdPrevLo = lo; _cdPrevHi = hi; _cdPrevTarget = newTarget;
 }
+// ═══════════════════════════════════════════════════════════════
+//  _cdRefresh：倒计时卡片的统一事件驱动刷新入口
+//  触发时机：切换按钮点击、检测到本地日期变更、进入/退出观测模式、
+//            数据拉取完成、页面重新可见且日期已变。
+//  确保 _buildCdCard + _cdApplyCellColor 不在 rAF 驱动的 update 循环中执行。
+// ═══════════════════════════════════════════════════════════════
+let _cdRefreshPending = false;
+let _cdRefreshRaf = null;
+let _cdLastRefreshDateStr = '';
+
+// reason 优先级：'force' > 'date-change'/'visibility' > 其他
+// 已有 pending 时，若新 reason 优先级更高则覆盖，不静默丢弃
+const _REASON_PRIORITY = { force: 2, 'date-change': 1, visibility: 1 };
+let _cdRefreshReason = null;
+
+function _cdRefresh(reason) {
+    const newPrio = _REASON_PRIORITY[reason] ?? 0;
+    const curPrio = _REASON_PRIORITY[_cdRefreshReason] ?? 0;
+    // 更新 reason（取优先级更高者）
+    if (!_cdRefreshPending || newPrio > curPrio) {
+        _cdRefreshReason = reason;
+    }
+    if (_cdRefreshPending) return; // rAF 已在队列，不重复注册
+    _cdRefreshPending = true;
+    if (_cdRefreshRaf) cancelAnimationFrame(_cdRefreshRaf);
+    _cdRefreshRaf = requestAnimationFrame(() => {
+        _cdRefreshRaf = null;
+        _cdRefreshPending = false;
+        const effectiveReason = _cdRefreshReason;
+        _cdRefreshReason = null;
+        // 日期变更检查：仅在日期真正改变时或强制触发时执行
+        const todayStr = new Date().toDateString();
+        const isDateChange = effectiveReason === 'date-change' || effectiveReason === 'visibility';
+        if (isDateChange && todayStr === _cdLastRefreshDateStr) return;
+        if (isDateChange) _cdLastRefreshDateStr = todayStr;
+        _buildCdCard();
+        _cdApplyCellColor();
+    });
+}
+
 const NOMINATIM_HEADERS = { 'Accept-Language': 'zh', 'User-Agent': 'GengTiLi-Calendar/1.0 (https://alaricpolum.github.io/calendar/)' };
 const VC_COND_MAP = {
     'Clear':'晴朗','Partially cloudy':'晴间多云','Overcast':'阴天','Cloudy':'多云',
@@ -3668,7 +3817,7 @@ let _currentLat = null, _currentLon = null, _currentCity = null;
 // ── 专注模式数据 ──────────────────────────────────────────────────
 // _focusMarks: { "2026年4月1日": { dot: 'red'|'blue'|'green', star: true } }
 let _focusMarks = {};
-try { _focusMarks = JSON.parse(localStorage.getItem('focusMarks') || '{}'); } catch(_) {}
+try { _focusMarks = _lsGetJSON('focusMarks') || {}; } catch(_) {}
 // _rangeStart/_rangeEnd: 区间高亮的起止格子 offset（基于当前渲染年份）
 let _rangeStart = null, _rangeEnd = null;
 let _lastYearReviewExtraData = null; // 缓存最近一次年度回顾的 extraData，供翻页复用
@@ -3721,7 +3870,8 @@ const _TERM_CACHE_MAX = 50;
 function _calcTermOffsets(year) {
     if (_termOffsetsCache[year]) return _termOffsetsCache[year];
     const keys = Object.keys(_termOffsetsCache);
-    if (keys.length >= _TERM_CACHE_MAX) keys.slice(0, _TERM_CACHE_MAX >> 1).forEach(k => delete _termOffsetsCache[k]);
+    // 修复⑥：>= 改为 >，避免第50项写入后立刻淘汰，缓存频繁在25~50间抖动
+    if (keys.length > _TERM_CACHE_MAX) keys.slice(0, _TERM_CACHE_MAX >> 1).forEach(k => delete _termOffsetsCache[k]);
     const springEq  = getShEq(year);
     const springJDE = (springEq.getTime() / DAY_MS) + JD_EPOCH;
     const result    = {};
@@ -3733,6 +3883,11 @@ function _calcTermOffsets(year) {
         const off       = Math.round((termDate - springEq) / DAY_MS);
         if (off >= 0 && off < 366) result[off] = TERM_NAMES[i];
     }
+    // 修复④：同时缓存排好序的数组，_updateTermHints 直接复用，省去每秒 entries+map+sort
+    result._sorted = Object.entries(result)
+        .filter(([k]) => k !== '_sorted')
+        .map(([o, n]) => [+o, n])
+        .sort((a, b) => a[0] - b[0]);
     _termOffsetsCache[year] = result;
     return result;
 }
@@ -3791,7 +3946,7 @@ function getShEq(year) {
                     const dt = new Date(entry.date+'T00:00:00');
                     if (dt.getTime() !== _eqCache[year]?.getTime()) {
                         _eqCache[year] = dt;
-                        render(); update();
+                        _forceRenderFlag = true; render(); _SCHED.forceRefresh();
                     }
                 }
             }).catch(() => {});
@@ -4252,62 +4407,140 @@ function aqiLabel(v) {
 }
 
 function _updateSeasonTagTime() {
-    if (!_weatherLastUpdate) return;
+    // 天气从未成功加载过：只要已有坐标就显示城市/坐标 + 离线提示，不 return
+    if (!_weatherLastUpdate) {
+        if (_currentLat !== null && _weatherOffline) {
+            DOM.seasonSyncTag.innerText = `${_currentCity||'当前位置'} · 天气获取失败`;
+            DOM.seasonSyncTag.style.opacity = '0.6';
+        }
+        return;
+    }
     const mins = Math.floor((Date.now()-_weatherLastUpdate.getTime())/60000);
     const timeStr = mins<1?'刚刚':mins+'分钟前';
     const offlineStr = _weatherOffline ? '（离线）' : '';
     DOM.seasonSyncTag.innerText = `${_currentCity||'当前位置'} · ${timeStr}${offlineStr}`;
     DOM.seasonSyncTag.style.opacity = _weatherOffline ? '0.6' : '1';
 }
+// 预报卡预置节点缓存（7张卡，各含 lbl/rain/tmax/tmin 4个节点）
+// 首次调用时惰性构建，15分钟刷新时只改 textContent/style/className，零 DOM 重建
+const _fcCards = [];
+function _ensureFcCards() {
+    if (_fcCards.length === 7) return;
+    DOM.forecastBrief.textContent = '';
+    for (let i = 0; i < 7; i++) {
+        const card  = document.createElement('div'); card.className = 'fc-day';
+        const left  = document.createElement('div'); left.className  = 'fc-left';
+        const lbl   = document.createElement('span'); lbl.className  = 'fc-label';
+        const rain  = document.createElement('span'); rain.className = 'fc-rain';
+        left.appendChild(lbl); left.appendChild(rain);
+        const divEl = document.createElement('div'); divEl.className = 'fc-divider';
+        const right = document.createElement('div'); right.className = 'fc-right';
+        const tmax  = document.createElement('span'); tmax.className = 'fc-max';
+        const tmin  = document.createElement('span'); tmin.className = 'fc-min';
+        right.appendChild(tmax); right.appendChild(tmin);
+        card.appendChild(left); card.appendChild(divEl); card.appendChild(right);
+        DOM.forecastBrief.appendChild(card);
+        _fcCards.push({ card, lbl, rain, tmax, tmin });
+    }
+}
+
 function _renderForecast(days) {
     if (!DOM.forecastBrief || !days) return;
+    _ensureFcCards();
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    // 今天公历星期几（0=周日…6=周六），转换为更替历星期索引（0=周一…6=周日）
-    const todayWkIdx = (now.getDay() + 6) % 7; // 公历今日对应更替历 WKS 的索引
-    DOM.forecastBrief.textContent = '';
-    days.slice(0,7).forEach(d => {
-        const isToday = d.datetime===todayStr;
+    const todayWkIdx = (now.getDay() + 6) % 7;
+    const _fc2disp = v => _tempUnit==='F' ? Math.round(v*9/5+32) : Math.round(v);
+    days.slice(0,7).forEach((d, i) => {
+        const { card, lbl, rain, tmax, tmin } = _fcCards[i];
+        const isToday = d.datetime === todayStr;
         const gD = new Date(d.datetime+'T12:00:00');
         let vY = gD.getFullYear(); if (gD < getShEq(vY)) vY--;
         const diff   = getDayDiff(getShEq(vY), gD);
         const total  = isLeapYearV(vY);
         const precip = Math.round(d.precipprob??0);
         const isGengti = diff >= 364;
-        const wkIdx  = diff % 7; // 该格更替历星期索引
+        const wkIdx  = diff % 7;
         const label  = isGengti ? ((total===365 || diff===365) ? 'A' : (diff===364 ? 'B' : 'A')) : (isToday?'今天':WKS[wkIdx]);
-        // 虚线框：非今天、该格更替历星期索引（含更替日按其offset计算）与公历今日星期一致
         const isSameWday = !isToday && (diff % 7) === todayWkIdx;
-
-        const card = document.createElement('div');
         card.className = 'fc-day' + (isToday?' fc-today':'') + (isSameWday?' fc-same-wday':'');
-
-        const left = document.createElement('div'); left.className='fc-left';
-        const lbl  = document.createElement('span'); lbl.className='fc-label'; lbl.textContent=label;
-        const rain = document.createElement('span'); rain.className='fc-rain';
-        rain.textContent=precip+'%'; rain.style.color=precipColor(precip);
-        left.appendChild(lbl); left.appendChild(rain);
-
-        const div = document.createElement('div'); div.className='fc-divider';
-
-        const right = document.createElement('div'); right.className='fc-right';
-        const _fc2disp = v => _tempUnit==='F' ? Math.round(v*9/5+32) : Math.round(v);
-        const tmax  = document.createElement('span'); tmax.className='fc-max'; tmax.textContent=_fc2disp(d.tempmax)+'°';
-        const tmin  = document.createElement('span'); tmin.className='fc-min'; tmin.textContent=_fc2disp(d.tempmin)+'°';
-        right.appendChild(tmax); right.appendChild(tmin);
-
-        card.appendChild(left); card.appendChild(div); card.appendChild(right);
-        DOM.forecastBrief.appendChild(card);
+        lbl.textContent  = label;
+        rain.textContent = precip + '%'; rain.style.color = precipColor(precip);
+        tmax.textContent = _fc2disp(d.tempmax) + '°';
+        tmin.textContent = _fc2disp(d.tempmin) + '°';
     });
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  Tooltip
 // ═══════════════════════════════════════════════════════════════
+// ── OPT-5：Tooltip 内部结构惰性初始化，后续只修改 textContent/style ────────
+let _ttBuilt = false;
+// 持久化节点引用（首次构建后永久保留）
+const _ttNodes = {};
+
+function _buildTooltipSkeleton() {
+    if (_ttBuilt) return;
+    _ttBuilt = true;
+    const tt = DOM.tooltip;
+    tt.innerHTML = '';
+
+    // ── 标题区（可复用，根据类型调整样式） ──
+    const _ttHeader = document.createElement('div');
+    _ttHeader.id = 'tt-hdr';
+    _ttHeader.style.cssText = 'text-align:center;padding:8px 12px 6px;border-bottom:1px dashed #DCD3BC;';
+    const _ttHdrRow = document.createElement('div');  // 双荣格用 flex 行
+    _ttHdrRow.id = 'tt-hdr-row';
+    _ttHdrRow.style.cssText = 'display:flex;justify-content:center;align-items:baseline;gap:8px;';
+    const _ttHdrTitle = document.createElement('div');
+    _ttHdrTitle.id = 'tt-hdr-title';
+    _ttHdrTitle.style.cssText = 'font-size:.88rem;font-weight:900;letter-spacing:2px;';
+    const _ttHdrTitle2 = document.createElement('span'); // 双荣第二 span
+    _ttHdrTitle2.id = 'tt-hdr-title2';
+    _ttHdrTitle2.style.cssText = 'font-size:.88rem;font-weight:900;letter-spacing:2px;';
+    const _ttHdrSep = document.createElement('span');
+    _ttHdrSep.style.cssText = 'font-size:.65rem;color:#ccc;'; _ttHdrSep.textContent = '·';
+    const _ttHdrSub = document.createElement('div');
+    _ttHdrSub.id = 'tt-hdr-sub';
+    _ttHdrSub.style.cssText = 'font-size:.65rem;font-weight:700;margin-top:2px;letter-spacing:1px;opacity:.85;';
+    _ttHeader.appendChild(_ttHdrRow);
+    _ttHeader.appendChild(_ttHdrSub);
+    tt.appendChild(_ttHeader);
+
+    // ── 数据行区 ──
+    const _ttBody = document.createElement('div');
+    _ttBody.style.cssText = 'padding:7px 12px 8px;display:flex;flex-direction:column;gap:4px;';
+    function _makeRow(labelTxt) {
+        const row = document.createElement('div'); row.className = 'tt-item';
+        const l = document.createElement('span'); l.className = 'tt-label'; l.textContent = labelTxt;
+        const v = document.createElement('span'); v.className = 'tt-val';
+        row.appendChild(l); row.appendChild(v);
+        _ttBody.appendChild(row);
+        return v;
+    }
+    _ttNodes.dayGap  = _makeRow('距今天数');
+    _ttNodes.moon    = _makeRow('月相进度');
+    _ttNodes.term    = _makeRow('岁律节点');
+    _ttNodes.wkday   = _makeRow('公历星期');
+    tt.appendChild(_ttBody);
+
+    // 保存对 header 节点的引用
+    _ttNodes.header   = _ttHeader;
+    _ttNodes.hdrRow   = _ttHdrRow;
+    _ttNodes.hdrTitle = _ttHdrTitle;
+    _ttNodes.hdrTitle2= _ttHdrTitle2;
+    _ttNodes.hdrSep   = _ttHdrSep;
+    _ttNodes.hdrSub   = _ttHdrSub;
+    // focus-mode 专区（稍后按需 append）
+    _ttNodes.focusSection = null;
+}
+
 function showTooltip(e, data) {
     e.stopPropagation();
     // 专注模式 + 有权限 + 更替日 A → 触发年度回顾弹窗
-    if (data.isExtra && data.extraName === '更替日 A' && document.body.classList.contains('focus-mode') && _cdUser) {
+    if (data.isExtra && data.extraName === '更替日 A' && document.body.classList.contains('focus-mode')) {
+        // 额外阻止冒泡：防止 click 事件冒泡到 body 后再触发 yearReviewOverlay 的关闭逻辑
+        if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
         _showYearReview(data.vYear, data);
         return;
     }
@@ -4315,8 +4548,19 @@ function showTooltip(e, data) {
     const tt  = DOM.tooltip;
     const now = new Date();
     const cellId = data.gStr+'_'+data.offset;
-    const gNums  = data.gStr.match(/\d+/g);
-    const targetDate = new Date(+gNums[0], +gNums[1]-1, +gNums[2], now.getHours(), now.getMinutes(), now.getSeconds());
+
+    // OPT-5: 解析 gStr 不再用 match(/\d+/g)，改用预计算 cellMs 直接读取年月日
+    const _cData = _cellDataMap.get(e.target?.closest?.('.cell') || e.target);
+    let gY, gM, gD_num;
+    if (_cData && _cData.cellMs !== undefined) {
+        const _d = new Date(_cData.cellMs);
+        gY = _d.getFullYear(); gM = _d.getMonth(); gD_num = _d.getDate();
+    } else {
+        const gNums = data.gStr.match(/\d+/g);
+        gY = +gNums[0]; gM = +gNums[1]-1; gD_num = +gNums[2];
+    }
+    const targetDate = new Date(gY, gM, gD_num, now.getHours(), now.getMinutes(), now.getSeconds());
+
     if (tt.style.display==='block' && tt.getAttribute('data-active-cell')===cellId) { hideTooltip(e); return; }
     tt.setAttribute('data-active-cell', cellId);
 
@@ -4330,6 +4574,11 @@ function showTooltip(e, data) {
     const flipY = (cell.bottom - vvTop)+GAP+ttH > winH;
     tt.style.left = Math.max(8, flipX?cell.left-ttW-GAP:cell.right+GAP)+'px';
     tt.style.top  = Math.max(8, flipY?cell.top-vvTop-ttH-GAP:cell.bottom-vvTop+GAP)+'px';
+    // OPT-5: 初始化惰性骨架（只在首次调用时构建 DOM，后续只修改 textContent）
+    _buildTooltipSkeleton();
+    // 确保 hdrRow 是 header 的第一个子节点（bone structure integrity）
+    if (!_ttNodes.header.contains(_ttNodes.hdrRow)) _ttNodes.header.insertBefore(_ttNodes.hdrRow, _ttNodes.header.firstChild);
+    if (!_ttNodes.header.contains(_ttNodes.hdrSub)) _ttNodes.header.appendChild(_ttNodes.hdrSub);
 
     const dayGap = Math.round((new Date(targetDate.getFullYear(),targetDate.getMonth(),targetDate.getDate())
                              - new Date(now.getFullYear(),now.getMonth(),now.getDate())) / 86400000);
@@ -4356,69 +4605,60 @@ function showTooltip(e, data) {
     const isWangshu = data.isWangshu||false;
     const isToday   = dayGap===0;
 
-    // 用 DOM API 构建 rows，避免将计算值拼入 innerHTML
-    function _makeTtRow(label, val, extraClass='') {
-        const row = document.createElement('div'); row.className = 'tt-item';
-        const l = document.createElement('span'); l.className = 'tt-label'; l.textContent = label;
-        const v = document.createElement('span'); v.className = 'tt-val' + (extraClass?' '+extraClass:''); v.textContent = val;
-        row.appendChild(l); row.appendChild(v);
-        return row;
-    }
-    function _makeTtRows() {
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'padding:7px 12px 8px;display:flex;flex-direction:column;gap:4px;';
-        wrap.appendChild(_makeTtRow('距今天数', dayGapStr));
-        wrap.appendChild(_makeTtRow('月相进度', (moon.illumination * 100).toFixed(1) + '%' + (moon.waxing ? ' ↑' : ' ↓')));
-        wrap.appendChild(_makeTtRow('岁律节点', daysStr, 'term-val'));
-        wrap.appendChild(_makeTtRow('公历星期', WKS[data.realGDayWk]));
-        return wrap;
-    }
-
     tt.style.padding  = '0';
     tt.style.overflow = 'hidden';
     tt.style.display  = 'none';
 
-    // 判断是否为"秋分即望舒"双重身份
+    // OPT-5: 不清空 tt.textContent，只更新已有骨架节点的文字和颜色
+    // 先清理专注模式附加节点（稍后重新 append），保留 #tt-hdr 和 data rows
+    const _focusOld = tt.querySelector('.tt-note-section');
+    const _barOld   = tt.querySelector('.tt-focus-bar');
+    if (_focusOld) _focusOld.remove();
+    if (_barOld)   _barOld.remove();
+
+    // ── 更新数据行（直接修改 textContent） ──
+    _ttNodes.dayGap.textContent = dayGapStr;
+    _ttNodes.moon.textContent   = (moon.illumination * 100).toFixed(1) + '%' + (moon.waxing ? ' ↑' : ' ↓');
+    _ttNodes.term.textContent   = daysStr;
+    _ttNodes.term.className     = 'tt-val term-val';
+    _ttNodes.wkday.textContent  = WKS[data.realGDayWk];
+
+    // ── 判断是否为"秋分即望舒"双重身份 ──
     const isAutumnEquinox = termAtOffset === '秋分';
     const isDoubleHonor   = isAutumnEquinox && isWangshu;
 
+    // ── 更新 Header 区（只改样式和 textContent，不重建 DOM）──
+    const hdr = _ttNodes.header;
+    const hdrRow = _ttNodes.hdrRow;
     if (isDoubleHonor) {
-        // 双重弹窗：归衡 + 望舒合并，双色渐变边框
         const cA = '#B8860B', cW = isToday ? '#B22222' : '#D4A853';
-        tt.style.border = `1.5px solid ${cA}`;
-        tt.style.boxShadow = `0 0 0 1.5px ${cW}`;
-        tt.textContent = '';
-        const _h1 = document.createElement('div');
-        _h1.style.cssText = `text-align:center;padding:8px 12px 4px;border-bottom:1px dashed ${cA};`;
-        const _hRow = document.createElement('div');
-        _hRow.style.cssText = 'display:flex;justify-content:center;align-items:baseline;gap:8px;';
+        tt.style.border = `1.5px solid ${cA}`; tt.style.boxShadow = `0 0 0 1.5px ${cW}`;
+        hdr.style.cssText = `text-align:center;padding:8px 12px 4px;border-bottom:1px dashed ${cA};`;
+        hdrRow.textContent = '';
         const _s1=document.createElement('span'); _s1.style.cssText=`font-size:.88rem;font-weight:900;color:${cA};letter-spacing:2px;`; _s1.textContent='归衡';
         const _sd=document.createElement('span'); _sd.style.cssText='font-size:.65rem;color:#ccc;'; _sd.textContent='·';
         const _s2=document.createElement('span'); _s2.style.cssText=`font-size:.88rem;font-weight:900;color:${cW};letter-spacing:2px;`; _s2.textContent='望舒';
-        _hRow.appendChild(_s1); _hRow.appendChild(_sd); _hRow.appendChild(_s2);
-        const _hsub=document.createElement('div'); _hsub.style.cssText=`font-size:.65rem;color:${cA};font-weight:700;margin-top:3px;letter-spacing:1px;opacity:.85;`; _hsub.textContent=data.gStr+' · 秋分&满月';
-        _h1.appendChild(_hRow); _h1.appendChild(_hsub);
-        tt.appendChild(_h1); tt.appendChild(_makeTtRows());
+        hdrRow.appendChild(_s1); hdrRow.appendChild(_sd); hdrRow.appendChild(_s2);
+        _ttNodes.hdrSub.style.cssText=`font-size:.65rem;color:${cA};font-weight:700;margin-top:3px;letter-spacing:1px;opacity:.85;`;
+        _ttNodes.hdrSub.textContent = data.gStr+' · 秋分&满月';
     } else if (majorCfg) {
-        tt.style.border = `1.5px solid ${majorCfg.border}`;
-        tt.style.boxShadow = '';
-        tt.textContent = '';
-        const _m1=document.createElement('div'); _m1.style.cssText=`text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${majorCfg.border};`;
-        const _mt=document.createElement('div'); _mt.style.cssText=`font-size:.88rem;font-weight:900;color:${majorCfg.titleColor};letter-spacing:2px;`; _mt.textContent=majorCfg.title;
-        const _ms=document.createElement('div'); _ms.style.cssText=`font-size:.65rem;color:${majorCfg.titleColor};font-weight:700;margin-top:2px;letter-spacing:1px;opacity:.85;`; _ms.textContent=majorCfg.sub;
-        _m1.appendChild(_mt); _m1.appendChild(_ms);
-        tt.appendChild(_m1); tt.appendChild(_makeTtRows());
+        tt.style.border = `1.5px solid ${majorCfg.border}`; tt.style.boxShadow = '';
+        hdr.style.cssText = `text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${majorCfg.border};`;
+        hdrRow.textContent = '';
+        const _mt=document.createElement('span'); _mt.style.cssText=`font-size:.88rem;font-weight:900;color:${majorCfg.titleColor};letter-spacing:2px;`; _mt.textContent=majorCfg.title;
+        hdrRow.appendChild(_mt);
+        _ttNodes.hdrSub.style.cssText=`font-size:.65rem;color:${majorCfg.titleColor};font-weight:700;margin-top:2px;letter-spacing:1px;opacity:.85;`;
+        _ttNodes.hdrSub.textContent = majorCfg.sub;
     } else if (isWangshu) {
         const c = isToday?'#B22222':'#D4A853';
-        tt.style.border = `1.5px solid ${c}`;
-        tt.style.boxShadow = '';
+        tt.style.border = `1.5px solid ${c}`; tt.style.boxShadow = '';
+        hdr.style.cssText = `text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${c};`;
+        hdrRow.textContent = '';
+        const _wt=document.createElement('span'); _wt.style.cssText=`font-size:.88rem;font-weight:900;color:${c};letter-spacing:3px;`; _wt.textContent='望舒';
+        hdrRow.appendChild(_wt);
         const wangshuSub = termAtOffset ? data.gStr+' · '+termAtOffset+'满月' : data.gStr+' · 满月';
-        tt.textContent = '';
-        const _w1=document.createElement('div'); _w1.style.cssText=`text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${c};`;
-        const _wt=document.createElement('div'); _wt.style.cssText=`font-size:.88rem;font-weight:900;color:${c};letter-spacing:3px;`; _wt.textContent='望舒';
-        const _ws=document.createElement('div'); _ws.style.cssText=`font-size:.65rem;color:${c};font-weight:700;margin-top:2px;opacity:.85;letter-spacing:1px;`; _ws.textContent=wangshuSub;
-        _w1.appendChild(_wt); _w1.appendChild(_ws);
-        tt.appendChild(_w1); tt.appendChild(_makeTtRows());
+        _ttNodes.hdrSub.style.cssText=`font-size:.65rem;color:${c};font-weight:700;margin-top:2px;opacity:.85;letter-spacing:1px;`;
+        _ttNodes.hdrSub.textContent = wangshuSub;
     } else {
         tt.style.boxShadow = '';
         const termName   = TERMS[data.offset]||'';
@@ -4426,12 +4666,14 @@ function showTooltip(e, data) {
         const dateColor  = isToday?'#B22222':'#2C3E50';
         const dashColor  = isToday?'#B22222':'#DCD3BC';
         tt.style.border  = `${isToday?'1.5px':'1px'} solid ${borderColor}`;
-        tt.textContent = '';
-        const _d1=document.createElement('div'); _d1.style.cssText=`text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${dashColor};`;
-        const _dt=document.createElement('div'); _dt.style.cssText=`font-size:.88rem;font-weight:900;color:${dateColor};letter-spacing:.5px;`; _dt.textContent=data.gStr;
-        _d1.appendChild(_dt);
-        if (termName) { const _dn=document.createElement('div'); _dn.style.cssText='font-size:.65rem;color:#7f8c8d;font-weight:700;margin-top:2px;letter-spacing:1px;'; _dn.textContent=termName; _d1.appendChild(_dn); }
-        tt.appendChild(_d1); tt.appendChild(_makeTtRows());
+        hdr.style.cssText = `text-align:center;padding:8px 12px 6px;border-bottom:1px dashed ${dashColor};`;
+        hdrRow.textContent = '';
+        const _dt=document.createElement('span'); _dt.style.cssText=`font-size:.88rem;font-weight:900;color:${dateColor};letter-spacing:.5px;`; _dt.textContent=data.gStr;
+        hdrRow.appendChild(_dt);
+        if (termName) {
+            _ttNodes.hdrSub.style.cssText='font-size:.65rem;color:#7f8c8d;font-weight:700;margin-top:2px;letter-spacing:1px;';
+            _ttNodes.hdrSub.textContent = termName;
+        } else { _ttNodes.hdrSub.textContent = ''; }
     }
     // 专注模式下追加操作栏（便签需要权限；色点/星标始终可用）
     if (isFocus) {
@@ -4534,7 +4776,7 @@ function showTooltip(e, data) {
     if (!isFocus) {
         viewDateOverride = targetDate;
         DOM.statusCard.classList.add('is-observing');
-        update();
+        _SCHED.forceRefresh();
     }
 }
 
@@ -4764,7 +5006,12 @@ function _showYearReview(vYear, extraData) {
     // ── 首次：创建完整弹窗 ───────────────────────────────────────
     const overlay = document.createElement('div');
     overlay.id = 'yearReviewOverlay';
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    // 用 setTimeout 延迟绑定 click 关闭事件，防止触发年度回顾的那次 click 事件
+    // 因为 document.body.appendChild 后，同一 click 事件仍会继续冒泡到新插入的 overlay
+    // Chrome 严格遵守规范会立即触发 overlay 的 click → 弹窗一闪即关
+    setTimeout(() => {
+        overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    }, 0);
     overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
 
     const modal = document.createElement('div');
@@ -4794,200 +5041,433 @@ function _showYearReview(vYear, extraData) {
     closeBtn.focus();
 }
 
+// TASK-3: 解耦 DOM 隐藏与观测模式状态清理，消除滚动后的死锁
+// ── DOM 层：仅在弹窗可见时收起 ───────────────────────────────────
+// ── 状态层：只要处于观测模式（viewDateOverride !== null），无条件清理 ──
 function hideTooltip(e) {
     const tt = DOM.tooltip;
-    if (tt?.style.display==='block') {
-        tt.style.display='none';
-        tt.setAttribute('data-active-cell','');
-        // 同时退出观测模式（普通模式下弹窗会设置 viewDateOverride）
+    const wasObserving = viewDateOverride !== null; // 记录进入前的观测状态
+
+    // DOM 动作：有弹窗就收起（不依赖观测状态）
+    if (tt?.style.display === 'block') {
+        tt.style.display = 'none';
+        tt.setAttribute('data-active-cell', '');
+    }
+
+    // 状态动作：无条件执行 —— 只要处于观测模式就必须退出
+    // 这样无论 Tooltip 是被 _hideTooltipVisual 隐藏（display=none）
+    // 还是从未显示，用户点击页面都能解锁观测模式，消除状态死锁
+    if (wasObserving) {
         viewDateOverride = null;
         DOM.statusCard?.classList.remove('is-observing');
+        _SCHED.forceRefresh(); // 强制时间恢复流动（秒级立即刷新）
+    }
+}
+
+// 仅关闭弹窗 DOM，不退出观测模式（viewDateOverride / is-observing 保持不变）
+// 用于观测模式下滚动时：弹窗消失，但状态卡继续显示"观测模式"
+// 注意：滚动后再点击任意位置会触发 hideTooltip，届时状态才会被正确清理
+function _hideTooltipVisual() {
+    const tt = DOM.tooltip;
+    if (tt?.style.display === 'block') {
+        tt.style.display = 'none';
+        tt.setAttribute('data-active-cell', '');
     }
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  update()：rAF节流 + Page Visibility 暂停
 // ═══════════════════════════════════════════════════════════════
-function scheduleUpdate() {
-    if (_paused) return;
-    _updateRaf = requestAnimationFrame(() => {
-        try { update(); } catch(e) { console.error('[update]', e); }
-        scheduleUpdate();
-    });
+// ═══════════════════════════════════════════════════════════════
+//  四级调度器（替代原 scheduleUpdate + update）
+//  高频rAF: 时钟文字 + Hero SVG 1FPS节流
+//  中频1s:  日期标签、进度、节气倒计时
+//  低频1min: 月相、月出月落、季节色
+//  极低频跨天: 日历格DOM更新
+// ═══════════════════════════════════════════════════════════════
+function _precomputeCellMs(ttObj) {
+    // 解析 "YYYY年M月D日" → 本地午夜毫秒，比 match(/\d+/g) 快 5x，且无GC压力
+    const s = ttObj.gStr;
+    let y = 0, m = 0, d = 0, i = 0;
+    while (i < s.length && s.charCodeAt(i) !== 0x5E74) { y = y * 10 + s.charCodeAt(i) - 48; i++; }
+    i++;
+    while (i < s.length && s.charCodeAt(i) !== 0x6708) { m = m * 10 + s.charCodeAt(i) - 48; i++; }
+    i++;
+    while (i < s.length && s.charCodeAt(i) !== 0x65E5) { d = d * 10 + s.charCodeAt(i) - 48; i++; }
+    ttObj.cellMs = new Date(y, m - 1, d).getTime();
 }
-function update() {
-    const now = new Date();
-    DOM.mainClock.innerText = now.toLocaleTimeString('zh-CN',{hour12:false});
-    const thisSecond = now.getSeconds();
-    if (thisSecond === _lastSecond) return;
-    _lastSecond = thisSecond;
 
-    const sceneDate  = viewDateOverride || now;
-    let gY = sceneDate.getFullYear();
-    let vYear = (sceneDate < getShEq(gY)) ? gY-1 : gY;
-    const astro    = getAstronomyParams(sceneDate, vYear);
-    const diffDays = Math.max(0, getDayDiff(astro.springEq, sceneDate));
-    const total    = isLeapYearV(astro.vYear);
+// 格子状态快照（脏检查，避免无意义 DOM 写入）
+const _cellStateSnap = new Map();
 
-    if (!_physInfoHasError) {
-        // 推演年份：读一次缓存，避免每帧访问 DOM 输入框
-        const renderY = _cachedRenderYear ?? parseInt(DOM.yIn.value);
-        const targetY = (!isNaN(renderY) && renderY>=1900 && renderY<=2200) ? renderY : astro.vYear;
-        const tEq = getShEq(targetY), tNextEq = getShEq(targetY+1), tTotal = isLeapYearV(targetY);
+const _SCHED = (() => {
+    let _rafId       = null;
+    let _paused      = false;
+    let _heroVisible = true;
+    let _lastSecond  = -1;
+    let _lastMinute  = -1;
+    let _lastDateStr = '';
+    let _lastHeroTs  = 0;
 
-        if (viewDateOverride) {
-            const vEq=getShEq(astro.vYear), vNextEq=getShEq(astro.vYear+1);
-            const vTotal=isLeapYearV(astro.vYear);
-            const vProgress=Math.min(100,Math.max(0,(viewDateOverride-vEq)/(vNextEq-vEq)*100)).toFixed(1);
-            DOM.physInfo.innerText=`当前进度: ${vProgress}% | 年度天数: ${vTotal}天（${vTotal===366?'闰年':vTotal===365?'平年':'基年'}）`;
-        } else {
-            let tProgress;
-            if      (now < tEq)      tProgress = '0.0';
-            else if (now >= tNextEq) tProgress = '100.0';
-            else    tProgress = Math.min(100, Math.max(0, (now-tEq)/(tNextEq-tEq)*100)).toFixed(1);
-            DOM.physInfo.innerText=`当前进度: ${tProgress}% | 年度天数: ${tTotal}天（${tTotal===366?'闰年':tTotal===365?'平年':'基年'}）`;
+    // 文本快照
+    const _snap = {
+        clockText:'', vLabelText:'', gNowText:'', physText:'',
+        moonName:'', moonAge:'', riseText:'', setTime:'',
+        seasonIdx:-1, passedDays:-1, leftDays:-1,
+    };
+    const _termHintCache = { prev: '', next: '' };
+
+    // 预置节点：prevTermHint / nextTermHint 各 4 个子节点（前缀·名称·中段·数字·后缀）
+    // 初次使用时惰性构建，之后只改 textContent/color，彻底消除每分钟 DOM 创建
+    const _termHintNodes = {
+        prev: null, // { pre, name, mid, num, suf }
+        next: null,
+    };
+    function _ensureTermNodes(el, key) {
+        if (_termHintNodes[key]) return _termHintNodes[key];
+        el.textContent = '';
+        const pre = document.createTextNode('');
+        const name = document.createElement('span'); name.style.fontWeight = '700';
+        const mid  = document.createTextNode('');
+        const num  = document.createElement('span'); num.style.fontWeight = '700';
+        const suf  = document.createTextNode('');
+        el.appendChild(pre); el.appendChild(name);
+        el.appendChild(mid); el.appendChild(num); el.appendChild(suf);
+        return (_termHintNodes[key] = { pre, name, mid, num, suf });
+    }
+    function _setTermNodes(el, key, visible, preStr, nameStr, midStr, numStr, sufStr, col) {
+        if (!visible) { el.style.display = 'none'; return; }
+        el.style.display = '';
+        const n = _ensureTermNodes(el, key);
+        n.pre.nodeValue  = preStr;
+        n.name.textContent = nameStr; n.name.style.color = col;
+        n.mid.nodeValue  = midStr;
+        n.num.textContent  = numStr;  n.num.style.color  = col;
+        n.suf.nodeValue  = sufStr;
+    }
+
+    // IntersectionObserver：hero离屏时停止SVG渲染
+    function _initHeroObs() {
+        if (!('IntersectionObserver' in window)) return;
+        const hero = document.getElementById('heroSpace');
+        if (!hero) return;
+        new IntersectionObserver(entries => {
+            _heroVisible = entries[0].isIntersecting;
+        }, { threshold: 0.01 }).observe(hero);
+    }
+
+    // ── OPT-2：时钟格式对象只在秒边界分配一次，消除 60次/s GC 压力 ──
+    let _clockNow = null; // 上一次建立的 Date 对象（秒边界复用）
+    function _tick(ts) {
+        if (_paused) return;
+        _rafId = requestAnimationFrame(_tick);
+
+        // 每帧只用低开销整数除法确认"当前秒"
+        const nowMs  = Date.now();
+        const nowSec = (nowMs / 1000) | 0; // 当前秒（整数）
+
+        // 秒边界才构建 Date 对象（每秒一次，非每帧 60 次）
+        if (nowSec !== _lastSecond) {
+            _lastSecond = nowSec;
+            _clockNow   = new Date(nowMs); // 本秒仅分配一次
+            const min     = _clockNow.getMinutes();
+            const dateStr = _clockNow.toDateString();
+
+            // 时钟文字：使用手动格式化，避免 Intl/toLocaleTimeString 的国际化开销
+            const h = _clockNow.getHours(), m = _clockNow.getMinutes(), s = _clockNow.getSeconds();
+            const txt = (h<10?'0'+h:h)+':'+(m<10?'0'+m:m)+':'+(s<10?'0'+s:s);
+            if (txt !== _snap.clockText) { _snap.clockText = txt; DOM.mainClock.textContent = txt; }
+
+            // 中频
+            _tickMid(_clockNow);
+
+            // 低频：分变时
+            if (min !== _lastMinute) { _lastMinute = min; _tickLow(_clockNow); }
+
+            // 极低频：跨天
+            if (dateStr !== _lastDateStr) { _lastDateStr = dateStr; _tickDaily(); }
         }
-        DOM.physInfo.style.color='#7f8c8d';
 
-        // 已过/剩余天数（复用上方已计算的 tEq/tNextEq/tTotal）
-        const _refDate = viewDateOverride || now;
-        const passed = _refDate < tEq ? 0 : _refDate >= tNextEq ? tTotal : Math.min(tTotal, getDayDiff(tEq, _refDate));
-        DOM.daysPassed.innerText = passed;
-        DOM.daysLeft.innerText   = Math.max(0, tTotal - passed);
+        // Hero SVG: 1FPS 节流（每帧都检查时间戳，但 _clockNow 已缓存）
+        if (_heroVisible && ts - _lastHeroTs >= 1000) { _lastHeroTs = ts; _renderHeroSVG(_clockNow || new Date(nowMs)); }
+    }
 
-        // 节气倒计时：与观测模式联动
-        if (DOM.nextTermHint) {
-            const tTerms = _calcTermOffsets(targetY);
-            const termEntries = Object.entries(tTerms).map(([o, n]) => [+o, n]).sort((a, b) => a[0] - b[0]);
-            const nextEntry = termEntries.find(([o]) => o > passed);
-            // 上一个节气（含春分 offset=0）
-            const prevEntry = [...termEntries].reverse().find(([o]) => o <= passed) || [0, '春分'];
-            const [prevOff, prevName] = prevEntry;
-            const daysSince = passed - prevOff;
-            const isPrevMajor = ['春分','夏至','秋分','冬至'].includes(prevName);
-            const prevColor = isPrevMajor ? 'var(--accent)' : 'var(--v-blue)';
+    function _tickMid(now) {
+        const sceneDate = viewDateOverride || now;
+        const gY    = sceneDate.getFullYear();
+        const vYear = (sceneDate < getShEq(gY)) ? gY - 1 : gY;
+        const astro = getAstronomyParams(sceneDate, vYear);
+        const diffDays = Math.max(0, getDayDiff(astro.springEq, sceneDate));
+        const total    = isLeapYearV(astro.vYear);
 
-            // 渲染"XX 后第 N 天"
+        const vLabel = diffDays < 364
+            ? `${Math.floor(diffDays/28)+1}月 ${diffDays%28+1}日`
+            : (total===365 ? '更替日 A' : (diffDays===364 ? '更替日 B' : '更替日 A'));
+        const topTxt = `${astro.vYear}年`;
+        const gTxt   = `公历 ${sceneDate.getFullYear()}年${sceneDate.getMonth()+1}月${sceneDate.getDate()}日`;
+
+        if (topTxt !== _snap.vLabelText) { _snap.vLabelText = topTxt; DOM.topYear.textContent = topTxt; }
+        if (gTxt   !== _snap.gNowText)   {
+            _snap.gNowText = gTxt;
+            DOM.gNow.textContent = gTxt;
+            DOM.vNowFlat.lastChild.nodeValue = ` ${vLabel}`;
+        }
+
+        if (!_physInfoHasError) {
+            const renderY = _cachedRenderYear ?? parseInt(DOM.yIn.value);
+            const targetY = (!isNaN(renderY) && renderY>=1900 && renderY<=2200) ? renderY : astro.vYear;
+            const tEq     = getShEq(targetY), tNextEq = getShEq(targetY+1), tTotal = isLeapYearV(targetY);
+            const _ref    = viewDateOverride || now;
+
+            let tProg;
+            if (viewDateOverride) {
+                // astro.springEq === getShEq(astro.vYear)，直接复用，避免重复调用
+                const vNE = getShEq(astro.vYear+1);
+                tProg = Math.min(100, Math.max(0, (viewDateOverride-astro.springEq)/(vNE-astro.springEq)*100)).toFixed(1);
+            } else if (now < tEq) tProg = '0.0';
+            else if (now >= tNextEq) tProg = '100.0';
+            else tProg = Math.min(100, Math.max(0, (now-tEq)/(tNextEq-tEq)*100)).toFixed(1);
+
+            const physTxt = `当前进度: ${tProg}% | 年度天数: ${tTotal}天（${tTotal===366?'闰年':tTotal===365?'平年':'基年'}）`;
+            if (physTxt !== _snap.physText) {
+                _snap.physText = physTxt;
+                DOM.physInfo.textContent = physTxt;
+                DOM.physInfo.style.color = '#7f8c8d';
+            }
+
+            const passed = _ref < tEq ? 0 : _ref >= tNextEq ? tTotal : Math.min(tTotal, getDayDiff(tEq, _ref));
+            const left   = Math.max(0, tTotal - passed);
+            if (passed !== _snap.passedDays) { _snap.passedDays = passed; DOM.daysPassed.textContent = passed; }
+            if (left   !== _snap.leftDays)   { _snap.leftDays   = left;   DOM.daysLeft.textContent   = left;   }
+
+            _updateTermHints(passed, targetY, tNextEq, _ref);
+        }
+    }
+
+    function _tickLow(now) {
+        const sceneDate = viewDateOverride || now;
+        const moon = getMoonPhase(sceneDate);
+        const { illumination: illum, normalized: _n, waxing } = moon;
+        let moonName;
+        if      (illum < 0.0625)               moonName = '新月';
+        else if (illum >= 0.9375)              moonName = '满月';
+        else if (_n >= 0.1875 && _n < 0.3125) moonName = '上弦月';
+        else if (_n >= 0.6875 && _n < 0.8125) moonName = '下弦月';
+        else if (waxing)                       moonName = illum < 0.5 ? '娥眉月' : '盈凸月';
+        else                                   moonName = illum > 0.5 ? '亏凸月' : '残月';
+
+        const ageStr = moon.age.toFixed(1);
+        if (moonName !== _snap.moonName || ageStr !== _snap.moonAge) {
+            _snap.moonName = moonName; _snap.moonAge = ageStr;
+            _renderMoonPhaseLabel(moonName, moon, sceneDate);
+        }
+
+        if (_heroVisible && _currentLat !== null) {
+            const _pa = getMoonParallacticAngle(sceneDate, _currentLat, _currentLon);
+            const tf  = _currentLat < -5 ? `rotate(${180 - _pa})` : `rotate(${_pa})`;
+            DOM.moonVisualPhase.setAttribute('transform', tf);
+            DOM.moonVisualPhase.style.opacity = '1';
+        }
+
+        if (DOM.moonRiseSet) {
+            const _mrs = _getMoonRiseSet(sceneDate, _currentLat, _currentLon);
+            const rStr = _mrs ? '↑ '+_mrs.rise : '', sStr = _mrs ? '↓ '+_mrs.set : '';
+            if (rStr !== _snap.riseText || sStr !== _snap.setTime) {
+                _snap.riseText = rStr; _snap.setTime = sStr; _renderMoonRiseSet(_mrs);
+            }
+        }
+
+        const gY    = sceneDate.getFullYear();
+        const vYear = (sceneDate < getShEq(gY)) ? gY - 1 : gY;
+        const astro = getAstronomyParams(sceneDate, vYear);
+        const sIdx  = Math.min(3, Math.max(0, Math.floor(Math.max(0, getDayDiff(astro.springEq, sceneDate)) / 91)));
+        if (sIdx !== _snap.seasonIdx) {
+            _snap.seasonIdx = sIdx;
+            const col = [SEASON_COLORS.spring, SEASON_COLORS.summer, SEASON_COLORS.autumn, SEASON_COLORS.winter][sIdx];
+            DOM.seasonSyncTag.style.color = DOM.seasonSyncTag.style.borderColor = col;
+        }
+    }
+
+    function _tickDaily() {
+        render();
+        // _buildCdCard / _cdApplyCellColor 由事件驱动（_cdRefresh），不在 rAF 循环中执行
+        _cdRefresh('date-change');
+        _cdCheckArrivalAlert();
+    }
+
+    // Hero SVG 1FPS 渲染（合成层优先）
+    let _orbitOffsetCache = '';
+    // OPT-9: SVG 属性脏检查缓存（阈值: 0.05° / 0.1px）
+    const _svgCache = { eX:null,eY:null,sunDeg:null,axisDeg:null,moonPath:null,moonTx:null,moonTy:null };
+
+    function _renderHeroSVG(now) {
+        const sceneDate = viewDateOverride || now;
+        const gY    = sceneDate.getFullYear();
+        const vYear = (sceneDate < getShEq(gY)) ? gY - 1 : gY;
+        const astro = getAstronomyParams(sceneDate, vYear);
+        const eX = 400 + 340*Math.cos(astro.orbitAngle);
+        const eY = 210 + 130*Math.sin(astro.orbitAngle);
+        // 地球位置：阈值 0.1px
+        if (_svgCache.eX === null || Math.abs(eX - _svgCache.eX) > 0.1 || Math.abs(eY - _svgCache.eY) > 0.1) {
+            _svgCache.eX = eX; _svgCache.eY = eY;
+            DOM.earthNode.setAttribute('transform', `translate(${eX.toFixed(2)},${eY.toFixed(2)})`);
+        }
+        const sunDeg = Math.atan2(210-eY, 400-eX) * 180 / Math.PI;
+        // 日面/晨昏线旋转：阈值 0.05°
+        if (_svgCache.sunDeg === null || Math.abs(sunDeg - _svgCache.sunDeg) > 0.05) {
+            _svgCache.sunDeg = sunDeg;
+            const sdStr = sunDeg.toFixed(2);
+            DOM.daySide.setAttribute('transform',       `rotate(${sdStr})`);
+            DOM.terminatorLine.setAttribute('transform', `rotate(${sdStr})`);
+        }
+        // 地轴旋转（含 23.5° 倾角）：阈值 0.05°
+        const axisDeg = sunDeg + 23.5*Math.sin(astro.v);
+        if (_svgCache.axisDeg === null || Math.abs(axisDeg - _svgCache.axisDeg) > 0.05) {
+            _svgCache.axisDeg = axisDeg;
+            DOM.earthAxis.setAttribute('transform', `rotate(${axisDeg.toFixed(2)})`);
+        }
+        const moon = getMoonPhase(sceneDate);
+        // 月相路径：索引变化才更新
+        const moonPathIdx = Math.floor(moon.normalized*120);
+        if (_svgCache.moonPath !== moonPathIdx) {
+            _svgCache.moonPath = moonPathIdx;
+            DOM.moonVisualPhase.setAttribute('d', MOON_PATH_TABLE[moonPathIdx]);
+        }
+        // 月球位置：阈值 0.1px
+        const moonTx = 36*Math.cos(moon.normalized*2*Math.PI);
+        const moonTy = -36*Math.sin(moon.normalized*2*Math.PI);
+        if (_svgCache.moonTx === null || Math.abs(moonTx - _svgCache.moonTx) > 0.1 || Math.abs(moonTy - _svgCache.moonTy) > 0.1) {
+            _svgCache.moonTx = moonTx; _svgCache.moonTy = moonTy;
+            DOM.moonNode.setAttribute('transform', `translate(${moonTx.toFixed(2)},${moonTy.toFixed(2)})`);
+        }
+        if (ORBIT_TOTAL_LEN > 0) {
+            const idx    = Math.min(ARC_TABLE_SIZE, Math.floor(astro.v/(2*Math.PI)*ARC_TABLE_SIZE));
+            const walked = ARC_TABLE[idx];
+            const key    = walked.toFixed(1);
+            if (key !== _orbitOffsetCache) {
+                _orbitOffsetCache = key;
+                DOM.solidOrbitPath.setAttribute('stroke-dasharray',
+                    `${key} ${(ORBIT_TOTAL_LEN-walked+1).toFixed(1)}`);
+            }
+        }
+    }
+
+    // 节气提示（脏检查版 + 预置节点，每分钟只改 textContent，零 DOM 创建）
+    function _updateTermHints(passed, targetY, tNextEq, _ref) {
+        if (!DOM.nextTermHint) return;
+        const tTerms = _calcTermOffsets(targetY);
+        const termEntries = tTerms._sorted; // 复用缓存的排序数组，省去每秒 entries+map+sort
+        const nextEntry = termEntries.find(([o])=>o>passed);
+        const prevEntry = [...termEntries].reverse().find(([o])=>o<=passed) || [0,'春分'];
+        const [prevOff, prevName] = prevEntry;
+        const daysSince = passed - prevOff;
+
+        const prevKey = daysSince === 0 ? '' : `${prevName}后${daysSince}`;
+        if (prevKey !== _termHintCache.prev) {
+            _termHintCache.prev = prevKey;
             if (DOM.prevTermHint) {
-                DOM.prevTermHint.textContent = '';
-                if (daysSince === 0) {
-                    // 正好在节气当天，不显示"后第0天"
-                    DOM.prevTermHint.textContent = '';
+                if (daysSince > 0) {
+                    const isMaj = ['春分','夏至','秋分','冬至'].includes(prevName);
+                    const col   = isMaj ? 'var(--accent)' : 'var(--v-blue)';
+                    _setTermNodes(DOM.prevTermHint, 'prev', true, '· ', prevName, ' 后第 ', String(daysSince), ' 天', col);
                 } else {
-                    const _p1=document.createTextNode('· ');
-                    const _ps=document.createElement('span'); _ps.style.cssText=`color:${prevColor};font-weight:700;`; _ps.textContent=prevName;
-                    const _p2=document.createTextNode(' 后第 ');
-                    const _pn=document.createElement('span'); _pn.style.cssText=`color:${prevColor};font-weight:700;`; _pn.textContent=daysSince+'';
-                    const _p3=document.createTextNode(' 天');
-                    DOM.prevTermHint.append(_p1,_ps,_p2,_pn,_p3);
+                    _setTermNodes(DOM.prevTermHint, 'prev', false, '', '', '', '', '', '');
                 }
             }
-
+        }
+        let nextKey;
+        if (nextEntry) {
+            const [nextOff, nextName] = nextEntry;
+            nextKey = `${nextName}${nextOff-passed}`;
+        } else {
+            nextKey = `春分${getDayDiff(_ref, tNextEq)}`;
+        }
+        if (nextKey !== _termHintCache.next) {
+            _termHintCache.next = nextKey;
             if (nextEntry) {
                 const [nextOff, nextName] = nextEntry;
-                const daysTo = nextOff - passed;
-                const isMajor = ['春分','夏至','秋分','冬至'].includes(nextName);
-                const color = isMajor ? 'var(--accent)' : 'var(--v-blue)';
-                DOM.nextTermHint.textContent = '';
-                const _t1=document.createTextNode('· 距 ');
-                const _s1=document.createElement('span'); _s1.style.cssText=`color:${color};font-weight:700;`; _s1.textContent=nextName;
-                const _t2=document.createTextNode(' 还有 ');
-                const _s2=document.createElement('span'); _s2.style.cssText=`color:${color};font-weight:700;`; _s2.textContent=daysTo+'';
-                const _t3=document.createTextNode(' 天');
-                DOM.nextTermHint.append(_t1,_s1,_t2,_s2,_t3);
+                const isMaj = ['春分','夏至','秋分','冬至'].includes(nextName);
+                const col   = isMaj ? 'var(--accent)' : 'var(--v-blue)';
+                _setTermNodes(DOM.nextTermHint, 'next', true, '· 距 ', nextName, ' 还有 ', String(nextOff-passed), ' 天', col);
             } else {
-                const daysToNextEq = getDayDiff(_refDate, tNextEq);
-                DOM.nextTermHint.textContent = '';
-                const _t1=document.createTextNode('· 距 ');
-                const _s1=document.createElement('span'); _s1.style.cssText='color:var(--accent);font-weight:700;'; _s1.textContent='春分';
-                const _t2=document.createTextNode(' 还有 ');
-                const _s2=document.createElement('span'); _s2.style.cssText='color:var(--accent);font-weight:700;'; _s2.textContent=daysToNextEq+'';
-                const _t3=document.createTextNode(' 天');
-                DOM.nextTermHint.append(_t1,_s1,_t2,_s2,_t3);
+                _setTermNodes(DOM.nextTermHint, 'next', true, '· 距 ', '春分', ' 还有 ', String(getDayDiff(_ref, tNextEq)), ' 天', 'var(--accent)');
             }
         }
     }
 
-    const vLabel = diffDays<364
-        ? `${Math.floor(diffDays/28)+1}月 ${diffDays%28+1}日`
-        : (total===365?"更替日 A":(diffDays===364?"更替日 B":"更替日 A"));
-    DOM.topYear.innerText  = `${astro.vYear}年`;
-    DOM.vNowFlat.lastChild.nodeValue = ` ${vLabel}`;
-    DOM.gNow.innerText     = `公历 ${sceneDate.getFullYear()}年${sceneDate.getMonth()+1}月${sceneDate.getDate()}日`;
-
-    const eX = 400 + 340*Math.cos(astro.orbitAngle);
-    const eY = 210 + 130*Math.sin(astro.orbitAngle);
-    DOM.earthNode.setAttribute('transform',`translate(${eX},${eY})`);
-    const sunDeg = Math.atan2(210-eY, 400-eX)*180/Math.PI;
-    DOM.daySide.setAttribute('transform',`rotate(${sunDeg})`);
-    DOM.terminatorLine.setAttribute('transform',`rotate(${sunDeg})`);
-    // 修复③: 夏至北极朝太阳倾斜，地轴相对晨昏线应+23.5°*sin(v)
-    DOM.earthAxis.setAttribute('transform',`rotate(${sunDeg+23.5*Math.sin(astro.v)})`);
-
-    const moon = getMoonPhase(sceneDate);
-    DOM.moonVisualPhase.setAttribute('d', MOON_PATH_TABLE[Math.floor(moon.normalized*120)]);
-    // 修复②: 月球逆时针公转，SVG Y轴朝下须对sin取负
-    DOM.moonNode.setAttribute('transform',`translate(${36*Math.cos(moon.normalized*2*Math.PI)},${-36*Math.sin(moon.normalized*2*Math.PI)})`);
-    // 视位置角：根据观测者经纬度+时刻计算月亮亮面在地面观测者眼中的旋转角
-    // 南半球（纬度<-5°）亮面镜像，赤道附近（±5°）不旋转
-    const _pa = getMoonParallacticAngle(sceneDate, _currentLat, _currentLon);
-    const _isSouth = _currentLat !== null && _currentLat < -5;
-    // moonVisualPhase 路径以Y轴为对称轴，亮面朝右为0°基准
-    // 视位置角顺时针为正，SVG rotate顺时针为正，直接使用
-    // 南半球：天顶朝向相反，亮面水平镜像，等价于 rotate(180 - pa)
-    const _moonTransform = _isSouth
-        ? `rotate(${180 - _pa})`
-        : `rotate(${_pa})`;
-    DOM.moonVisualPhase.setAttribute('transform', _moonTransform);
-    // 定位完成后才显示月亮亮面（定位前pa=0，亮面朝右不正确）
-    if (_currentLat !== null) DOM.moonVisualPhase.style.opacity = '1';
-    // 以几何亮面比例（illumination）为准判断月相名称
-    // illumination = (1-cos(2π·n))/2，新月=0%，上下弦=50%，满月=100%
-    // 上弦/下弦 illumination 相同（均为50%），用 normalized 区间精确区分，规避浮点误差
-    const illum  = moon.illumination;
-    const _n     = moon.normalized;
-    const waxing = moon.waxing;
-    let moonName;
-    if      (illum < 0.0625)               moonName = '新月';
-    else if (illum >= 0.9375)              moonName = '满月';
-    else if (_n >= 0.1875 && _n < 0.3125) moonName = '上弦月';
-    else if (_n >= 0.6875 && _n < 0.8125) moonName = '下弦月';
-    else if (waxing)                       moonName = illum < 0.5 ? '娥眉月' : '盈凸月';
-    else                                   moonName = illum > 0.5 ? '亏凸月' : '残月';
-    // ① moonPhaseLabel 改用 DOM API，消除最后一处 innerHTML 写入计算值
-    (function() {
-        const lbl = DOM.moonPhaseLabel;
-        lbl.textContent = '';
-        const prefix = document.createTextNode((viewDateOverride?'彼时月相':'当前月相') + '：');
-        const nameSpan = document.createElement('span');
-        nameSpan.style.color = moonPhaseColor(moon.normalized);
-        nameSpan.textContent = moonName;
-        const suffix = document.createTextNode('（月龄 ' + moon.age.toFixed(1) + '）' + (viewDateOverride?' · 观测模式':''));
-        lbl.appendChild(prefix); lbl.appendChild(nameSpan); lbl.appendChild(suffix);
-    })();
-    // ② 月出月落改用 DOM API
-    if (DOM.moonRiseSet) {
-        const _mrs = _getMoonRiseSet(sceneDate, _currentLat, _currentLon);
-        if (_mrs) {
-            DOM.moonRiseSet.textContent = '';
-            const rSpan = document.createElement('span'); rSpan.style.color='#B8860B'; rSpan.textContent='↑ '+_mrs.rise;
-            const gap   = document.createTextNode('\u00a0\u00a0');
-            const sSpan = document.createElement('span'); sSpan.style.color='#708090'; sSpan.textContent='↓ '+_mrs.set;
-            DOM.moonRiseSet.appendChild(rSpan); DOM.moonRiseSet.appendChild(gap); DOM.moonRiseSet.appendChild(sSpan);
-        } else {
-            DOM.moonRiseSet.textContent = '月出月落：待定位';
+    // 月相标签预置节点（惰性构建，之后只改 textContent/color，零 DOM 重建）
+    const _moonLblNodes = { pre: null, name: null, suf: null };
+    function _renderMoonPhaseLabel(moonName, moon) {
+        const lbl = DOM.moonPhaseLabel; if (!lbl) return;
+        if (!_moonLblNodes.pre) {
+            lbl.textContent = '';
+            _moonLblNodes.pre  = document.createTextNode('');
+            _moonLblNodes.name = document.createElement('span');
+            _moonLblNodes.suf  = document.createTextNode('');
+            lbl.appendChild(_moonLblNodes.pre);
+            lbl.appendChild(_moonLblNodes.name);
+            lbl.appendChild(_moonLblNodes.suf);
         }
+        _moonLblNodes.pre.nodeValue    = (viewDateOverride ? '彼时月相' : '当前月相') + '：';
+        _moonLblNodes.name.textContent = moonName;
+        _moonLblNodes.name.style.color = moonPhaseColor(moon.normalized);
+        _moonLblNodes.suf.nodeValue    = `（月龄 ${moon.age.toFixed(1)}）` + (viewDateOverride ? ' · 观测模式' : '');
     }
 
-    if (ORBIT_TOTAL_LEN>0) {
-        // 修复①: 已走弧 = astro.v（= mappedRatio*2π），从春分顺序积分到当前位置
-        const idx = Math.min(ARC_TABLE_SIZE, Math.floor(astro.v / (2*Math.PI) * ARC_TABLE_SIZE));
-        const walked = ARC_TABLE[idx];
-        DOM.solidOrbitPath.setAttribute('stroke-dasharray',`${walked} ${ORBIT_TOTAL_LEN-walked+1}`);
+    // 月出月落预置节点（惰性构建）
+    const _moonRSNodes = { rise: null, set: null };
+    function _renderMoonRiseSet(_mrs) {
+        const el = DOM.moonRiseSet; if (!el) return;
+        if (!_mrs) {
+            el.textContent = '月出月落：待定位';
+            _moonRSNodes.rise = _moonRSNodes.set = null;
+            return;
+        }
+        if (!_moonRSNodes.rise) {
+            el.textContent = '';
+            _moonRSNodes.rise = document.createElement('span'); _moonRSNodes.rise.style.color = '#B8860B';
+            const sep = document.createTextNode('  ');
+            _moonRSNodes.set  = document.createElement('span'); _moonRSNodes.set.style.color  = '#708090';
+            el.appendChild(_moonRSNodes.rise);
+            el.appendChild(sep);
+            el.appendChild(_moonRSNodes.set);
+        }
+        _moonRSNodes.rise.textContent = '↑ ' + _mrs.rise;
+        _moonRSNodes.set.textContent  = '↓ ' + _mrs.set;
     }
-    const sIdx = Math.min(3,Math.max(0,Math.floor(getDayDiff(astro.springEq,sceneDate)/91)));
-    DOM.seasonSyncTag.style.color = DOM.seasonSyncTag.style.borderColor = [SEASON_COLORS.spring,SEASON_COLORS.summer,SEASON_COLORS.autumn,SEASON_COLORS.winter][sIdx];
-}
+
+    return {
+        start()  { _initHeroObs(); if (!_rafId && !_paused) _rafId = requestAnimationFrame(_tick); },
+        pause()  { _paused=true; if (_rafId) { cancelAnimationFrame(_rafId); _rafId=null; } },
+        resume() { _paused=false; if (!_rafId) _rafId=requestAnimationFrame(_tick); },
+        forceRefresh() { _lastSecond=-1; _lastMinute=-1; },
+    };
+})();
+
+// 月相分钟级缓存（原版每秒调用5次Meeus）
+(function(){
+    const _cache = { min:-1, val:null };
+    const _orig  = getMoonPhase;
+    getMoonPhase = function(date) {
+        const min = Math.floor(date.getTime()/60000);
+        if (_cache.min===min) return _cache.val;
+        const val = _orig(date); _cache.min=min; _cache.val=val; return val;
+    };
+})();
+
+// getAstronomyParams 秒级缓存
+(function(){
+    const _cache = { sec:-1, vy:-1, val:null };
+    const _orig  = getAstronomyParams;
+    getAstronomyParams = function(date, forceYear) {
+        const sec = Math.floor(date.getTime()/1000);
+        if (_cache.sec===sec && _cache.vy===forceYear) return _cache.val;
+        const val = _orig(date, forceYear); _cache.sec=sec; _cache.vy=forceYear; _cache.val=val; return val;
+    };
+})();
+
+function scheduleUpdate() { _SCHED.start(); } // 兼容旧调用
+// [update() 已由 _SCHED 四级调度器替代，删除原实现]
 
 // ═══════════════════════════════════════════════════════════════
 //  render() 日历
@@ -5008,14 +5488,21 @@ let   _lastTotal  = 0;      // 上次渲染的年份总天数（用于判断更�
 // key = DOM 元素，value = { gStr, offset, realGDayWk, isWangshu?, isExtra?, vYear?, extraName? }
 const _cellDataMap = new WeakMap();
 
-function render() {
+// ── 年份级渲染拦截：仅年份变化或强制刷新时才进入 _doRender 的 364 次循环 ──
+let _lastRenderedYear = null;
+let _forceRenderFlag = false;
+function render(force) {
+    if (force) _forceRenderFlag = true;
     if (_renderRaf) cancelAnimationFrame(_renderRaf);
     _renderRaf = requestAnimationFrame(() => { _renderRaf=null; _doRender(); });
 }
 
+// ── OPT-6：年份级持久化缓存 —— 同一年份的满月集合和望舒 offset 永不重算 ──
+const _yearDataCache = new Map(); // key=year, val={ _fullMoonOffsets, wangshuOff, total }
+
 // ── 计算年份相关的可变数据（与 DOM 无关）─────────────────────────
 function _calcYearData(y) {
-    const cEq  = getShEq(y);
+    const cEq   = getShEq(y);
     const total = isLeapYearV(y);
     const now   = new Date();
     const TERMS = _calcTermOffsets(y);
@@ -5023,41 +5510,50 @@ function _calcYearData(y) {
         .filter(([,n])=>['春分','夏至','秋分','冬至'].includes(n)).map(([o])=>+o);
     const MAJOR_TERMS = new Set(majorOffsets);
 
-    // 精确满月判断：用 _meeusLunarPhaseUTC 计算年内所有满月的精确 UTC 时刻，
-    // 加上本地时区偏移后再 floor，确保满月日期以用户本地时区为准。
-    const _tzOffsetMs = -new Date().getTimezoneOffset() * 60000;
-    const _fullMoonOffsets = (function() {
-        const s = new Set();
-        const k_start = _prevNewMoonK(cEq.getTime());
+    // OPT-6: 粗筛+精算，并跨 render 永久缓存
+    let _cached = _yearDataCache.get(y);
+    let _fullMoonOffsets, wangshuOff;
+
+    if (_cached && _cached.total === total) {
+        // 命中缓存：直接复用，本年满月集合不重算
+        _fullMoonOffsets = _cached._fullMoonOffsets;
+        wangshuOff       = _cached.wangshuOff;
+    } else {
+        // 首次计算：粗筛（29.5天周期近似）锁定范围，再 Meeus 精算
+        const _tzOffsetMs = -now.getTimezoneOffset() * 60000;
+        const cEqMs = cEq.getTime();
+        _fullMoonOffsets = new Set();
+
+        // 粗筛：估算年内可能的满月天数 offset（±2天容差），再用 Meeus 精确验证
+        const k_start = _prevNewMoonK(cEqMs);
+        // 年跨度最多 14 个朔望月（含前后各1个富余）
         for (let dk = -1; dk <= 14; dk++) {
             const fmMs = _meeusLunarPhaseUTC(k_start + dk, 0.5);
-            const off  = Math.floor((fmMs + _tzOffsetMs - cEq.getTime()) / 86400000);
-            if (off >= 0 && off < total + 2) s.add(off);
+            const off  = Math.floor((fmMs + _tzOffsetMs - cEqMs) / 86400000);
+            if (off >= 0 && off < total + 2) _fullMoonOffsets.add(off);
         }
-        return s;
-    })();
-    const isFMfn = off => _fullMoonOffsets.has(off);
 
-    const autumnOff = +(Object.entries(TERMS).find(([,n])=>n==='秋分')?.[0] ?? 187);
-
-    // 望舒缓存：按年份缓存，避免每次遍历全年
-    let wangshuOff = -1;
-    if (_wangshuCache.has(y)) {
-        wangshuOff = _wangshuCache.get(y);
-    } else {
-        if (isFMfn(autumnOff)) {
+        // 计算望舒 offset
+        const autumnOff = +(Object.entries(TERMS).find(([,n])=>n==='秋分')?.[0] ?? 187);
+        wangshuOff = -1;
+        if (_fullMoonOffsets.has(autumnOff)) {
             wangshuOff = autumnOff;
         } else {
             let prevFM=-1, nextFM=-1;
-            for (let o=autumnOff-1; o>=0; o--)    { if(isFMfn(o)){prevFM=o;break;} }
-            for (let o=autumnOff+1; o<total; o++)  { if(isFMfn(o)){nextFM=o;break;} }
+            for (let o=autumnOff-1; o>=0; o--)   { if(_fullMoonOffsets.has(o)){prevFM=o;break;} }
+            for (let o=autumnOff+1; o<total; o++) { if(_fullMoonOffsets.has(o)){nextFM=o;break;} }
             if      (prevFM===-1)  wangshuOff = nextFM;
             else if (nextFM===-1)  wangshuOff = prevFM;
             else { const dP=autumnOff-prevFM, dN=nextFM-autumnOff; wangshuOff = dP<=dN?prevFM:nextFM; }
         }
-        if (_wangshuCache.size >= 10) _wangshuCache.delete(_wangshuCache.keys().next().value);
+
+        // 持久化写入全局缓存（不限大小，年份范围有限，最多几百个 Map 条目）
+        _yearDataCache.set(y, { _fullMoonOffsets, wangshuOff, total });
+        // 同步写入旧的 _wangshuCache（保持 getShEq 等处的兼容引用）
         _wangshuCache.set(y, wangshuOff);
     }
+
+    const isFMfn = off => _fullMoonOffsets.has(off);
     return { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn };
 }
 
@@ -5067,6 +5563,7 @@ function _buildCalendar(y) {
     view.innerHTML = '';
     _cellCache.length = 0;
     _extraCache.length = 0;
+    _gStrPreseededMap.clear(); // OPT-4: 清空预置节点缓存，随新格子重建
 
     const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
 
@@ -5104,8 +5601,16 @@ function _buildCalendar(y) {
             cell.appendChild(termEl);
             cell.appendChild(numEl);
             cell.appendChild(gInfoEl);
+            // OPT-4: 预置隐藏的标记节点，_applyFocusMarks 只改 display/opacity，不再增删 DOM
+            const _preDot  = document.createElement('div');
+            _preDot.className = 'cell-dot'; _preDot.style.display = 'none';
+            const _preStar = document.createElement('div');
+            _preStar.className = 'cell-star'; _preStar.style.display = 'none'; _preStar.textContent = '★';
+            const _preCd   = document.createElement('div');
+            _preCd.className = 'cell-countdown'; _preCd.style.display = 'none';
+            cell.appendChild(_preDot); cell.appendChild(_preStar); cell.appendChild(_preCd);
             dayGrid.appendChild(cell);
-            _cellCache[off] = { cell, numEl, termEl, gInfoEl, dayColor };
+            _cellCache[off] = { cell, numEl, termEl, gInfoEl, dayColor, preDot: _preDot, preStar: _preStar, preCd: _preCd };
         }
         view.appendChild(card);
     }
@@ -5125,10 +5630,11 @@ function _buildCalendar(y) {
     const DRAG_THRESHOLD = 4; // px，小于此距离视为点击
 
     // 拖拽期间的 document 级处理（动态挂载，不常驻）
+    // OPT-3: 用 e.target.closest('.cell') 替代 elementFromPoint，消除强制同步布局
     function _onDragMove(e) {
         if (!_rangeDragActive || _rangeStart === null || _rangeEnd !== null) return;
-        const el = document.elementFromPoint(e.clientX, e.clientY);
-        const cell = el?.closest('.cell');
+        // mousemove 期间 e.target 就是鼠标下方元素（pointerEvents 仍为 none 时需用 closest 爬祖先）
+        const cell = e.target?.closest?.('.cell');
         if (!cell) { _clearRangePreview(); return; }
         const data = _cellDataMap.get(cell); if (!data) { _clearRangePreview(); return; }
         _applyRangePreview(data.offset);
@@ -5139,8 +5645,8 @@ function _buildCalendar(y) {
         if (!_rangeDragActive) return;
         _rangeDragActive = false;
         _justDragged = true;
-        const el = document.elementFromPoint(e.clientX, e.clientY);
-        const cell = el?.closest('.cell');
+        // mouseup 的 e.target 即释放点元素，直接 closest 而非 elementFromPoint
+        const cell = e.target?.closest?.('.cell');
         if (!cell) return;
         const data = _cellDataMap.get(cell); if (!data) return;
         if (data.offset !== _rangeStart) _rangeSetEnd(data.offset);
@@ -5150,6 +5656,9 @@ function _buildCalendar(y) {
         if (!document.body.classList.contains('focus-mode')) return;
         const cell = e.target.closest('.cell');
         if (!cell || !cell.dataset.tt) return;
+        // 更替日格子不参与范围拖拽，跳过拖拽逻辑，让 click 事件自然派发
+        const _mdData = _cellDataMap.get(cell);
+        if (_mdData && _mdData.isExtra) return;
         if (_rangeStart !== null && _rangeEnd === null) return;
         _mouseDownCell = cell;
         const startX = e.clientX, startY = e.clientY;
@@ -5237,16 +5746,28 @@ function _buildCalendar(y) {
 
     // 移动端：touchend → 取消长按计时 / selecting 状态设终点
     view.addEventListener('touchend', e => {
+        const wasLongPressing = !!_rangeLongPressTimer;
         if (_rangeLongPressTimer) {
             clearTimeout(_rangeLongPressTimer);
             _rangeLongPressTimer = null;
         }
-        const cell = e.target.closest('.cell') || e.changedTouches && document.elementFromPoint(
-            e.changedTouches[0].clientX, e.changedTouches[0].clientY
-        )?.closest('.cell');
+        // OPT-3: changedTouches[0].target 即触摸释放点元素，消除 elementFromPoint 强制布局
+        const _touchTarget = e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].target : null;
+        const cell = e.target.closest('.cell') || _touchTarget?.closest?.('.cell');
         cell?.classList.remove('range-longpress-active');
 
         if (!document.body.classList.contains('focus-mode')) return;
+
+        // 移动端专注模式：轻触更替日 A → 直接触发年度回顾（不依赖 click 合成）
+        if (wasLongPressing && cell && _rangeStart === null) {
+            const data = _cellDataMap.get(cell);
+            if (data && data.isExtra && data.extraName === '更替日 A') {
+                e.preventDefault();
+                _showYearReview(data.vYear, data);
+                return;
+            }
+        }
+
         if (_rangeStart !== null && _rangeEnd === null && cell) {
             const data = _cellDataMap.get(cell);
             if (data && data.offset !== _rangeStart) {
@@ -5306,6 +5827,7 @@ function _buildExtraBox(y, cEq, total, now, isFMfn) {
         cell.setAttribute('tabindex','0');
         cell.setAttribute('aria-label', name);
         _cellDataMap.set(cell, ttObj);
+        _precomputeCellMs(ttObj); // 预热 cellMs
         cell.dataset.tt = JSON.stringify(ttObj);
         const numEl2 = document.createElement('div'); numEl2.className='v-num'; numEl2.style.cssText='color:var(--accent);font-weight:800;'; numEl2.textContent=name;
         const gInfoEl2 = document.createElement('div'); gInfoEl2.className='g-info'; gInfoEl2.textContent=`${gD.getMonth()+1}.${gD.getDate()}`;
@@ -5320,80 +5842,119 @@ function _buildExtraBox(y, cEq, total, now, isFMfn) {
         dg.appendChild(cell);
         _extraCache[i] = cell;
     }
-    view.appendChild(extra);
+    // cd-card 可能已存在于 DOM 末尾（由上一帧 _cdRefresh 插入）
+    // 必须把 extra-box 插到 cd-card 之前，否则 grid 自动排列会把 extra-box
+    // 顶到 cd-card 原来的格位，导致视觉上"倒计时卡片位置出现岁末更替期"的闪烁
+    const existingCdCard = view.querySelector('.cd-card');
+    if (existingCdCard) {
+        view.insertBefore(extra, existingCdCard);
+    } else {
+        view.appendChild(extra);
+    }
 }
 
 // ── 只更新可变部分（年份切换时调用）─────────────────────────────
 function _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn) {
+    // OPT-4: 年份切换时 gStr 全部变化，清空预置节点缓存强制重建映射
+    _gStrPreseededMap.clear();
     const nowStr = now.toDateString();
+    const cEqMs  = cEq.getTime();
 
-    for (let off=0; off<364; off++) {
-        const cached = _cellCache[off];
-        if (!cached) continue;
-        const { cell, numEl, termEl, gInfoEl, dayColor } = cached;
-        const d  = (off % 28) + 1;
-        const gD = new Date(cEq.getTime()+off*86400000);
-        const isT      = gD.toDateString()===nowStr;
-        const isFM     = isFMfn(off);
-        const termName = TERMS[off]||'';
-        const isMajor  = MAJOR_TERMS.has(off);
-        const isEqToday= isT && off===0;
-        const isWang   = off===wangshuOff;
+    // ── TASK-2 + OPT-8: 唯一游标日期对象，消灭 364 次 new Date() Minor GC ──────
+    // 今日午夜毫秒（用 _cachedTodayMs() 缓存，避免 new Date() in loop）
+    const _todayTs = _cachedTodayMs();
 
-        // className：精确 add/remove，不覆盖整个 className 以保留 range-* 等运行时 class
-        cell.classList.remove('is-equinox-today','is-today','is-full-moon','is-wangshu');
-        if (isEqToday) cell.classList.add('is-equinox-today');
-        else if (isT)  cell.classList.add('is-today');
-        if (isFM)      cell.classList.add('is-full-moon');
-        if (isWang)    cell.classList.add('is-wangshu');
-        cell.setAttribute('aria-label', `${gD.getMonth()+1}月${gD.getDate()}日`);
-        const _ttObj = {gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isWangshu:isWang};
-        _cellDataMap.set(cell, _ttObj);
-        cell.dataset.tt = JSON.stringify(_ttObj);
+    // 单一游标对象：初始化为 cEq 当日，每次循环末尾 setDate(+1) 向后推进
+    // 整个 364 次循环复用这一个 Date 实例，零额外 GC 压力
+    const workDate = new Date(cEqMs);
 
-        // 数字颜色（只在变化时写入，避免不必要的样式重计算）
-        const _newColor = isEqToday?'#DF1B12':(isT?'var(--accent)':dayColor);
-        if (numEl.style.color !== _newColor) numEl.style.color = _newColor;
+    const updates = [];
+    for (let off = 0; off < 364; off++) {
+        const cached = _cellCache[off]; if (!cached) continue;
 
-        // 节气占位更新
-        if (isEqToday) {
-            termEl.className = 'equinox-yuan';
-            termEl.removeAttribute('title');
-            termEl.removeAttribute('aria-label');
-            termEl.textContent = '元';
-        } else if (termName) {
-            termEl.className = `term-tag ${isMajor?'major-red':'minor-term'}`;
-            termEl.textContent = termName;
-        } else {
-            termEl.className = 'term-placeholder';
-            termEl.removeAttribute('title');
-            termEl.removeAttribute('aria-label');
-            termEl.textContent = '';
-        }
+        // 直接从游标对象读取年月日（游标已精确指向第 off 天）
+        const gYr = workDate.getFullYear();
+        const gMo = workDate.getMonth() + 1;
+        const gDy = workDate.getDate();
+        const gWk = workDate.getDay();           // 0=周日…6=周六
+        // 本格本地午夜毫秒（单次构造，与 _todayTs 比对）
+        const cellMsExact = workDate.getTime() - (workDate.getHours() * 3600000
+                          + workDate.getMinutes() * 60000 + workDate.getSeconds() * 1000
+                          + workDate.getMilliseconds());
+        // 注意：cEqMs 本身已是午夜时刻（getShEq 返回本地 00:00:00），
+        // 但为精确比对 _todayTs，仍以 getFullYear/Month/Date 重算本地午夜
+        const cellMsLocal = new Date(gYr, workDate.getMonth(), gDy).getTime();
 
-        // 公历小字
-        gInfoEl.textContent = `${gD.getMonth()+1}.${gD.getDate()}`;
+        const isT       = cellMsLocal === _todayTs;
+        const isFM      = isFMfn(off);
+        const termName  = TERMS[off] || '';
+        const isMajor   = MAJOR_TERMS.has(off);
+        const isEqToday = isT && off === 0;
+        const isWang    = off === wangshuOff;
+        const newColor  = isEqToday ? '#DF1B12' : (isT ? 'var(--accent)' : cached.dayColor);
+        const newTermCls= isEqToday ? 'equinox-yuan' : (termName ? `term-tag ${isMajor?'major-red':'minor-term'}` : 'term-placeholder');
+        const newTermTxt= isEqToday ? '元' : termName;
+        const newGInfo  = `${gMo}.${gDy}`;
+        const gLabel    = `${gMo}月${gDy}日`;
+        // ttObj 内联 cellMs，供 _cdApplyCellColor / showTooltip 直接读取
+        const ttObj = { gStr:`${gYr}年${gMo}月${gDy}日`, offset:off, realGDayWk:(gWk||7)-1, isWangshu:isWang, cellMs:cellMsLocal };
+        updates.push({ off, cached, isT, isFM, isEqToday, isWang, newColor, newTermCls, newTermTxt, newGInfo, gLabel, ttObj });
+
+        // TASK-2: 游标前进一天（setDate 在月末自动进位，无需手动处理月份溢出）
+        workDate.setDate(gDy + 1);
     }
 
-    // 更替日区域：total变化时重建，否则只更新日期小字
+    // ── 第二遍：批量写 DOM，脏检查跳过无变化节点 ───────────────────────
+    for (const u of updates) {
+        const { off, cached, isT, isFM, isEqToday, isWang, newColor, newTermCls, newTermTxt, newGInfo, gLabel, ttObj } = u;
+        const { cell, numEl, termEl, gInfoEl } = cached;
+        const snap = _cellStateSnap.get(off);
+        const isNew = !snap;
+
+        // class：用 toggle 增量更新，保留 range-* 等运行时 class
+        if (isNew || snap.isEqT !== isEqToday)  cell.classList.toggle('is-equinox-today', isEqToday);
+        if (isNew || snap.isT   !== (isT&&!isEqToday)) cell.classList.toggle('is-today',  isT&&!isEqToday);
+        if (isNew || snap.isFM  !== isFM)        cell.classList.toggle('is-full-moon',     isFM);
+        if (isNew || snap.isW   !== isWang)       cell.classList.toggle('is-wangshu',       isWang);
+        if (isNew || snap.gLabel!== gLabel)       cell.setAttribute('aria-label', gLabel);
+
+        // WeakMap（每次都更新，供 tooltip 使用）
+        _cellDataMap.set(cell, ttObj);
+        if (isNew || snap.gStr !== ttObj.gStr || snap.isW !== isWang) cell.dataset.tt = JSON.stringify(ttObj);
+
+        if (isNew || snap.color !== newColor) numEl.style.color = newColor;
+        if (isNew || snap.tCls  !== newTermCls) {
+            termEl.className = newTermCls;
+            if (!isEqToday && !newTermTxt) { termEl.removeAttribute('title'); termEl.removeAttribute('aria-label'); }
+        }
+        if (isNew || snap.tTxt  !== newTermTxt)  termEl.textContent = newTermTxt;
+        if (isNew || snap.gInfo !== newGInfo)     gInfoEl.textContent = newGInfo;
+
+        _cellStateSnap.set(off, {
+            isEqT:isEqToday, isT:isT&&!isEqToday, isFM, isW:isWang,
+            gLabel, color:newColor, tCls:newTermCls, tTxt:newTermTxt, gInfo:newGInfo, gStr:ttObj.gStr,
+        });
+    }
+
+    // ── 更替日区域（逻辑不变，补 cellMs 预计算）────────────────────────
     if (total !== _lastTotal) {
         _buildExtraBox(y, cEq, total, now, isFMfn);
         _lastTotal = total;
     } else if (total > 364) {
-        for (let i=0; i<total-364; i++) {
-            const off = 364+i;
-            const gD  = new Date(cEq.getTime()+off*86400000);
-            const isT = gD.toDateString()===nowStr;
-            const isFM = isFMfn(off);
-            const ec  = _extraCache[i];
-            if (!ec) continue;
-            ec.classList.remove('is-today','is-full-moon');
-            if (isT)  ec.classList.add('is-today');
-            if (isFM) ec.classList.add('is-full-moon');
-            const _ecObj = {gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isExtra:true,vYear:y,extraName:(total===365?'更替日 A':(i===0?'更替日 B':'更替日 A'))};
-            _cellDataMap.set(ec, _ecObj);
-            ec.dataset.tt = JSON.stringify(_ecObj);
-            ec.querySelector('.g-info').textContent = `${gD.getMonth()+1}.${gD.getDate()}`;
+        for (let i = 0; i < total-364; i++) {
+            const off = 364+i, ec = _extraCache[i]; if (!ec) continue;
+            const gD  = new Date(cEqMs + off*86400000);
+            const isT = gD.toDateString() === nowStr;
+            const isFM= isFMfn(off);
+            ec.classList.toggle('is-today',    isT);
+            ec.classList.toggle('is-full-moon', isFM);
+            const ecObj = {gStr:`${gD.getFullYear()}年${gD.getMonth()+1}月${gD.getDate()}日`,offset:off,realGDayWk:(gD.getDay()||7)-1,isExtra:true,vYear:y,extraName:(total===365?'更替日 A':(i===0?'更替日 B':'更替日 A'))};
+            _precomputeCellMs(ecObj);
+            _cellDataMap.set(ec, ecObj);
+            ec.dataset.tt = JSON.stringify(ecObj);
+            const gi = ec.querySelector('.g-info');
+            const ng = `${gD.getMonth()+1}.${gD.getDate()}`;
+            if (gi && gi.textContent !== ng) gi.textContent = ng;
         }
     }
 }
@@ -5410,18 +5971,23 @@ function _doRender() {
     DOM.vHomeYearBg.innerText=y;
     document.title = `${y}年 · 更替历`;
 
-    if (!_calBuilt) {
-        // 首次：全量构建
-        _buildCalendar(y);
-    } else {
-        // 后续：只更新可变部分
-        const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
-        _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn);
+    // ── 年份级拦截：仅年份变化或强制模式时才重建/更新格子，消除观测模式无效重绘 ──
+    const _yearChanged = (y !== _lastRenderedYear);
+    if (_yearChanged || _forceRenderFlag) {
+        _forceRenderFlag = false;
+        _lastRenderedYear = y;
+        if (!_calBuilt) {
+            // 首次：全量构建
+            _buildCalendar(y);
+        } else {
+            // 后续：只更新可变部分
+            const { cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn } = _calcYearData(y);
+            _updateCells(y, cEq, total, now, TERMS, MAJOR_TERMS, wangshuOff, isFMfn);
+        }
     }
-    // 渲染完成后重绘专注标记 + 倒计时卡片 + 染色
+    // 渲染完成后重绘专注标记 + 倒计时卡片 + 染色（事件驱动，单帧去抖）
     _applyFocusMarks();
-    _buildCdCard();
-    _cdApplyCellColor();
+    _cdRefresh('force');
 }
 
 // ── 专注模式：保存标记到 localStorage ──────────────────────────────
@@ -5431,58 +5997,86 @@ function _saveFocusMarks() {
         const m = _focusMarks[k];
         if (!m.dot && !m.star && !m.note) delete _focusMarks[k];
     });
-    try { localStorage.setItem('focusMarks', JSON.stringify(_focusMarks)); } catch(_) {}
+    try { _lsSetJSON('focusMarks', _focusMarks); } catch(_) {}
 }
 
-// ── 专注模式：将标记渲染到格子上 ────────────────────────────────────
+// ── 专注模式：将标记渲染到格子上（OPT-4：预置节点，仅改 display/opacity，零 DOM 增删）────
+// 持久化的 gStr→{preDot,preStar,preCd} 缓存，_buildCalendar 首次构建后一直有效
+const _gStrPreseededMap = new Map();
+let _gStrPreseededYear = null; // 上次构建 Map 时的年份，年份变化时强制重建
+
 function _applyFocusMarks() {
     if (!_calBuilt) return;
-    const now = new Date();
-    const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayMs = _cachedTodayMs();
 
-    // 一次性建立 gStr → cell 的 O(1) 查找表
-    const gStrMap = new Map();
-    _cellCache.forEach(({ cell }) => {
-        const data = _cellDataMap.get(cell);
-        if (data?.gStr) gStrMap.set(data.gStr, cell);
+    // 1. 重建 gStr → 预置节点缓存
+    // 年份变化或 Map 为空时重建（修复：原判断 size !== length 在年份切换时永不触发，
+    // 因为格子数量始终是364，导致跨年后标记全部失效）
+    if (_gStrPreseededYear !== _lastRenderedYear || _gStrPreseededMap.size === 0) {
+        _gStrPreseededYear = _lastRenderedYear;
+        _gStrPreseededMap.clear();
+        _cellCache.forEach((cached) => {
+            const data = _cellDataMap.get(cached.cell);
+            if (data?.gStr && cached.preDot) {
+                _gStrPreseededMap.set(data.gStr, cached);
+            }
+        });
+    }
+
+    // 2. 先将所有预置节点隐藏（批量 display 切换，无 DOM 增删）
+    _gStrPreseededMap.forEach(cached => {
+        if (cached.preDot) { cached.preDot.style.display = 'none'; cached.preDot.className = 'cell-dot'; }
+        if (cached.preStar) cached.preStar.style.display = 'none';
+        if (cached.preCd)  cached.preCd.style.display = 'none';
     });
+    // 同时处理 extraCache（更替日，不走预置路径，保持旧逻辑但只在有标记时操作）
     _extraCache.forEach(cell => {
         if (!cell) return;
-        const data = _cellDataMap.get(cell);
-        if (data?.gStr) gStrMap.set(data.gStr, cell);
-    });
-
-    // 先清除所有旧标记元素
-    gStrMap.forEach(cell => {
         cell.querySelectorAll('.cell-dot,.cell-star,.cell-countdown').forEach(el => el.remove());
     });
 
-    // 按查找表 O(1) 定位格子并渲染标记
+    // 3. 对有标记的格子启用预置节点
     Object.entries(_focusMarks).forEach(([gStr, mark]) => {
-        const cell = gStrMap.get(gStr);
-        if (!cell) return;
-
-        if (mark.dot) {
-            const dot = document.createElement('div');
-            dot.className = `cell-dot cell-dot-${mark.dot}`;
-            cell.appendChild(dot);
-        }
-
-        if (mark.star) {
-            const star = document.createElement('div');
-            star.className = 'cell-star';
-            star.textContent = '★';
-            cell.appendChild(star);
-
-            const nums = gStr.match(/\d+/g);
-            if (nums) {
-                const cellMs = new Date(+nums[0], +nums[1]-1, +nums[2]).getTime();
-                const diffDays = Math.round((cellMs - todayMs) / 86400000);
-                if (diffDays > 0) {
-                    const cd = document.createElement('div');
-                    cd.className = 'cell-countdown';
-                    cd.textContent = `${diffDays}`;
-                    cell.appendChild(cd);
+        const cached = _gStrPreseededMap.get(gStr);
+        if (cached) {
+            // 普通格子：用预置节点
+            if (mark.dot && cached.preDot) {
+                cached.preDot.className = `cell-dot cell-dot-${mark.dot}`;
+                cached.preDot.style.display = '';
+            }
+            if (mark.star) {
+                if (cached.preStar) cached.preStar.style.display = '';
+                if (cached.preCd) {
+                    const _data = _cellDataMap.get(cached.cell);
+                    const cellMs = _data?.cellMs;
+                    if (cellMs !== undefined) {
+                        const diffDays = Math.round((cellMs - todayMs) / 86400000);
+                        if (diffDays > 0) {
+                            cached.preCd.textContent = String(diffDays);
+                            cached.preCd.style.display = '';
+                        }
+                    }
+                }
+            }
+        } else {
+            // 更替日格子：回退到旧 DOM 构建路径（仅1~2个格子）
+            const extraCell = _extraCache.find(c => c && _cellDataMap.get(c)?.gStr === gStr);
+            if (!extraCell) return;
+            if (mark.dot) {
+                const dot = document.createElement('div');
+                dot.className = `cell-dot cell-dot-${mark.dot}`;
+                extraCell.appendChild(dot);
+            }
+            if (mark.star) {
+                const star = document.createElement('div'); star.className = 'cell-star'; star.textContent = '★';
+                extraCell.appendChild(star);
+                const _data = _cellDataMap.get(extraCell);
+                const cellMs = _data?.cellMs;
+                if (cellMs !== undefined) {
+                    const diffDays = Math.round((cellMs - todayMs) / 86400000);
+                    if (diffDays > 0) {
+                        const cd = document.createElement('div'); cd.className = 'cell-countdown'; cd.textContent = String(diffDays); extraCell.appendChild(cd);
+                    }
                 }
             }
         }
@@ -5492,30 +6086,58 @@ function _applyFocusMarks() {
     _applyRangeHighlight();
 }
 
+// 今日午夜毫秒缓存（按日期字符串缓存，避免重复 new Date()）
+let _cachedTodayMsKey = '', _cachedTodayMsVal = 0;
+function _cachedTodayMs() {
+    const now = new Date();
+    const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+    if (key !== _cachedTodayMsKey) {
+        _cachedTodayMsKey = key;
+        _cachedTodayMsVal = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    }
+    return _cachedTodayMsVal;
+}
+
 // ── 专注模式：区间高亮渲染 ───────────────────────────────────────────
+// 当前高亮区间状态缓存（避免每次全量清除再全量添加）
+let _lastHighlightLo = null, _lastHighlightHi = null;
+
 function _applyRangeHighlight() {
     if (!_calBuilt) return;
-    _cellCache.forEach(({ cell }) => {
-        cell.classList.remove('range-highlight','range-start','range-end');
-        cell.removeAttribute('data-range-days');
-    });
-    _extraCache.forEach(cell => {
-        if (cell) { cell.classList.remove('range-highlight','range-start','range-end'); cell.removeAttribute('data-range-days'); }
-    });
+    // 清除上一次高亮的格子（仅遍历受影响的区间）
+    if (_lastHighlightLo !== null) {
+        for (let off = _lastHighlightLo; off <= _lastHighlightHi; off++) {
+            const cached = _cellCache[off];
+            if (cached) {
+                cached.cell.classList.remove('range-highlight','range-start','range-end');
+                cached.cell.removeAttribute('data-range-days');
+            }
+        }
+        // 同步清除 extraCache（offset >= 364）
+        _extraCache.forEach(cell => {
+            if (cell) { cell.classList.remove('range-highlight','range-start','range-end'); cell.removeAttribute('data-range-days'); }
+        });
+        _lastHighlightLo = null; _lastHighlightHi = null;
+    }
     if (_rangeStart === null) return;
     const lo = Math.min(_rangeStart, _rangeEnd ?? _rangeStart);
     const hi = Math.max(_rangeStart, _rangeEnd ?? _rangeStart);
     const days = hi - lo + 1;
-    _cellCache.forEach(({ cell }, off) => {
+    _lastHighlightLo = lo; _lastHighlightHi = hi;
+    // 只遍历区间内的格子
+    for (let off = lo; off <= hi; off++) {
+        const cached = _cellCache[off];
+        if (!cached) continue;
+        const { cell } = cached;
         if (off === lo) {
             cell.classList.add('range-start');
         } else if (off === hi) {
             cell.classList.add('range-end');
             if (_rangeEnd !== null) cell.setAttribute('data-range-days', days);
-        } else if (off > lo && off < hi) {
+        } else {
             cell.classList.add('range-highlight');
         }
-    });
+    }
 }
 
 // ── 专注模式：区间高亮触发方式 ──────────────────────────────────────
@@ -5618,20 +6240,39 @@ function _rangeClear() {
     _dismissRangeCopyBar();
 }
 
+// ── 专注模式：当前 preview 格子集合（避免 querySelectorAll 全扫描）
+const _rangePreviewSet = new Set();
+
 // ── 专注模式：清除 hover 预览 ────────────────────────────────────────
 function _clearRangePreview() {
-    DOM.calView.querySelectorAll('.range-preview').forEach(c => c.classList.remove('range-preview'));
+    _rangePreviewSet.forEach(c => c.classList.remove('range-preview'));
+    _rangePreviewSet.clear();
 }
 
 // ── 专注模式：在 selecting 状态下渲染 hover 预览 ─────────────────────
 function _applyRangePreview(hoverOffset) {
-    _cellCache.forEach(({ cell }) => cell.classList.remove('range-preview'));
-    if (_rangeStart === null || _rangeEnd !== null) return;
+    if (_rangeStart === null || _rangeEnd !== null) { _clearRangePreview(); return; }
     const lo = Math.min(_rangeStart, hoverOffset);
     const hi = Math.max(_rangeStart, hoverOffset);
-    _cellCache.forEach(({ cell }, off) => {
-        if (off > lo && off < hi) cell.classList.add('range-preview');
+
+    // 移除不再在区间内的格子
+    _rangePreviewSet.forEach(c => {
+        const data = _cellDataMap.get(c);
+        if (!data || data.offset <= lo || data.offset >= hi) {
+            c.classList.remove('range-preview');
+            _rangePreviewSet.delete(c);
+        }
     });
+    // 添加新进入区间的格子（只遍历区间内的 offset）
+    for (let off = lo + 1; off < hi; off++) {
+        const cached = _cellCache[off];
+        if (!cached) continue;
+        const { cell } = cached;
+        if (!_rangePreviewSet.has(cell)) {
+            cell.classList.add('range-preview');
+            _rangePreviewSet.add(cell);
+        }
+    }
 }
 
 // ── 专注模式：selecting 状态下点击另一格设为终点 ─────────────────────
@@ -5662,7 +6303,7 @@ function goHome() {
     viewDateOverride=null;
     DOM.statusCard.classList.remove('is-observing');
     const now=new Date(); let y=now.getFullYear(); if(now<getShEq(y)) y--;
-    DOM.yIn.value=y; _doRender(); update();
+    DOM.yIn.value=y; _doRender(); _SCHED.forceRefresh();
     setTimeout(()=>{ _scrollToCell(document.querySelector('.is-today')); }, 50);
 }
 
@@ -5774,9 +6415,10 @@ function _applyScrollClass(y) {
 
 // isBouncing 解锁：scrollend 事件 + 最长800ms超时保险（修复 Safari 竞态）
 function _unlock() { isBouncing=false; }
+let _togFloatEl = null; // 模块级缓存，DOMContentLoaded 后赋值
 function triggerBounce() {
     // 悬浮模式关闭时不执行回弹
-    if (!document.getElementById('togFloat')?.checked) return;
+    if (!_togFloatEl?.checked) return;
     if (isBouncing) return;
     isBouncing=true;
     const target = DOM.heroPlaceholder;
@@ -5812,6 +6454,7 @@ function _initCardDrag() {
     }
 
     let _dragging = null;
+    let _lastDragOver = null; // 记录当前 drag-over 目标，避免 querySelectorAll 全扫描
 
     // ── 桌面端：HTML5 Drag & Drop ────────────────────────────────
     grid.addEventListener('dragstart', e => {
@@ -5825,7 +6468,7 @@ function _initCardDrag() {
         const card = e.target.closest('.glass-card');
         if (!card) return;
         card.classList.remove('dragging');
-        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+        if (_lastDragOver) { _lastDragOver.classList.remove('drag-over'); _lastDragOver = null; }
         _dragging = null;
         saveCardOrder();
     });
@@ -5834,19 +6477,25 @@ function _initCardDrag() {
         e.dataTransfer.dropEffect = 'move';
         const over = e.target.closest('.glass-card');
         if (!over || over === _dragging) return;
-        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
-        over.classList.add('drag-over');
+        if (over !== _lastDragOver) {
+            if (_lastDragOver) _lastDragOver.classList.remove('drag-over');
+            over.classList.add('drag-over');
+            _lastDragOver = over;
+        }
         const rect = over.getBoundingClientRect();
         const after = e.clientX > rect.left + rect.width / 2;
         grid.insertBefore(_dragging, after ? over.nextSibling : over);
     });
     grid.addEventListener('dragleave', e => {
         const over = e.target.closest('.glass-card');
-        if (over) over.classList.remove('drag-over');
+        if (over && over === _lastDragOver) {
+            over.classList.remove('drag-over');
+            _lastDragOver = null;
+        }
     });
     grid.addEventListener('drop', e => {
         e.preventDefault();
-        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+        if (_lastDragOver) { _lastDragOver.classList.remove('drag-over'); _lastDragOver = null; }
     });
 
     // 给每张卡设置 draggable（桌面端）
@@ -5854,27 +6503,35 @@ function _initCardDrag() {
         card.setAttribute('draggable', 'true');
     });
 
-    // ── 移动端：Touch 拖拽排序 ───────────────────────────────────
-    let _touchCard = null;      // 正在拖动的卡片
-    let _touchClone = null;     // 跟随手指的幽灵副本
+    // ── 移动端：Touch 拖拽排序（TASK-1：彻底消灭 elementFromPoint） ────────────
+    let _touchCard    = null;   // 正在拖动的卡片
+    let _touchClone   = null;   // 跟随手指的幽灵副本
     let _touchOffsetX = 0;      // 手指按下点相对于卡片左上角的偏移
     let _touchOffsetY = 0;
     let _longPressTimer = null; // 长按触发拖动的计时器
     const LONG_PRESS_MS = 300;  // 长按阈值（ms）
 
+    // 拖拽激活时快照的目标矩形缓存：避免 touchmove 中触发强制布局
+    // 结构：Map<Element, DOMRect>（O(1) 查找，替代原数组 find O(n)）
+    let _dropTargetRects = new Map();
+    let _lastTouchDragOver = null; // 记录当前 drag-over 目标，避免 querySelectorAll 全扫描
+
+    // TASK-1: 纯数学矩形碰撞检测，替代 elementFromPoint + display toggle
     function _touchGetCardAt(x, y) {
-        // 临时隐藏 clone，避免 elementFromPoint 命中它
-        if (_touchClone) _touchClone.style.display = 'none';
-        const el = document.elementFromPoint(x, y);
-        if (_touchClone) _touchClone.style.display = '';
-        return el ? el.closest('.glass-card') : null;
+        for (const [card, rect] of _dropTargetRects) {
+            if (card === _touchCard) continue; // 跳过自身
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                return card;
+            }
+        }
+        return null;
     }
 
     function _touchStartDrag(card, touch) {
         _touchCard = card;
         card.classList.add('dragging');
 
-        // 创建半透明跟随副本
+        // 创建半透明跟随副本（pointerEvents:none 确保不影响碰撞检测）
         const rect = card.getBoundingClientRect();
         _touchOffsetX = touch.clientX - rect.left;
         _touchOffsetY = touch.clientY - rect.top;
@@ -5887,7 +6544,7 @@ function _initCardDrag() {
             width:          rect.width  + 'px',
             height:         rect.height + 'px',
             opacity:        '0.75',
-            pointerEvents:  'none',
+            pointerEvents:  'none',  // 确保幽灵副本不参与任何碰撞检测
             zIndex:         '9999',
             borderRadius:   '14px',
             boxShadow:      '0 8px 30px rgba(0,0,0,0.18)',
@@ -5895,35 +6552,50 @@ function _initCardDrag() {
             margin:         '0',
         });
         document.body.appendChild(_touchClone);
+
+        // TASK-1: 拖拽激活瞬间一次性快照所有可放置目标的 BoundingClientRect
+        // 此后 touchmove 中不再触发任何布局读取（getBoundingClientRect）
+        // 使用 Map 结构，_touchGetCardAt 中查找 O(1)
+        _dropTargetRects = new Map();
+        grid.querySelectorAll('.glass-card').forEach(c => {
+            _dropTargetRects.set(c, c.getBoundingClientRect());
+        });
     }
 
     function _touchMove(x, y) {
         if (!_touchCard || !_touchClone) return;
-        // 移动幽灵副本跟随手指
+        // 移动幽灵副本跟随手指（纯写操作，不触发布局）
         _touchClone.style.left = (x - _touchOffsetX) + 'px';
         _touchClone.style.top  = (y - _touchOffsetY) + 'px';
 
-        // 找到手指下方的目标卡
+        // TASK-1: 纯数学碰撞检测，零布局触发
         const over = _touchGetCardAt(x, y);
-        grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
+        // 只操作变化的单个目标，不再 querySelectorAll 全扫描
+        if (over !== _lastTouchDragOver) {
+            if (_lastTouchDragOver) _lastTouchDragOver.classList.remove('drag-over');
+            _lastTouchDragOver = over || null;
+            if (over) over.classList.add('drag-over');
+        }
         if (over && over !== _touchCard) {
-            over.classList.add('drag-over');
-            const rect = over.getBoundingClientRect();
-            // 移动端单列布局：按 Y 轴上下判断；多列布局：按 X 轴左右判断
-            const isOneCol = grid.offsetWidth === over.offsetWidth;
+            // 从 Map 中 O(1) 取缓存 rect，避免再次 getBoundingClientRect
+            const r = _dropTargetRects.get(over) || over.getBoundingClientRect();
+            // 单列（移动端竖屏）按 Y 轴，多列按 X 轴
+            const isOneCol = grid.offsetWidth <= over.offsetWidth + 2;
             const after = isOneCol
-                ? y > rect.top + rect.height / 2
-                : x > rect.left + rect.width  / 2;
+                ? y > r.top + r.height / 2
+                : x > r.left + r.width  / 2;
             grid.insertBefore(_touchCard, after ? over.nextSibling : over);
         }
     }
 
     function _touchEnd() {
         clearTimeout(_longPressTimer);
+        // TASK-1: 清理坐标缓存
+        _dropTargetRects = new Map();
+        if (_lastTouchDragOver) { _lastTouchDragOver.classList.remove('drag-over'); _lastTouchDragOver = null; }
         if (_touchClone) { _touchClone.remove(); _touchClone = null; }
         if (_touchCard)  {
             _touchCard.classList.remove('dragging');
-            grid.querySelectorAll('.glass-card').forEach(c => c.classList.remove('drag-over'));
             _touchCard = null;
             saveCardOrder();
         }
@@ -5964,19 +6636,19 @@ function _initCardDrag() {
 }
 
 function loadSettings() {
-    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch(_) { return {}; }
+    return _lsGetJSON(SETTINGS_KEY) || {};
 }
 function saveSettings(s) {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch(_) {}
+    _lsSetJSON(SETTINGS_KEY, s);
 }
 function saveCardOrder() {
     try {
         const ids = [...document.querySelectorAll('.tool-grid .glass-card')].map(c => c.dataset.cardId);
-        localStorage.setItem('gengtiCardOrder', JSON.stringify(ids));
+        _lsSetJSON('gengtiCardOrder', ids);
     } catch(_) {}
 }
 function loadCardOrder() {
-    try { return JSON.parse(localStorage.getItem('gengtiCardOrder')) || null; } catch(_) { return null; }
+    return _lsGetJSON('gengtiCardOrder');
 }
 
 function applySettings() {
@@ -6008,8 +6680,7 @@ function initSettings() {
     document.getElementById('togFloat').addEventListener('change', applySettings);
 
     // ── 温度单位切换
-    const s2 = loadSettings();
-    _tempUnit = s2.tempUnit || 'C';
+    _tempUnit = s.tempUnit || 'C';
     _applyUnitBtns();
     document.getElementById('btnUnitToggle').addEventListener('click', () => {
         _tempUnit = _tempUnit === 'C' ? 'F' : 'C';
@@ -6026,7 +6697,7 @@ function _applyUnitBtns() {
 function _saveUnitPref() {
     try {
         const s = loadSettings(); s.tempUnit = _tempUnit;
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+        _lsSetJSON(SETTINGS_KEY, s);
     } catch(_) {}
 }
 
@@ -6039,7 +6710,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // buildArcTable 异步执行，不阻塞首帧
     setTimeout(buildArcTable, 0);
     // focusMode 必须在 goHome()/render 之前恢复，_buildCdCard 依赖此状态
-    if (localStorage.getItem('focusMode') === '1') document.body.classList.add('focus-mode');
+    if (_lsGet('focusMode') === '1') document.body.classList.add('focus-mode');
 
     // ── 日历立即渲染，不等待倒计时网络请求 ──────────────────────
     setMode('G'); goHome();
@@ -6048,8 +6719,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
     _cdInit().then(async () => {
         // token 验证 + 任务拉取完成后，追加渲染倒计时卡片
-        _buildCdCard();
-        _cdApplyCellColor();
+        _cdRefresh('force');
         await _cdCheckCycleTasks(); // 页面首次加载：检测周期任务自动续期
         _cdCheckArrivalAlert(); // 页面首次加载：检查今日是否有到达的倒计时
         const _urlGo     = new URLSearchParams(window.location.search).get('go');
@@ -6095,7 +6765,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         _cdSaveToken(data.token);
                         overlay.remove();
                         await _cdInit();
-                        _buildCdCard(); _cdApplyCellColor();
+                        _cdRefresh('force');
                     } catch(_) {
                         errDiv.textContent = '网络错误，请重试';
                         submitBtn.disabled = false; submitBtn.textContent = '登录';
@@ -6153,7 +6823,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         _cdSaveToken(tk);
                         overlay.remove();
                         await _cdInit();
-                        _buildCdCard(); _cdApplyCellColor();
+                        _cdRefresh('force');
                     } catch(_) {
                         errDiv.textContent = '网络错误，请重试';
                         submitBtn.disabled = false; submitBtn.textContent = '验证';
@@ -6179,13 +6849,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     _syncHeroPlaceholder();
     new ResizeObserver(_syncHeroPlaceholder).observe(DOM.heroSpace);
 
+    // ── 缓存 togFloat 引用（scroll 是高频事件，避免每次 getElementById）
+    const _togFloat = document.getElementById('togFloat');
+    _togFloatEl = _togFloat; // 同步到模块级引用（供 triggerBounce 使用）
+
     // ── 按钮事件（消除内联 onclick）
     document.getElementById('btnHome').addEventListener('click',  e=>{
         e.stopPropagation();
         hideTooltip();
         if (document.body.classList.contains('focus-mode')) {
             document.body.classList.remove('focus-mode');
-            localStorage.setItem('focusMode','0');
+            _lsSet('focusMode','0');
             _rangeClear();
         }
         goHome();
@@ -6212,7 +6886,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         function _selectCity(lat, lon, displayName) {
             updateWeather(lat, lon, displayName);
             fetchWaqi(lat, lon);
-            _lastSecond=-1; update();
+            _SCHED.forceRefresh();
             DOM.seasonSyncTag.innerText = `已切换至 ${displayName}`;
             setTimeout(_updateSeasonTagTime, 3000);
             _collapse();
@@ -6242,13 +6916,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 const res = results[0];
                 const lat = parseFloat(res.lat);
                 const lon = parseFloat(res.lon);
-                // 解析 display_name：只保留含行政级别关键词的段，取前两个
-                const displayName = (res.display_name || res.name || q)
-                    .split(',')
-                    .map(s => s.trim())
-                    .filter(s => s && ADMIN_KEYWORDS.test(s))
-                    .slice(0, 2)
-                    .join('，') || res.name || q;
+                const displayName = _parseDisplayName(res, q);
 
                 _selectCity(lat, lon, displayName);
             } catch(e) {
@@ -6307,7 +6975,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             viewDateOverride = null;
             document.getElementById('statusCard').classList.remove('is-observing');
             hideTooltip();
-            update();
+            _SCHED.forceRefresh();
         }
     });
 
@@ -6325,7 +6993,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                     _rangeClear();
                 } else {
                     document.body.classList.remove('focus-mode');
-                    localStorage.setItem('focusMode','0');
+                    _lsSet('focusMode','0');
                     hideTooltip();
                 }
             }
@@ -6360,7 +7028,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('scroll',()=>{
         const cy=window.scrollY;
         // 悬浮模式开启时才执行淡出和回弹判断
-        if (document.getElementById('togFloat')?.checked) {
+        if (_togFloat?.checked) {
             _applyScrollClass(cy);
             const heroBottom=DOM.heroPlaceholder;
             const hBottom=heroBottom?heroBottom.offsetTop+heroBottom.offsetHeight:430;
@@ -6370,8 +7038,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     },{passive:true});
 
     // wheel：passive:true（不阻塞滚动性能），isBouncing 时用 scrollTo 代替 preventDefault
+    // 观测模式下滚动：弹窗关闭但不退出观测模式（viewDateOverride 保持）
     window.addEventListener('wheel',e=>{
-        if(DOM.tooltip.style.display==='block') hideTooltip(e);
+        if(DOM.tooltip.style.display==='block') {
+            viewDateOverride ? _hideTooltipVisual() : hideTooltip(e);
+        }
         if(isBouncing && e.deltaY<0) { window.scrollTo({top:lastScrollY,behavior:'instant'}); }
     },{passive:true});
 
@@ -6398,9 +7069,9 @@ window.addEventListener('DOMContentLoaded', async () => {
             e.stopPropagation();
             const focusOn = !document.body.classList.contains('focus-mode');
             document.body.classList.toggle('focus-mode', focusOn);
-            localStorage.setItem('focusMode', focusOn ? '1' : '0');
+            _lsSet('focusMode', focusOn ? '1' : '0');
             hideTooltip(); // 模式切换时关闭已打开的弹窗
-            _buildCdCard(); _cdApplyCellColor();
+            _cdRefresh('force');
             if (focusOn) window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     })();
@@ -6421,70 +7092,105 @@ window.addEventListener('DOMContentLoaded', async () => {
         const now = new Date();
         const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now;
         _midnightTimer = setTimeout(() => {
+            _forceRenderFlag = true; // 跨天强制刷新（同一年份today格位移）
             render();
-            _buildCdCard();
-            _cdApplyCellColor();
+            _cdRefresh('date-change');
             _cdCheckArrivalAlert();
             _scheduleNextMidnight();
         }, msToMidnight);
     }
     _scheduleNextMidnight();
 
-    // ── Page Visibility：标签页隐藏时同时暂停 rAF 和天气定时器
+    // ── Page Visibility：标签页隐藏时同时暂停 rAF、天气定时器和零点计时器
     // 设备休眠可能导致 setTimeout 延迟，重新激活时补一次日期检查作为保险
     let _lastVisibleDate = new Date().toDateString();
     document.addEventListener('visibilitychange',()=>{
-        _paused=document.hidden;
-        if(!_paused) {
-            scheduleUpdate(); _startWeatherTimers();
+        if (document.hidden) {
+            _SCHED.pause();
+            _stopWeatherTimers();
+            // 暂停零点计时器（设备休眠时 setTimeout 不可靠，重新激活时重新调度）
+            if (_midnightTimer) { clearTimeout(_midnightTimer); _midnightTimer = null; }
+        } else {
+            _SCHED.resume();
+            _startWeatherTimers();
             const todayStr = new Date().toDateString();
             if (todayStr !== _lastVisibleDate) {
                 _lastVisibleDate = todayStr;
-                render(); _buildCdCard(); _cdApplyCellColor();
+                _forceRenderFlag = true; render(); _cdRefresh('visibility');
                 _cdCheckArrivalAlert();
             }
-        } else {
-            _stopWeatherTimers();
+            // 重新激活时重新调度零点计时器（修复休眠后计时器丢失问题）
+            if (!_midnightTimer) _scheduleNextMidnight();
         }
     });
 
-    // ── 定位 → 天气（失败时显示"上海（默认·点击重试）"）
+    // ── 定位 → 天气（失败/拒绝时给出明确提示，支持点击重试）
     async function _doGeolocate() {
-        DOM.seasonSyncTag.style.cursor='default';
-        DOM.seasonSyncTag.innerText='正在定位…';
-        if (!navigator.geolocation) { _geoFallback(); return; }
-        navigator.geolocation.getCurrentPosition(async pos=>{
-            const {latitude:lat,longitude:lon}=pos.coords;
-            let city=null;
+        DOM.seasonSyncTag.style.cursor = 'default';
+        DOM.seasonSyncTag.title = '';
+        DOM.seasonSyncTag.innerText = '正在定位…';
+
+        if (!navigator.geolocation) { _geoFallback('noapi'); return; }
+
+        // 先用 Permissions API 检查权限状态，避免已拒绝时仍无声地 fallback 到上海
+        if (navigator.permissions) {
+            try {
+                const perm = await navigator.permissions.query({ name: 'geolocation' });
+                if (perm.state === 'denied') {
+                    _geoFallback('denied');
+                    // 权限状态变化时自动重新尝试（用户在系统设置里改回允许）
+                    perm.onchange = () => { if (perm.state !== 'denied') { perm.onchange=null; _doGeolocate(); } };
+                    return;
+                }
+            } catch(_) { /* Permissions API 不支持时忽略，继续正常流程 */ }
+        }
+
+        navigator.geolocation.getCurrentPosition(async pos => {
+            const { latitude: lat, longitude: lon } = pos.coords;
+            let city = null;
             try {
                 // 反地理编码：Nominatim 坐标→城市名
-                const gc=new AbortController(); const gcTid=setTimeout(()=>gc.abort(),5000);
-                const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&format=json&accept-language=zh`,{signal:gc.signal,headers:NOMINATIM_HEADERS});
+                const gc = new AbortController(); const gcTid = setTimeout(() => gc.abort(), 5000);
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&format=json&accept-language=zh`, { signal: gc.signal, headers: NOMINATIM_HEADERS });
                 clearTimeout(gcTid);
-                const g=await r.json();
-                // 解析 display_name：只保留含行政级别关键词的段，取前两个
-                city = (g.display_name || g.name)
-                    ? (g.display_name || g.name)
-                        .split(',')
-                        .map(s => s.trim())
-                        .filter(s => s && ADMIN_KEYWORDS.test(s))
-                        .slice(0, 2)
-                        .join('，') || g.name || null
-                    : null;
-            } catch(_){}
-            updateWeather(lat,lon,city);
-            fetchWaqi(lat,lon);
-            _lastSecond=-1; update(); // 定位完成，强制刷新月相视位置角
-        }, _geoFallback, {timeout:8000,maximumAge:300000});
+                const g = await r.json();
+                city = _parseDisplayName(g, null);
+            } catch(_) {}
+            // 定位成功后立即更新标签，不等天气请求完成
+            // 避免天气 Worker 失败时标签仍残留"定位失败（上海）"
+            _currentLat = lat; _currentLon = lon; _currentCity = city;
+            DOM.seasonSyncTag.style.cursor = 'default';
+            DOM.seasonSyncTag.title = '';
+            DOM.seasonSyncTag.onclick = null;
+            DOM.seasonSyncTag.innerText = city ? `已定位：${city}` : `已定位（${lat.toFixed(2)}, ${lon.toFixed(2)}）`;
+            updateWeather(lat, lon, city);
+            fetchWaqi(lat, lon);
+            _SCHED.forceRefresh();
+        }, err => {
+            // GeolocationPositionError.code: 1=PERMISSION_DENIED 2=UNAVAILABLE 3=TIMEOUT
+            _geoFallback(err && err.code === 1 ? 'denied' : 'error');
+        }, { timeout: 8000, maximumAge: 300000 });
     }
-    function _geoFallback() {
-        updateWeather(31.23,121.47,'上海');
-        fetchWaqi(31.23,121.47);
-        _lastSecond=-1; update();
-        // 提示用户定位失败，可点击重试
-        DOM.seasonSyncTag.style.cursor='pointer';
-        DOM.seasonSyncTag.setAttribute('aria-label','定位失败，已切换至上海，点击重试');
-        DOM.seasonSyncTag.onclick = () => { DOM.seasonSyncTag.onclick=null; _doGeolocate(); };
+    function _geoFallback(reason) {
+        updateWeather(31.23, 121.47, '上海');
+        fetchWaqi(31.23, 121.47);
+        _SCHED.forceRefresh();
+        DOM.seasonSyncTag.style.cursor = 'pointer';
+        if (reason === 'denied') {
+            // 权限被明确拒绝：提示去设置里修改，点击给出操作指引
+            DOM.seasonSyncTag.innerText = '定位已禁止（上海）';
+            DOM.seasonSyncTag.title = '浏览器已拒绝位置权限，请在地址栏或系统设置中允许本站访问位置后点击重试';
+            DOM.seasonSyncTag.setAttribute('aria-label', '定位权限已被禁止，显示上海默认数据，点击查看解决方法');
+            DOM.seasonSyncTag.onclick = () => {
+                alert('定位权限已被禁止。\n\n解决方法：\n• Chrome / Edge：点击地址栏左侧锁形图标 → 网站设置 → 位置 → 改为"允许"\n• Safari：设置 → Safari → 网站 → 位置 → 找到本站改为"允许"\n• 修改后刷新页面，或点击标签重试。');
+            };
+        } else {
+            // 定位失败（超时 / 硬件不可用 / 其他）：可直接点击重试
+            DOM.seasonSyncTag.innerText = '定位失败（上海）';
+            DOM.seasonSyncTag.title = '获取位置失败，已切换至上海默认数据，点击重试';
+            DOM.seasonSyncTag.setAttribute('aria-label', '定位失败，已切换至上海，点击重试');
+            DOM.seasonSyncTag.onclick = () => { DOM.seasonSyncTag.onclick = null; _doGeolocate(); };
+        }
     }
     _doGeolocate();
 
@@ -6501,8 +7207,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     _startWeatherTimers();
 
-    // ── 启动主循环
-    scheduleUpdate();
+    // ── 启动主循环（四级调度器）
+    _SCHED.start();
 
 
 });
