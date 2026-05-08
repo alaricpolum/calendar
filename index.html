@@ -3350,6 +3350,16 @@ function _buildCdCard() {
     const view = DOM.calView;
     view.querySelectorAll('.cd-card').forEach(el => el.remove());
 
+    // 在新卡加入 DOM 之前先量好月历卡高度，加入时直接带上正确 maxHeight，
+    // 避免 cd-card 以自然高度加入 DOM 后再收缩的中间帧抖动
+    const _preBoxes = [...view.querySelectorAll('.month-box:not(.extra-box)')];
+    const _preMaxH  = _preBoxes.length
+        ? Math.max(..._preBoxes.map(b => b.getBoundingClientRect().height))
+        : 0;
+    function _presetHeight(card) {
+        if (_preMaxH > 0) { card.style.maxHeight = _preMaxH + 'px'; card.style.overflowY = 'auto'; }
+    }
+
     // 未登录时仍渲染卡片，显示注册/登录入口
 
     const list  = _cdSortedTasks();
@@ -3418,6 +3428,7 @@ function _buildCdCard() {
         body.appendChild(iconWrap); body.appendChild(tip);
         body.appendChild(rowWrap); body.appendChild(inviteBtn);
         card.appendChild(body);
+        _presetHeight(card);
         view.appendChild(card);
         _applyCardHeight(card, view);
         return;
@@ -3450,6 +3461,7 @@ function _buildCdCard() {
 
     if (!total) {
         card.appendChild(_renderCdEmpty(card, isAdmin));
+        _presetHeight(card);
         view.appendChild(card);
         _applyCardHeight(card, view);
         return;
@@ -3540,6 +3552,7 @@ function _buildCdCard() {
             endedDiv.appendChild(delBtn);
         }
         card.appendChild(endedDiv);
+        _presetHeight(card);
         view.appendChild(card);
         _applyCardHeight(card, view);
         return;
@@ -3602,30 +3615,22 @@ function _buildCdCard() {
     }
     card.appendChild(actRow);
 
+    _presetHeight(card);
     view.appendChild(card);
     _applyCardHeight(card, view);
 }
 
-// ── 倒计时卡高度限制：不超过同行月份卡高度，超出内部滚动 ──────────
-// 先把倒计时卡临时移出 DOM，让月份卡恢复自然高度再量，量完放回原位。
-// extra-box（岁末更替期）排除在外，避免平年↔闰年切换时高度突变影响测量。
+// ── 倒计时卡高度限制：不超过月份卡高度，超出内部滚动 ──────────
+// 月历卡高度由自身内容决定，与 cd-card 无关，可直接读取，无需移动或收缩 cd-card。
+// 读取后一步设好 maxHeight，全程零中间状态，无抖动。
 let _cdResizeObserver = null;
 function _applyCardHeight(card, view) {
     function _sync() {
-        const parent = card.parentNode;
-        const next   = card.nextSibling;
-        if (parent) parent.removeChild(card);
-
         const allBoxes = [...view.querySelectorAll('.month-box:not(.extra-box)')];
-        const maxH = allBoxes.length
-            ? Math.max(...allBoxes.map(b => b.getBoundingClientRect().height))
-            : 0;
+        if (!allBoxes.length) return;
 
-        if (parent) {
-            if (next) parent.insertBefore(card, next);
-            else parent.appendChild(card);
-        }
-
+        // 月历卡高度由各自内容撑开，不受 cd-card 影响，直接读取即可
+        const maxH = Math.max(...allBoxes.map(b => b.getBoundingClientRect().height));
         if (maxH > 0) {
             card.style.maxHeight = maxH + 'px';
             card.style.overflowY = 'auto';
