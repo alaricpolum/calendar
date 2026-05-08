@@ -3607,20 +3607,26 @@ function _buildCdCard() {
 }
 
 // ── 倒计时卡高度限制：不超过同行月份卡高度，超出内部滚动 ──────────
-// 修复：不再 removeChild 再 insertBefore，避免 DOM 移除导致的页面抖动。
-// month-box 与 cd-card 是网格兄弟节点，month-box 的高度不受 cd-card 内容影响，
-// 直接读取 getBoundingClientRect 即可，无需将 cd-card 临时移出 DOM。
+// 先把倒计时卡临时移出 DOM，让月份卡恢复自然高度再量，量完放回原位。
+// extra-box（岁末更替期）排除在外，避免平年↔闰年切换时高度突变影响测量。
 let _cdResizeObserver = null;
 function _applyCardHeight(card, view) {
     function _sync() {
-        // 排除 extra-box（岁末更替期）：其高度在平年↔闰年切换时会发生突变，
-        // 若纳入计算会导致 cd-card 高度跟随抖动，产生闪烁
+        const parent = card.parentNode;
+        const next   = card.nextSibling;
+        if (parent) parent.removeChild(card);
+
         const allBoxes = [...view.querySelectorAll('.month-box:not(.extra-box)')];
         const maxH = allBoxes.length
             ? Math.max(...allBoxes.map(b => b.getBoundingClientRect().height))
             : 0;
+
+        if (parent) {
+            if (next) parent.insertBefore(card, next);
+            else parent.appendChild(card);
+        }
+
         if (maxH > 0) {
-            card.style.height    = maxH + 'px';
             card.style.maxHeight = maxH + 'px';
             card.style.overflowY = 'auto';
         }
