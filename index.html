@@ -816,6 +816,17 @@
         padding: 10px 16px 14px; border-top: 1px solid var(--muted);
         display: flex; gap: 8px;
     }
+
+    /* ── 退出确认弹窗 ─────────────────────────────────────────── */
+    .cd-logout-user-card {
+        background: var(--muted); border-radius: 10px;
+        border: 1px solid var(--border); padding: 9px 12px; margin-bottom: 10px;
+    }
+    .cd-logout-user-name { font-size: .78rem; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .cd-logout-user-role {
+        display: inline-block; font-size: .6rem; font-weight: 700; color: var(--accent);
+        background: rgba(178,34,34,.08); padding: 1px 7px; border-radius: 20px;
+    }
     .cd-del-cancel {
         flex: 1; padding: 8px 0; background: var(--muted); color: var(--primary);
         border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
@@ -1311,7 +1322,7 @@ async function _cdInit() {
     if (!token) { _cdUser = null; _cdTasks = []; document.body.classList.remove('has-cd-user'); return; }
     try {
         const res = await _cdFetch('/cd/token/info');
-        if (!res.ok) { _cdUser = null; _cdClearToken(); document.body.classList.remove('has-cd-user'); return; }
+        if (!res.ok) { _cdUser = null; _cdClearToken(); document.body.classList.remove('has-cd-user'); _applyFocusMarks(); return; }
         const data = await res.json();
         _cdUser = { token, role: data.role, name: data.name, tags: data.tags };
         document.body.classList.add('has-cd-user');
@@ -1319,6 +1330,7 @@ async function _cdInit() {
     } catch(_) {
         _cdUser = null;
         document.body.classList.remove('has-cd-user');
+        _applyFocusMarks();
     }
 }
 
@@ -1398,6 +1410,7 @@ function _cdShowLoginModal() {
             _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
             overlay.remove();
             await _cdInit();
+            _applyFocusMarks();
             _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
@@ -1474,6 +1487,7 @@ function _cdShowRegisterModal() {
             _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
             overlay.remove();
             await _cdFetchTasks();
+            _applyFocusMarks();
             _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
@@ -1598,6 +1612,7 @@ function _cdShowRedeemModal() {
             history.replaceState(null, '', u.toString());
             overlay.remove();
             await _cdFetchTasks();
+            _applyFocusMarks();
             _cdRefresh('force');
         } catch(_) {
             errDiv.textContent = '网络错误，请重试';
@@ -3078,6 +3093,79 @@ function _cdShowDeleteConfirm(item, diffDays, onConfirmed) {
     confirmBtn.focus();
 }
 
+function _cdShowLogoutConfirm() {
+    document.querySelectorAll('.cd-del-overlay').forEach(el => el.remove());
+
+    const roleLabel = { superadmin: '超级管理员', admin: '管理员', user: '成员' };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cd-del-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'cd-del-modal';
+    modal.addEventListener('click', e => e.stopPropagation());
+
+    // ── 标题行
+    const header = document.createElement('div');
+    header.className = 'cd-del-header';
+    const icon = document.createElement('div');
+    icon.className = 'cd-del-icon';
+    icon.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="#A32D2D" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v7A1.5 1.5 0 0 0 3.5 13H6"/><polyline points="10 5 13 8 10 11"/><line x1="13" y1="8" x2="6" y2="8"/></svg>`;
+    const hdText = document.createElement('div');
+    hdText.className = 'cd-del-hd-text';
+    const hdTitle = document.createElement('div');
+    hdTitle.className = 'cd-del-title'; hdTitle.textContent = '确认退出登录';
+    const hdSub = document.createElement('div');
+    hdSub.className = 'cd-del-subtitle'; hdSub.textContent = '退出后需重新登录才能访问数据';
+    hdText.appendChild(hdTitle); hdText.appendChild(hdSub);
+    header.appendChild(icon); header.appendChild(hdText);
+    modal.appendChild(header);
+
+    // ── 用户信息卡
+    const body = document.createElement('div');
+    body.className = 'cd-del-body';
+    const userCard = document.createElement('div');
+    userCard.className = 'cd-logout-user-card';
+    const userName = document.createElement('div');
+    userName.className = 'cd-logout-user-name';
+    userName.textContent = _cdUser?.name || '当前用户';
+    const userRole = document.createElement('span');
+    userRole.className = 'cd-logout-user-role';
+    userRole.textContent = roleLabel[_cdUser?.role] || _cdUser?.role || '';
+    userCard.appendChild(userName); userCard.appendChild(userRole);
+    const warn = document.createElement('p');
+    warn.className = 'cd-del-warn';
+    warn.innerHTML = '退出后本设备上的<strong>登录状态将被清除</strong>，日历标记和倒计时数据不受影响。';
+    body.appendChild(userCard); body.appendChild(warn);
+    modal.appendChild(body);
+
+    // ── 按钮行
+    const footer = document.createElement('div');
+    footer.className = 'cd-del-footer';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cd-del-cancel'; cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', () => overlay.remove());
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'cd-del-confirm'; confirmBtn.textContent = '确认退出';
+    confirmBtn.addEventListener('click', () => {
+        _cdClearToken();
+        _cdUser = null;
+        _cdTasks = [];
+        document.body.classList.remove('has-cd-user');
+        overlay.remove();
+        _applyFocusMarks();
+        _cdRefresh('force');
+    });
+    footer.appendChild(cancelBtn); footer.appendChild(confirmBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') overlay.remove(); });
+    document.body.appendChild(overlay);
+    confirmBtn.focus();
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  _buildCdCard 子函数（#6：拆分超长函数）
 // ═══════════════════════════════════════════════════════════════
@@ -3457,6 +3545,16 @@ function _buildCdCard() {
         mgBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAdminPanel(); });
         hdrWrap.appendChild(mgBtn);
     }
+    // 退出登录按钮（所有登录用户可见）
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'cd-admin-btn';
+    logoutBtn.style.cssText = 'margin-left:0;color:#c0392b;border-color:#c0392b;opacity:.75;';
+    logoutBtn.textContent = '退出';
+    logoutBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        _cdShowLogoutConfirm();
+    });
+    hdrWrap.appendChild(logoutBtn);
     card.appendChild(hdrWrap);
 
     if (!total) {
@@ -4549,7 +4647,7 @@ function _buildTooltipSkeleton() {
 function showTooltip(e, data) {
     e.stopPropagation();
     // 专注模式 + 有权限 + 更替日 A → 触发年度回顾弹窗
-    if (data.isExtra && data.extraName === '更替日 A' && document.body.classList.contains('focus-mode')) {
+    if (data.isExtra && data.extraName === '更替日 A' && document.body.classList.contains('focus-mode') && _cdUser) {
         // 额外阻止冒泡：防止 click 事件冒泡到 body 后再触发 yearReviewOverlay 的关闭逻辑
         if (e && e.stopImmediatePropagation) e.stopImmediatePropagation();
         _showYearReview(data.vYear, data);
@@ -4687,11 +4785,11 @@ function showTooltip(e, data) {
         } else { _ttNodes.hdrSub.textContent = ''; }
     }
     // 专注模式下追加操作栏（便签需要权限；色点/星标始终可用）
-    if (isFocus) {
+    if (isFocus && _cdUser) {
         const gKey = data.gStr;
 
-        // ── 便签区（仅 superadmin / admin / user 可见）────────
-        if (_cdUser) {
+        // ── 便签区 ────────
+        {
             const noteSection = document.createElement('div');
             noteSection.className = 'tt-note-section';
 
@@ -5772,7 +5870,7 @@ function _buildCalendar(y) {
         // 移动端专注模式：轻触更替日 A → 直接触发年度回顾（不依赖 click 合成）
         if (wasLongPressing && cell && _rangeStart === null) {
             const data = _cellDataMap.get(cell);
-            if (data && data.isExtra && data.extraName === '更替日 A') {
+            if (data && data.isExtra && data.extraName === '更替日 A' && _cdUser) {
                 e.preventDefault();
                 _showYearReview(data.vYear, data);
                 return;
@@ -6018,6 +6116,19 @@ let _gStrPreseededYear = null; // 上次构建 Map 时的年份，年份变化�
 
 function _applyFocusMarks() {
     if (!_calBuilt) return;
+    if (!_cdUser) {
+        // 清除所有已渲染的标记（防止登出后残留）
+        _gStrPreseededMap.forEach(cached => {
+            if (cached.preDot)  { cached.preDot.style.display  = 'none'; cached.preDot.className = 'cell-dot'; }
+            if (cached.preStar) { cached.preStar.style.display = 'none'; }
+            if (cached.preCd)   { cached.preCd.style.display   = 'none'; }
+        });
+        _extraCache.forEach(cell => {
+            if (cell) cell.querySelectorAll('.cell-dot,.cell-star,.cell-countdown').forEach(el => el.remove());
+            if (cell) { const badge = cell.querySelector('.extra-review-badge'); if (badge) badge.style.display = 'none'; }
+        });
+        return;
+    }
     const todayMs = _cachedTodayMs();
 
     // 1. 重建 gStr → 预置节点缓存
@@ -6090,6 +6201,16 @@ function _applyFocusMarks() {
                     }
                 }
             }
+        }
+    });
+
+    // 恢复更替日A徽章显示（登录态下）
+    _extraCache.forEach(cell => {
+        if (!cell) return;
+        const data = _cellDataMap.get(cell);
+        if (data && data.extraName === '更替日 A') {
+            const badge = cell.querySelector('.extra-review-badge');
+            if (badge) badge.style.display = '';
         }
     });
 
@@ -6729,7 +6850,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     // ── 倒计时系统后台初始化（验证 token，拉取任务，不阻塞日历）──
     // 若 URL 带有 ?invite= 且本地无 token，自动弹出邀请码兑换弹窗
     _cdInit().then(async () => {
-        // token 验证 + 任务拉取完成后，追加渲染倒计时卡片
+        // token 验证 + 任务拉取完成后，追加渲染倒计时卡片 + 恢复专注标记
+        _applyFocusMarks();
         _cdRefresh('force');
         await _cdCheckCycleTasks(); // 页面首次加载：检测周期任务自动续期
         _cdCheckArrivalAlert(); // 页面首次加载：检查今日是否有到达的倒计时
@@ -6776,6 +6898,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         _cdSaveToken(data.token);
                         overlay.remove();
                         await _cdInit();
+                        _applyFocusMarks();
                         _cdRefresh('force');
                     } catch(_) {
                         errDiv.textContent = '网络错误，请重试';
@@ -6834,6 +6957,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         _cdSaveToken(tk);
                         overlay.remove();
                         await _cdInit();
+                        _applyFocusMarks();
                         _cdRefresh('force');
                     } catch(_) {
                         errDiv.textContent = '网络错误，请重试';
