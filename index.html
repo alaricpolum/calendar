@@ -76,6 +76,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
     :root {
+        --v-dark-green:        #2F4F4F;  /* 深青绿（倒计时卡片边框/标题）*/
         --primary: #2C3E50;
         --accent:  #B22222;
         --bg:      #F5F2E9;
@@ -911,14 +912,14 @@
     /* ── 倒计时卡片 ──────────────────────────────────────────────── */
     .cd-card {
         background: var(--surface); border-radius: 14px;
-        border: 1.5px solid #2F4F4F; padding: 10px 12px 12px;
+        border: 1.5px solid var(--v-dark-green); padding: 10px 12px 12px;
         display: flex; flex-direction: column; box-sizing: border-box;
         overflow-y: auto;
         scrollbar-width: none; -ms-overflow-style: none;
     }
     .cd-card::-webkit-scrollbar { display: none; }
     .cd-card-h {
-        font-size: .65rem; font-weight: 700; color: #2F4F4F;
+        font-size: .65rem; font-weight: 700; color: var(--v-dark-green);
         letter-spacing: 2px; border-bottom: 1.5px solid var(--muted);
         padding-bottom: 6px; margin-bottom: 8px;
     }
@@ -931,7 +932,7 @@
     .cd-list-item.cd-active { background: rgba(47,79,79,0.06); }
     .cd-accent-bar { width: 3px; border-radius: 2px; flex-shrink: 0; align-self: stretch; min-height: 28px; }
     .cd-list-name { font-size: .68rem; font-weight: 700; color: var(--text); }
-    .cd-list-name.cd-ended { color: #aaa; }
+    .cd-list-name.cd-ended { color: var(--color-disabled, #aaa); }
     .cd-list-sub  { font-size: .52rem; color: #aaa; }
     .cd-ended-badge { font-size: .44rem; color: #888; background: var(--muted); border-radius: 4px; padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
     .cd-list-days { font-size: .65rem; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
@@ -946,8 +947,9 @@
     .cd-prog-fill    { height: 100%; border-radius: 2px; transition: width .4s; }
     .cd-date-row     { display: contents; }
     .cd-date-lbl     { font-size: .48rem; color: #aaa; font-weight: 600; letter-spacing: 1px; }
-    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+    .cd-date-val     { font-size: .56rem; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
     .cd-action-row   { display: flex; gap: 5px; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--muted); }
+    .cd-tag-scroll::-webkit-scrollbar { display: none; }
     .cd-action-btn   { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); border-radius: 7px; padding: 5px 4px; background: var(--bg); cursor: pointer; transition: background .15s; }
     .cd-action-btn:hover { background: var(--muted); }
     .cd-action-btn span  { font-size: .52rem; font-weight: 700; color: var(--v-blue); white-space: nowrap; }
@@ -966,16 +968,17 @@
     .qr-overlay { position: fixed; inset: 0; background: rgba(28,22,14,0.55); display: flex; align-items: center; justify-content: center; z-index: 3000; }
     .qr-modal { background: #F5F2E9; border-radius: 16px; border: 1.5px solid #6B1010; padding: 20px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 260px; width: 90%; font-family: 'Noto Serif SC',serif; }
     .qr-modal-title { font-size: .88rem; font-weight: 700; color: #2C3E50; text-align: center; letter-spacing: 1px; }
-    .qr-modal-url   { font-size: .52rem; color: #aaa; word-break: break-all; text-align: center; line-height: 1.5; }
+    .qr-modal-url   { font-size: .52rem; color: var(--color-muted-text, #aaa); word-break: break-all; text-align: center; line-height: 1.5; }
     .qr-modal-close { font-size: .68rem; font-weight: 700; color: var(--v-blue); cursor: pointer; padding: 5px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); }
 
     /* ── 管理员创建倒计时弹窗 ─────────────────────────────────────── */
     .cd-admin-btn {
-        display: flex; align-items: center; gap: 4px;
+        display: flex; align-items: center; justify-content: center; gap: 4px;
         font-size: .55rem; font-weight: 700; color: #6B1010;
-        cursor: pointer; padding: 2px 6px; border-radius: 5px;
+        cursor: pointer; padding: 2px 8px; border-radius: 5px;
         border: 1px solid rgba(107,16,16,0.3); background: rgba(107,16,16,0.04);
-        transition: background .15s; margin-left: auto;
+        transition: background .15s;
+        white-space: nowrap; flex-shrink: 1; min-width: 0;
     }
     .cd-admin-btn:hover { background: rgba(107,16,16,0.10); }
     .cd-admin-overlay {
@@ -1303,23 +1306,46 @@ function _cdGetToken()       { return _lsGet('cdToken'); }
 function _cdSaveToken(tk)    { _lsSet('cdToken', tk); }
 function _cdClearToken()     { _lsRemove('cdToken'); }
 
+// ── SA Session 状态（true = 当前通过 HttpOnly Cookie 登录的 SA）─
+let _cdIsSaSession = false;
+
 // ── 图钉置顶 ───────────────────────────────────────────────────
 function _cdGetPinned()      { return _lsGet('cdPinned'); }
-function _cdSetPinned(name)  { _lsSet('cdPinned', name || null); }
+function _cdSetPinned(name)  { _lsSet('cdPinned', name || null); _cdSortedTasksInvalidate(); }
 
 // ── 带 token 的 fetch 封装 ──────────────────────────────────────
+// SA 用户通过 session cookie 鉴权，需带 credentials: 'include'，不带 Bearer
 async function _cdFetch(path, options = {}) {
-    const token = _cdGetToken();
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const res = await fetch(CD_API + path, { ...options, headers });
-    return res;
+    const fetchOpts = { ...options, headers };
+    if (_cdIsSaSession) {
+        fetchOpts.credentials = 'include'; // 携带 HttpOnly Cookie
+    } else {
+        const token = _cdGetToken();
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+    }
+    return fetch(CD_API + path, fetchOpts);
 }
 
-// ── 初始化：验证本地 token，拉取身份和任务 ───────────────────────
+// ── 初始化：先尝试 SA session，再回落到本地 token ───────────────
 async function _cdInit() {
+    // 1. 优先检查 SA Session Cookie（无需本地存储，完全由后端维护）
+    try {
+        const saRes = await fetch(CD_API + '/cd/session/verify', { credentials: 'include' });
+        if (saRes.ok) {
+            const saData = await saRes.json();
+            _cdIsSaSession = true;
+            _cdUser = { role: saData.role, name: saData.name, tags: saData.tags };
+            document.body.classList.add('has-cd-user');
+            await _cdFetchTasks();
+            return;
+        }
+    } catch(_) {}
+    _cdIsSaSession = false;
+
+    // 2. 回落：普通用户 Bearer Token
     const token = _cdGetToken();
-    if (!token) { _cdUser = null; _cdTasks = []; document.body.classList.remove('has-cd-user'); return; }
+    if (!token) { _cdUser = null; _cdTasks = []; _cdSortedTasksInvalidate(); document.body.classList.remove('has-cd-user'); return; }
     try {
         const res = await _cdFetch('/cd/token/info');
         if (!res.ok) { _cdUser = null; _cdClearToken(); document.body.classList.remove('has-cd-user'); _applyFocusMarks(); return; }
@@ -1335,25 +1361,39 @@ async function _cdInit() {
 }
 
 // ── 拉取任务列表 ────────────────────────────────────────────────
+let _cdFetchTasksPending = false;
 async function _cdFetchTasks() {
     if (!_cdUser) return;
+    if (_cdFetchTasksPending) return;
+    _cdFetchTasksPending = true;
     try {
         const res = await _cdFetch('/cd/tasks');
-        if (!res.ok) return;
+        if (!res.ok) { _cdFetchTasksPending = false; _cdRefreshIfOpen(); return; }
         const data = await res.json();
-        _cdTasks = data.tasks || [];
+        _cdTasks = data.tasks || []; _cdSortedTasksInvalidate();
     } catch(_) {}
+    _cdFetchTasksPending = false;
 }
 
 // ── 置顶排序 ────────────────────────────────────────────────────
+let _cdSortedCache = null; // { tasks, pinned, result }
+function _cdSortedTasksInvalidate() { _cdSortedCache = null; }
+function _cdRefreshIfOpen() { _cdRefresh('data'); }
 function _cdSortedTasks() {
     const pinned = _cdGetPinned();
-    if (!pinned || !_cdTasks.length) return _cdTasks;
-    const idx = _cdTasks.findIndex(t => t.name === pinned);
-    if (idx <= 0) return _cdTasks;
-    const sorted = [..._cdTasks];
-    sorted.unshift(sorted.splice(idx, 1)[0]);
-    return sorted;
+    if (_cdSortedCache && _cdSortedCache.tasks === _cdTasks && _cdSortedCache.pinned === pinned) {
+        return _cdSortedCache.result;
+    }
+    let result = _cdTasks;
+    if (pinned && _cdTasks.length) {
+        const idx = _cdTasks.findIndex(t => t.name === pinned);
+        if (idx > 0) {
+            result = [..._cdTasks];
+            result.unshift(result.splice(idx, 1)[0]);
+        }
+    }
+    _cdSortedCache = { tasks: _cdTasks, pinned, result };
+    return result;
 }
 
 // ── 更替历日期文字 ──────────────────────────────────────────────
@@ -1396,7 +1436,31 @@ function _cdShowLoginModal() {
     const _doLogin = async () => {
         const name = nameInp.value.trim();
         const password = pwdInp.value;
-        if (!name || !password) { errDiv.textContent = '请填写姓名和密码'; return; }
+        // 姓名留空 + 密码有值 → SA Token 路径（不存前端，走 Session Cookie）
+        if (!name && password) {
+            submitBtn.disabled = true; submitBtn.textContent = '验证中…';
+            try {
+                const res = await fetch(CD_API + '/cd/sa/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ token: password }),
+                });
+                const data = await res.json();
+                if (!res.ok) { errDiv.textContent = '请填写姓名'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
+                _cdIsSaSession = true;
+                overlay.remove();
+                await _cdInit();
+                _applyFocusMarks();
+                _cdRefresh('force');
+            } catch(_) {
+                errDiv.textContent = '网络错误，请重试';
+                submitBtn.disabled = false; submitBtn.textContent = '登录';
+            }
+            return;
+        }
+        // 普通用户：姓名+密码
+        if (!name || !password) { errDiv.textContent = '请填写姓名'; return; }
         submitBtn.disabled = true; submitBtn.textContent = '验证中…';
         try {
             const res = await fetch(CD_API + '/cd/login', {
@@ -1406,6 +1470,7 @@ function _cdShowLoginModal() {
             });
             const data = await res.json();
             if (!res.ok) { errDiv.textContent = data.error || '姓名或密码错误'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
+            _cdIsSaSession = false;
             _cdSaveToken(data.token);
             _cdUser = { token: data.token, role: data.role, name, tags: data.tags };
             overlay.remove();
@@ -3147,10 +3212,23 @@ function _cdShowLogoutConfirm() {
     cancelBtn.addEventListener('click', () => overlay.remove());
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'cd-del-confirm'; confirmBtn.textContent = '确认退出';
-    confirmBtn.addEventListener('click', () => {
-        _cdClearToken();
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        if (_cdIsSaSession) {
+            // SA：通知后端吊销 session，清除 HttpOnly Cookie
+            try {
+                await fetch(CD_API + '/cd/session/logout', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            } catch(_) {}
+            _cdIsSaSession = false;
+        } else {
+            _cdClearToken();
+        }
         _cdUser = null;
-        _cdTasks = [];
+        _cdTasks = []; _cdSortedTasksInvalidate();
         document.body.classList.remove('has-cd-user');
         overlay.remove();
         _applyFocusMarks();
@@ -3434,9 +3512,13 @@ function _cdCheckArrivalAlert() {
 // ═══════════════════════════════════════════════════════════════
 //  渲染倒计时卡片
 // ═══════════════════════════════════════════════════════════════
+let _cdCardEl = null; // 复用的卡片根节点
 function _buildCdCard() {
     const view = DOM.calView;
-    view.querySelectorAll('.cd-card').forEach(el => el.remove());
+    // 仅在首次或卡片被外部移除时重建整个 DOM 树
+    const existingCard = view.querySelector('.cd-card');
+    if (existingCard) existingCard.remove();
+    _cdCardEl = null;
 
     // 在新卡加入 DOM 之前先量好月历卡高度，加入时直接带上正确 maxHeight，
     // 避免 cd-card 以自然高度加入 DOM 后再收缩的中间帧抖动
@@ -3466,9 +3548,20 @@ function _buildCdCard() {
     hdrWrap.style.cssText = 'display:flex;align-items:center;margin-bottom:8px;border-bottom:1.5px solid var(--muted);padding-bottom:6px;gap:5px;';
     const hdr = document.createElement('div');
     hdr.className = 'cd-card-h';
-    hdr.style.cssText = 'margin-bottom:0;border-bottom:none;padding-bottom:0;flex:1;';
+    hdr.style.cssText = 'margin-bottom:0;border-bottom:none;padding-bottom:0;flex-shrink:0;';
     hdr.textContent = '倒计时';
     hdrWrap.appendChild(hdr);
+
+    // ── 周期图标占位，紧挨"倒计时"文字右侧
+    const cycleBadgeSlot = document.createElement('span');
+    cycleBadgeSlot.id = 'cd-cycle-badge-slot';
+    cycleBadgeSlot.style.cssText = 'display:none;flex-shrink:0;margin-left:-3px;';
+    hdrWrap.appendChild(cycleBadgeSlot);
+
+    // spacer 撑开，把按钮组推到右端
+    const hdrSpacer = document.createElement('span');
+    hdrSpacer.style.cssText = 'flex:1;';
+    hdrWrap.appendChild(hdrSpacer);
 
     // 未登录：沙漏图标 + 说明 + 注册/登录并排 + 邀请码虚线
     if (!_cdUser) {
@@ -3525,7 +3618,7 @@ function _buildCdCard() {
     // 所有登录用户均可新建（user 新建的任务无标签，仅自己可见）
     const addBtn = document.createElement('button');
     addBtn.className = 'cd-admin-btn';
-    addBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 10 10" fill="none"><path d="M5 1v8M1 5h8" stroke="#854F0B" stroke-width="1.5" stroke-linecap="round"/></svg> 新建';
+    addBtn.textContent = '新建';
     addBtn.addEventListener('click', e => { e.stopPropagation(); _cdShowAddTaskModal(); });
     hdrWrap.appendChild(addBtn);
     // admin 专属：管理面板（含邀请 + 用户管理）
@@ -3586,6 +3679,29 @@ function _buildCdCard() {
     } else {
         hdr.style.color = themeColor;
         card.style.borderColor = themeBorderAlpha;
+    }
+
+    // ── 填充顶部周期图标（精确SVG：大viewBox保证清晰，数字+字母辨识度高）
+    {
+        const slot = card.querySelector('#cd-cycle-badge-slot');
+        if (slot && item.cycle && item.cycle.type !== 'none') {
+            const unitLetterMap = { day:'d', week:'w', month:'m', year:'y' };
+            const n      = item.cycle.num || 1;
+            const letter = unitLetterMap[item.cycle.type] || 'd';
+            const numStr = String(n);
+            const tc = themeColor;
+            const numSize  = numStr.length === 1 ? '5.8px' : '4.6px';
+            // ↻ 字符方案：正圆箭头由系统字体渲染，数字+字母横排绝对定位于中心
+            slot.innerHTML = `<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:1;">
+  <span style="font-size:16px;font-weight:300;line-height:1;display:block;color:${tc};opacity:0.9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">↻</span>
+  <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-44%);display:flex;flex-direction:row;align-items:baseline;gap:0.5px;pointer-events:none;line-height:1;">
+    <span style="font-family:'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;font-size:${numSize};font-weight:600;color:${tc};letter-spacing:-0.2px;">${numStr}</span>
+    <span style="font-family:'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;font-size:4.6px;font-weight:600;color:${tc};opacity:0.75;">${letter}</span>
+  </span>
+</span>`;
+            slot.style.display = 'inline-flex';
+            slot.style.alignItems = 'center';
+        }
     }
     // 正计时：diffDays 为负数（过去日期），取绝对值为"已过天数"
     // 倒计时：diffDays 为正数，负数表示已结束
@@ -3662,43 +3778,104 @@ function _buildCdCard() {
     card.appendChild(_renderCdProgress(item, displayDays, color, isCountUp));
     card.appendChild(_renderCdDateRow(item, isCountUp));
 
-    // ── 操作行：标签显示 + 创建者（superadmin）+ 删除（admin） ──
-    const actRow = document.createElement('div');
-    actRow.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:4px;border-top:1px solid var(--muted);padding-top:6px;margin-top:0;';
-    if (Array.isArray(item.tags) && item.tags.length) {
-        item.tags.forEach(tag => {
-            const t = document.createElement('span');
-            t.style.cssText = 'font-size:.5rem;color:#7f8c8d;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;';
-            t.textContent = tag; actRow.appendChild(t);
+    // ── 操作区：分两行 ──────────────────────────────────────────
+    const actWrap = document.createElement('div');
+    actWrap.style.cssText = 'border-top:1px solid var(--muted);padding-top:6px;margin-top:0;display:flex;flex-direction:column;gap:5px;';
+
+    // 底部行：左侧滚动区 + 右侧固定删除按钮
+    const bottomRow = document.createElement('div');
+    bottomRow.style.cssText = 'display:flex;align-items:center;gap:0;overflow:hidden;';
+
+    // 左侧容器：用户名 + 标签，横向滚动不换行
+    const leftGroup = document.createElement('div');
+    leftGroup.style.cssText = 'display:flex;align-items:center;gap:4px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;min-width:0;flex:1;scrollbar-width:none;-ms-overflow-style:none;touch-action:pan-x;';
+    leftGroup.className = 'cd-tag-scroll';
+    leftGroup.addEventListener('wheel', e => { if (e.deltaY !== 0) { e.preventDefault(); leftGroup.scrollLeft += e.deltaY; } }, { passive: false });
+    // 鼠标拖动横向滚动（桌面端）
+    ;(function() {
+        let _mouseDown = false, _mouseStartX = 0, _mouseScrollLeft = 0;
+        leftGroup.style.cursor = 'grab';
+        leftGroup.addEventListener('mousedown', e => {
+            _mouseDown = true;
+            _mouseStartX = e.clientX;
+            _mouseScrollLeft = leftGroup.scrollLeft;
+            leftGroup.style.cursor = 'grabbing';
+            leftGroup.style.userSelect = 'none';
+            e.preventDefault();
         });
-    }
-    // 周期标识
-    if (item.cycle && item.cycle.type !== 'none') {
-        const unitMap = { day:'天', week:'周', month:'月', year:'年' };
-        const n = item.cycle.num || 1;
-        const unit = unitMap[item.cycle.type] || '天';
-        const cycleLabel = n > 1 ? `每${n}${unit}` : `每${unit}`;
-        const cyclePill = document.createElement('span');
-        cyclePill.style.cssText = `font-size:.48rem;font-weight:700;color:${themeColor};background:${isCountUp?'rgba(133,79,11,0.08)':'rgba(47,79,79,0.07)'};border:1px solid ${isCountUp?'rgba(133,79,11,0.25)':'rgba(47,79,79,0.25)'};border-radius:20px;padding:1px 7px;display:inline-flex;align-items:center;gap:2px;flex-shrink:0;`;
-        const cycleIcon = document.createElement('span'); cycleIcon.textContent = '↻'; cycleIcon.style.cssText = 'font-size:.6rem;line-height:1;';
-        const cycleText = document.createElement('span'); cycleText.textContent = cycleLabel;
-        cyclePill.appendChild(cycleIcon); cyclePill.appendChild(cycleText);
-        actRow.appendChild(cyclePill);
-    }
-    // 创建者用户名：仅 superadmin 可见
-    // creatorName 由新版后端写入；旧任务无此字段时显示"未知"兜底
-    if (isSA) {
-        const displayName = item.creatorName || (item.createdBy ? item.createdBy.slice(0, 8) + '…' : '未知');
+        document.addEventListener('mousemove', e => {
+            if (!_mouseDown) return;
+            const dx = e.clientX - _mouseStartX;
+            leftGroup.scrollLeft = _mouseScrollLeft - dx;
+        });
+        const _stopDrag = () => {
+            if (!_mouseDown) return;
+            _mouseDown = false;
+            leftGroup.style.cursor = 'grab';
+            leftGroup.style.userSelect = '';
+        };
+        document.addEventListener('mouseup', _stopDrag);
+        document.addEventListener('mouseleave', _stopDrag);
+    })();
+    // 触摸横向滚动（移动端）
+    let _tagTouchStartX = 0, _tagTouchStartY = 0, _tagTouchDir = null;
+    leftGroup.addEventListener('touchstart', e => {
+        _tagTouchStartX = e.touches[0].clientX;
+        _tagTouchStartY = e.touches[0].clientY;
+        _tagTouchDir = null;
+        e.stopPropagation();
+    }, { passive: true });
+    leftGroup.addEventListener('touchmove', e => {
+        const dx = e.touches[0].clientX - _tagTouchStartX;
+        const dy = e.touches[0].clientY - _tagTouchStartY;
+        if (!_tagTouchDir) {
+            _tagTouchDir = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+        }
+        if (_tagTouchDir === 'x') {
+            e.preventDefault();
+            e.stopPropagation();
+            leftGroup.scrollLeft -= dx;
+            _tagTouchStartX = e.touches[0].clientX;
+        }
+    }, { passive: false });
+
+    // 创建者 tag
+    {
+        const role = item.creatorRole || '';
+        const roleStyles = {
+            superadmin: { color:'#6B1010', bg:'rgba(107,16,16,0.07)', border:'rgba(107,16,16,0.25)' },
+            admin:      { color:'#1a4f7a', bg:'rgba(26,79,122,0.07)', border:'rgba(26,79,122,0.25)' },
+            user:       { color:'#3b6e3b', bg:'rgba(59,110,59,0.07)', border:'rgba(59,110,59,0.25)' },
+        };
+        const s = roleStyles[role] || { color:'#7f8c8d', bg:'var(--muted)', border:'var(--border)' };
+        const displayName = item.creatorName || '未知';
         const creatorTag = document.createElement('span');
-        creatorTag.style.cssText = 'font-size:.48rem;color:#6B1010;background:rgba(107,16,16,0.06);border:1px solid rgba(107,16,16,0.25);border-radius:20px;padding:1px 8px;display:inline-flex;align-items:center;gap:3px;';
+        creatorTag.style.cssText = `font-size:.48rem;color:${s.color};background:${s.bg};border:1px solid ${s.border};border-radius:20px;padding:1px 8px;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;`;
         const icon = document.createElement('span'); icon.textContent = '👤'; icon.style.fontSize = '.5rem';
         const nameSpan = document.createElement('span'); nameSpan.textContent = displayName;
         creatorTag.appendChild(icon); creatorTag.appendChild(nameSpan);
-        actRow.appendChild(creatorTag);
+        leftGroup.appendChild(creatorTag);
     }
+
+    // 项目组 tags 紧接在用户名右侧
+    if (Array.isArray(item.tags) && item.tags.length) {
+        item.tags.forEach(tag => {
+            const t = document.createElement('span');
+            t.style.cssText = 'font-size:.48rem;color:#7f8c8d;background:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 7px;flex-shrink:0;white-space:nowrap;';
+            t.textContent = tag;
+            leftGroup.appendChild(t);
+        });
+    }
+    // 末尾占位，使最后标签与删除按钮的间隔随内容滚动
+    const tagSpacer = document.createElement('span');
+    tagSpacer.style.cssText = 'flex-shrink:0;width:4px;display:inline-block;';
+    leftGroup.appendChild(tagSpacer);
+    bottomRow.appendChild(leftGroup);
+
+    // 删除按钮
     if (isAdmin || item.createdBy === _cdGetToken()) {
         const delBtn = document.createElement('button');
-        delBtn.style.cssText = 'margin-left:auto;font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;';
+        delBtn.style.cssText = 'font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;';
         delBtn.textContent = '删除';
         delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
         delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
@@ -3709,9 +3886,11 @@ function _buildCdCard() {
                 await _cdFetchTasks(); _cdActiveIdx = 0; _cdRefresh('data');
             });
         });
-        actRow.appendChild(delBtn);
+        bottomRow.appendChild(delBtn);
     }
-    card.appendChild(actRow);
+
+    actWrap.appendChild(bottomRow);
+    card.appendChild(actWrap);
 
     _presetHeight(card);
     view.appendChild(card);
@@ -3867,6 +4046,7 @@ const _REASON_PRIORITY = { force: 2, 'date-change': 1, visibility: 1 };
 let _cdRefreshReason = null;
 
 function _cdRefresh(reason) {
+    if (!_calBuilt) return; // 日历未建好时跳过，_calBuilt 置 true 后会由初始化主动触发
     const newPrio = _REASON_PRIORITY[reason] ?? 0;
     const curPrio = _REASON_PRIORITY[_cdRefreshReason] ?? 0;
     // 更新 reason（取优先级更高者）
@@ -4065,8 +4245,9 @@ function getShEq(year) {
 
 function isLeapYearV(y)    { return Math.round((getShEq(y+1) - getShEq(y)) / DAY_MS); }
 function getDayDiff(d1,d2) {
-    const t1 = new Date(d1.getFullYear(),d1.getMonth(),d1.getDate()).getTime();
-    const t2 = new Date(d2.getFullYear(),d2.getMonth(),d2.getDate()).getTime();
+    // 用整数除法把毫秒时间戳截断到天边界，避免 new Date() 分配
+    const t1 = Math.floor(d1.getTime() / DAY_MS) * DAY_MS;
+    const t2 = Math.floor(d2.getTime() / DAY_MS) * DAY_MS;
     return Math.floor((t2-t1)/DAY_MS);
 }
 // ── Meeus《天文算法》第49章：精确月相时刻（TDT） ────────────────
@@ -4206,8 +4387,12 @@ function _prevNewMoonK(ms) {
 
 // getMoonPhase：基于 Meeus 精确新月时刻插值，与月相日历图表完全同源
 // 调用 _prevNewMoonK 保证与图表使用相同的朔望月边界
+let _moonPhaseCache = { key: -1, val: null };
 function getMoonPhase(date) {
-    const ms     = date.getTime();
+    const ms  = date.getTime();
+    // 分钟级缓存：月相在同一分钟内完全不变，无需每秒重算
+    const minKey = (ms / 60000) | 0;
+    if (minKey === _moonPhaseCache.key) return _moonPhaseCache.val;
     const k0     = _prevNewMoonK(ms);
     const prevMs = _meeusLunarPhaseUTC(k0,     0);
     const nextMs = _meeusLunarPhaseUTC(k0 + 1, 0);
@@ -4228,7 +4413,9 @@ function getMoonPhase(date) {
     n = Math.max(0, Math.min(0.9999999, n));
     const illumination = (1 - Math.cos(2 * Math.PI * n)) / 2;
     const waxing = ms < fullMs;
-    return { age: phase * SYNODIC_MONTH, normalized: n, illumination, waxing };
+    const result = { age: phase * SYNODIC_MONTH, normalized: n, illumination, waxing };
+    _moonPhaseCache = { key: minKey, val: result };
+    return result;
 }
 function getAstronomyParams(date, forceYear) {
     const vYear    = forceYear;
@@ -5267,6 +5454,7 @@ const _SCHED = (() => {
 
     // ── OPT-2：时钟格式对象只在秒边界分配一次，消除 60次/s GC 压力 ──
     let _clockNow = null; // 上一次建立的 Date 对象（秒边界复用）
+    let _lastMidResult = null; // 缓存 _tickMid 返回值供 _renderHeroSVG 复用
     function _tick(ts) {
         if (_paused) return;
         _rafId = requestAnimationFrame(_tick);
@@ -5287,8 +5475,8 @@ const _SCHED = (() => {
             const txt = (h<10?'0'+h:h)+':'+(m<10?'0'+m:m)+':'+(s<10?'0'+s:s);
             if (txt !== _snap.clockText) { _snap.clockText = txt; DOM.mainClock.textContent = txt; }
 
-            // 中频
-            _tickMid(_clockNow);
+            // 中频：返回 {astro, sceneDate} 供 Hero SVG 复用
+            _lastMidResult = _tickMid(_clockNow);
 
             // 低频：分变时
             if (min !== _lastMinute) { _lastMinute = min; _tickLow(_clockNow); }
@@ -5298,7 +5486,7 @@ const _SCHED = (() => {
         }
 
         // Hero SVG: 1FPS 节流（每帧都检查时间戳，但 _clockNow 已缓存）
-        if (_heroVisible && ts - _lastHeroTs >= 1000) { _lastHeroTs = ts; _renderHeroSVG(_clockNow || new Date(nowMs)); }
+        if (_heroVisible && ts - _lastHeroTs >= 1000) { _lastHeroTs = ts; _renderHeroSVG(_clockNow || new Date(nowMs), _lastMidResult); }
     }
 
     function _tickMid(now) {
@@ -5351,6 +5539,7 @@ const _SCHED = (() => {
 
             _updateTermHints(passed, targetY, tNextEq, _ref);
         }
+        return { astro, sceneDate };
     }
 
     function _tickLow(now) {
@@ -5409,11 +5598,12 @@ const _SCHED = (() => {
     // OPT-9: SVG 属性脏检查缓存（阈值: 0.05° / 0.1px）
     const _svgCache = { eX:null,eY:null,sunDeg:null,axisDeg:null,moonPath:null,moonTx:null,moonTy:null };
 
-    function _renderHeroSVG(now) {
+    function _renderHeroSVG(now, _hint) {
         const sceneDate = viewDateOverride || now;
-        const gY    = sceneDate.getFullYear();
-        const vYear = (sceneDate < getShEq(gY)) ? gY - 1 : gY;
-        const astro = getAstronomyParams(sceneDate, vYear);
+        // 优先复用 _tickMid 本秒已算好的结果，避免重复调用 getAstronomyParams
+        const astro = (_hint && _hint.sceneDate === sceneDate)
+            ? _hint.astro
+            : (() => { const gY = sceneDate.getFullYear(); return getAstronomyParams(sceneDate, (sceneDate < getShEq(gY)) ? gY-1 : gY); })();
         const eX = 400 + 340*Math.cos(astro.orbitAngle);
         const eY = 210 + 130*Math.sin(astro.orbitAngle);
         // 地球位置：阈值 0.1px
@@ -6124,8 +6314,11 @@ function _applyFocusMarks() {
             if (cached.preCd)   { cached.preCd.style.display   = 'none'; }
         });
         _extraCache.forEach(cell => {
-            if (cell) cell.querySelectorAll('.cell-dot,.cell-star,.cell-countdown').forEach(el => el.remove());
-            if (cell) { const badge = cell.querySelector('.extra-review-badge'); if (badge) badge.style.display = 'none'; }
+            if (!cell) return;
+            // 只移除动态追加的倒计时节点（色点/星标已通过 _gStrPreseededMap 处理）
+            cell.querySelectorAll('.cell-countdown').forEach(el => el.remove());
+            const badge = cell.querySelector('.extra-review-badge');
+            if (badge) badge.style.display = 'none';
         });
         return;
     }
@@ -6221,11 +6414,14 @@ function _applyFocusMarks() {
 // 今日午夜毫秒缓存（按日期字符串缓存，避免重复 new Date()）
 let _cachedTodayMsKey = '', _cachedTodayMsVal = 0;
 function _cachedTodayMs() {
-    const now = new Date();
-    const key = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
-    if (key !== _cachedTodayMsKey) {
-        _cachedTodayMsKey = key;
-        _cachedTodayMsVal = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    // 用 Date.now() 整除 DAY_MS 判断日期是否变化，零 GC 开销
+    const nowMs    = Date.now();
+    const dayFloor = Math.floor(nowMs / DAY_MS) * DAY_MS; // UTC 天边界（毫秒）
+    if (dayFloor !== _cachedTodayMsVal) {
+        // 日期变化才构造一次 Date，计算本地零点
+        const d = new Date(nowMs);
+        _cachedTodayMsVal = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        _cachedTodayMsKey = String(dayFloor); // 保留兼容字段
     }
     return _cachedTodayMsVal;
 }
@@ -6531,16 +6727,19 @@ function executeConvert() {
 // ═══════════════════════════════════════════════════════════════
 //  悬浮吸附（修复竞态 + passive wheel + 动态占位高度）
 // ═══════════════════════════════════════════════════════════════
+let _scrollThreshold = 300; // 缓存滚动阈值，避免 scroll handler 每次读 offsetHeight
 function _syncHeroPlaceholder() {
     const h = DOM.heroSpace;
     const p = DOM.heroPlaceholder;
-    if (h && p) p.style.height = h.offsetHeight + 'px';
+    if (h && p) {
+        p.style.height = h.offsetHeight + 'px';
+        _scrollThreshold = p.offsetHeight * 0.6; // 同步更新缓存阈值
+    }
 }
 
 function _applyScrollClass(y) {
     const h=DOM.heroSpace, c=DOM.statusCard;
-    const threshold = DOM.heroPlaceholder ? DOM.heroPlaceholder.offsetHeight * 0.6 : 300;
-    const scrolled = y > threshold;
+    const scrolled = y > _scrollThreshold; // 使用缓存值，避免每次滚动强制重排
     h.classList.toggle('scrolled',scrolled);
     c.classList.toggle('scrolled',scrolled);
 }
@@ -6855,126 +7054,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         _cdRefresh('force');
         await _cdCheckCycleTasks(); // 页面首次加载：检测周期任务自动续期
         _cdCheckArrivalAlert(); // 页面首次加载：检查今日是否有到达的倒计时
-        const _urlGo     = new URLSearchParams(window.location.search).get('go');
 
-        // ── 普通用户登录（?go=login）— 姓名+密码 ──────────────────
-        if (_urlGo === 'login') {
-            const _uGo = new URL(window.location.href);
-            _uGo.searchParams.delete('go');
-            history.replaceState(null, '', _uGo.toString());
-            setTimeout(() => {
-                const overlay = document.createElement('div');
-                overlay.className = 'cd-admin-overlay';
-                const modal = document.createElement('div');
-                modal.className = 'cd-admin-modal';
-                modal.addEventListener('click', e => e.stopPropagation());
-                const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '登录';
-                const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
-                const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = '姓名';
-                const nameInp = document.createElement('input'); nameInp.className = 'cd-admin-input'; nameInp.type = 'text'; nameInp.placeholder = '注册时填写的名字';
-                f1.appendChild(l1); f1.appendChild(nameInp);
-                const f2 = document.createElement('div'); f2.className = 'cd-admin-field';
-                const l2 = document.createElement('label'); l2.className = 'cd-admin-label'; l2.textContent = '密码';
-                const pwdInp = document.createElement('input'); pwdInp.className = 'cd-admin-input'; pwdInp.type = 'password'; pwdInp.placeholder = '注册时设置的密码';
-                f2.appendChild(l2); f2.appendChild(pwdInp);
-                const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
-                const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
-                const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
-                cancelBtn.addEventListener('click', () => overlay.remove());
-                const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '登录';
-                const _doLogin = async () => {
-                    const name = nameInp.value.trim();
-                    const password = pwdInp.value;
-                    if (!name || !password) { errDiv.textContent = '请填写姓名和密码'; return; }
-                    submitBtn.disabled = true; submitBtn.textContent = '验证中…';
-                    try {
-                        const res = await fetch(CD_API + '/cd/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name, password }),
-                        });
-                        const data = await res.json();
-                        if (!res.ok) { errDiv.textContent = data.error || '姓名或密码错误'; submitBtn.disabled = false; submitBtn.textContent = '登录'; return; }
-                        _cdSaveToken(data.token);
-                        overlay.remove();
-                        await _cdInit();
-                        _applyFocusMarks();
-                        _cdRefresh('force');
-                    } catch(_) {
-                        errDiv.textContent = '网络错误，请重试';
-                        submitBtn.disabled = false; submitBtn.textContent = '登录';
-                    }
-                };
-                submitBtn.addEventListener('click', _doLogin);
-                [nameInp, pwdInp].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') _doLogin(); }));
-                btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
-                // 注册入口
-                const regLink = document.createElement('div');
-                regLink.style.cssText = 'text-align:center;margin-top:10px;font-size:.58rem;color:#7f8c8d;';
-                const regBtn = document.createElement('span');
-                regBtn.style.cssText = 'color:var(--v-blue);cursor:pointer;text-decoration:underline;';
-                regBtn.textContent = '立即注册';
-                regLink.appendChild(document.createTextNode('没有账号？'));
-                regLink.appendChild(regBtn);
-                regBtn.addEventListener('click', () => { overlay.remove(); _cdShowRegisterModal(); });
-                modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(f2); modal.appendChild(errDiv); modal.appendChild(btnRow); modal.appendChild(regLink);
-                overlay.appendChild(modal);
-                overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-                document.body.appendChild(overlay);
-                nameInp.focus();
-            }, 300);
-
-        // ── superadmin 隐藏登录入口（?go=superadmin）— Token 直接登录 ──
-        } else if (_urlGo === 'superadmin') {
-            const _uGo = new URL(window.location.href);
-            _uGo.searchParams.delete('go');
-            history.replaceState(null, '', _uGo.toString());
-            setTimeout(() => {
-                const overlay = document.createElement('div');
-                overlay.className = 'cd-admin-overlay';
-                const modal = document.createElement('div');
-                modal.className = 'cd-admin-modal';
-                modal.addEventListener('click', e => e.stopPropagation());
-                const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '身份验证';
-                const f1 = document.createElement('div'); f1.className = 'cd-admin-field';
-                const l1 = document.createElement('label'); l1.className = 'cd-admin-label'; l1.textContent = 'Token';
-                const inp = document.createElement('input'); inp.className = 'cd-admin-input'; inp.type = 'password'; inp.placeholder = '输入 Token';
-                const errDiv = document.createElement('div'); errDiv.style.cssText = 'font-size:.58rem;color:#B22222;min-height:1.2em;';
-                f1.appendChild(l1); f1.appendChild(inp); f1.appendChild(errDiv);
-                const btnRow = document.createElement('div'); btnRow.className = 'cd-admin-btns';
-                const cancelBtn = document.createElement('button'); cancelBtn.className = 'cd-admin-cancel'; cancelBtn.textContent = '取消';
-                cancelBtn.addEventListener('click', () => overlay.remove());
-                const submitBtn = document.createElement('button'); submitBtn.className = 'cd-admin-submit'; submitBtn.textContent = '验证';
-                const _doSALogin = async () => {
-                    const tk = inp.value.trim();
-                    if (!tk) { errDiv.textContent = '请输入 Token'; return; }
-                    submitBtn.disabled = true; submitBtn.textContent = '验证中…';
-                    try {
-                        const res = await fetch(CD_API + '/cd/token/info', {
-                            headers: { 'Authorization': 'Bearer ' + tk }
-                        });
-                        if (!res.ok) { errDiv.textContent = 'Token 无效'; submitBtn.disabled = false; submitBtn.textContent = '验证'; return; }
-                        _cdSaveToken(tk);
-                        overlay.remove();
-                        await _cdInit();
-                        _applyFocusMarks();
-                        _cdRefresh('force');
-                    } catch(_) {
-                        errDiv.textContent = '网络错误，请重试';
-                        submitBtn.disabled = false; submitBtn.textContent = '验证';
-                    }
-                };
-                submitBtn.addEventListener('click', _doSALogin);
-                inp.addEventListener('keydown', e => { if (e.key === 'Enter') _doSALogin(); });
-                btnRow.appendChild(cancelBtn); btnRow.appendChild(submitBtn);
-                modal.appendChild(hdr); modal.appendChild(f1); modal.appendChild(btnRow);
-                overlay.appendChild(modal);
-                overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-                document.body.appendChild(overlay);
-                inp.focus();
-            }, 300);
-
-        }
     });
 
     // ── 外观设置（读取偏好 + 绑定开关）
