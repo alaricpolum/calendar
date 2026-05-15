@@ -2544,6 +2544,10 @@ async function _cdShowAdminPanel() {
     modal.style.overflowY = 'auto';
     modal.style.overflowX = 'hidden';
     modal.addEventListener('click', e => e.stopPropagation());
+    // ── 立即挂载弹窗，不等待网络请求 ──────────────────────────────
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
 
     const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理面板';
     modal.appendChild(hdr);
@@ -2588,8 +2592,10 @@ async function _cdShowAdminPanel() {
             });
         } catch(_) {}
     }
-    await _refreshTagList();
+    // 不 await，立即展示骨架占位，后台异步填充
+    { const sk = document.createElement('span'); sk.style.cssText = 'font-size:.55rem;color:#ccc;'; sk.textContent = '加载中…'; tagListWrap.appendChild(sk); }
     tagSec.appendChild(tagListWrap);
+    _refreshTagList(); // fire-and-forget
 
     // 新增标签
     const newTagRow = document.createElement('div'); newTagRow.style.cssText = 'display:flex;gap:6px;flex-direction:column;';
@@ -2675,7 +2681,8 @@ async function _cdShowAdminPanel() {
             users.forEach(u => userListWrap.appendChild(_buildUserRow(u, allTags, userListWrap)));
         } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
     }
-    await _refreshUserList();
+    { const sk = document.createElement('span'); sk.style.cssText = 'font-size:.55rem;color:#ccc;'; sk.textContent = '加载中…'; userListWrap.appendChild(sk); }
+    _refreshUserList(); // fire-and-forget
     userSec.appendChild(userListWrap);
     modal.appendChild(userSec);
 
@@ -2732,7 +2739,8 @@ async function _cdShowAdminPanel() {
             });
         } catch(_) {}
     }
-    await _loadInvTags();
+    { const sk = document.createElement('span'); sk.style.cssText = 'font-size:.55rem;color:#ccc;'; sk.textContent = '加载中…'; invTagWrap.appendChild(sk); }
+    _loadInvTags(); // fire-and-forget
     invSec.appendChild(invTagWrap);
 
     const invResultDiv = document.createElement('div'); invResultDiv.className = 'cd-admin-result'; invResultDiv.style.display = 'none';
@@ -2801,9 +2809,6 @@ async function _cdShowAdminPanel() {
     closeBtn.addEventListener('click', () => overlay.remove());
     modal.appendChild(closeBtn);
 
-    overlay.appendChild(modal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2822,6 +2827,10 @@ async function _cdShowAdminMgmtPanel() {
     modal.style.overflowY = 'auto';
     modal.style.overflowX = 'hidden';
     modal.addEventListener('click', e => e.stopPropagation());
+    // ── 立即挂载弹窗，不等待网络请求 ──────────────────────────────
+    overlay.appendChild(modal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
 
     const hdr = document.createElement('div'); hdr.className = 'cd-admin-modal-h'; hdr.textContent = '管理面板';
     modal.appendChild(hdr);
@@ -2847,7 +2856,8 @@ async function _cdShowAdminMgmtPanel() {
             users.forEach(u => userListWrap.appendChild(_buildUserRow(u, availTags, userListWrap)));
         } catch(_) { const e = document.createElement('span'); e.style.cssText = 'font-size:.55rem;color:#ccc;'; e.textContent = '网络错误'; userListWrap.appendChild(e); }
     }
-    await _refreshAdminUserList();
+    { const sk = document.createElement('span'); sk.style.cssText = 'font-size:.55rem;color:#ccc;'; sk.textContent = '加载中…'; userListWrap.appendChild(sk); }
+    _refreshAdminUserList(); // fire-and-forget
     userSec.appendChild(userListWrap);
     modal.appendChild(userSec);
 
@@ -2939,9 +2949,6 @@ async function _cdShowAdminMgmtPanel() {
     closeBtn.addEventListener('click', () => overlay.remove());
     modal.appendChild(closeBtn);
 
-    overlay.appendChild(modal);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
 }
 
 //  弹窗：admin 专属"生成邀请链接"（只能邀请 viewer，标签限自己拥有的）
