@@ -1319,11 +1319,11 @@ async function _cdFetch(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
     const fetchOpts = { ...options, headers };
     if (_cdIsSaSession) {
-        fetchOpts.credentials = 'include'; // 携带 HttpOnly Cookie
-    } else {
-        const token = _cdGetToken();
-        if (token) headers['Authorization'] = 'Bearer ' + token;
+        fetchOpts.credentials = 'include'; // 携带 HttpOnly Cookie（SA session）
     }
+    // 无论是否 SA session，有本地 token 时也附加 Bearer（兼容普通用户 & 双重保险）
+    const token = _cdGetToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     return fetch(CD_API + path, fetchOpts);
 }
 
@@ -1341,6 +1341,14 @@ async function _cdInit() {
             return;
         }
     } catch(_) {}
+
+    // 若 session/verify 失败，但当前 _cdIsSaSession 已为 true（刚完成 SA 登录，Cookie
+    // 可能因 SameSite/跨域时序尚未在本次 verify 请求中携带），则保留 SA 状态，
+    // 直接用现有 _cdUser 拉取任务，避免误将超级管理员降级为未授权。
+    if (_cdIsSaSession && _cdUser) {
+        await _cdFetchTasks();
+        return;
+    }
     _cdIsSaSession = false;
 
     // 2. 回落：普通用户 Bearer Token
