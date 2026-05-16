@@ -2290,8 +2290,13 @@ function _buildUserRow(u, allTags, listWrap) {
 
     // role pill（固定宽，对齐）
     const roleTag = document.createElement('span');
-    const isAdmin = u.role === 'admin';
-    roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;width:44px;text-align:center;box-sizing:border-box;background:${isAdmin?'rgba(107,16,16,0.10)':'rgba(47,79,79,0.10)'};color:${isAdmin?'#6B1010':'#2F4F4F'};border:1px solid ${isAdmin?'rgba(107,16,16,0.3)':'rgba(47,79,79,0.3)'};`;
+    const rolePillStyles = {
+        superadmin: { bg:'rgba(107,16,16,0.10)',  color:'#6B1010', border:'rgba(107,16,16,0.3)'  },
+        admin:      { bg:'rgba(45,106,45,0.10)',   color:'#2d6a2d', border:'rgba(45,106,45,0.3)'  },
+        user:       { bg:'rgba(127,140,141,0.10)', color:'#7f8c8d', border:'rgba(127,140,141,0.3)'},
+    };
+    const rp = rolePillStyles[u.role] || rolePillStyles.user;
+    roleTag.style.cssText = `font-size:.5rem;font-weight:700;padding:1px 6px;border-radius:10px;flex-shrink:0;width:44px;text-align:center;box-sizing:border-box;background:${rp.bg};color:${rp.color};border:1px solid ${rp.border};`;
     roleTag.textContent = u.role;
 
     // 标签区容器
@@ -3707,8 +3712,8 @@ function _buildCdCard() {
             const tc = themeColor;
             const numSize  = numStr.length === 1 ? '5.8px' : '4.6px';
             // ↻ 字符方案：正圆箭头由系统字体渲染，数字+字母横排绝对定位于中心
-            slot.innerHTML = `<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:1;">
-  <span style="font-size:16px;font-weight:300;line-height:1;display:block;color:${tc};opacity:0.9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">↻</span>
+            slot.innerHTML = `<span style="position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:0;vertical-align:middle;">
+  <span style="font-size:16px;font-weight:300;line-height:0;display:inline-block;color:${tc};opacity:0.9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">↻</span>
   <span style="position:absolute;top:50%;left:50%;transform:translate(-50%,-44%);display:flex;flex-direction:row;align-items:baseline;gap:0.5px;pointer-events:none;line-height:1;">
     <span style="font-family:'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;font-size:${numSize};font-weight:600;color:${tc};letter-spacing:-0.2px;">${numStr}</span>
     <span style="font-family:'Helvetica Neue',Helvetica,Arial,system-ui,sans-serif;font-size:4.6px;font-weight:600;color:${tc};opacity:0.75;">${letter}</span>
@@ -3765,10 +3770,13 @@ function _buildCdCard() {
         const endedDiv = document.createElement('div');
         endedDiv.style.cssText = 'text-align:center;padding:16px 0 8px;font-size:.72rem;color:#aaa;font-weight:700;letter-spacing:1px;';
         endedDiv.textContent = '已结束';
-        if (isAdmin || item.createdBy === _cdGetToken()) {
-            const delBtn = document.createElement('button');
-            delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:3px 10px;background:var(--muted);';
-            delBtn.textContent = '删除此项';
+        const isSAUser2 = _cdUser && _cdUser.role === 'superadmin';
+        const isOwner2  = item.createdBy && _cdGetToken() && item.createdBy === _cdGetToken();
+        const canDelete2 = isSAUser2 || isOwner2;
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '删除此项';
+        if (canDelete2) {
+            delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:3px 10px;background:var(--muted);-webkit-tap-highlight-color:transparent;';
             delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
             delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
             delBtn.addEventListener('click', e => {
@@ -3778,8 +3786,11 @@ function _buildCdCard() {
                     await _cdFetchTasks(); _cdActiveIdx = 0; _cdRefresh('data');
                 });
             });
-            endedDiv.appendChild(delBtn);
+        } else {
+            delBtn.style.cssText = 'display:block;margin:8px auto 0;font-size:.58rem;color:#ccc;cursor:not-allowed;border:1px solid #e0ddd8;border-radius:6px;padding:3px 10px;background:#f5f3ef;opacity:0.5;-webkit-tap-highlight-color:transparent;';
+            delBtn.disabled = true;
         }
+        endedDiv.appendChild(delBtn);
         card.appendChild(endedDiv);
         _presetHeight(card);
         view.appendChild(card);
@@ -3859,14 +3870,16 @@ function _buildCdCard() {
         const role = item.creatorRole || '';
         const roleStyles = {
             superadmin: { color:'#6B1010', bg:'rgba(107,16,16,0.07)', border:'rgba(107,16,16,0.25)' },
-            admin:      { color:'#1a4f7a', bg:'rgba(26,79,122,0.07)', border:'rgba(26,79,122,0.25)' },
-            user:       { color:'#3b6e3b', bg:'rgba(59,110,59,0.07)', border:'rgba(59,110,59,0.25)' },
+            admin:      { color:'#2d6a2d', bg:'rgba(45,106,45,0.07)', border:'rgba(45,106,45,0.25)' },
+            user:       { color:'#7f8c8d', bg:'rgba(127,140,141,0.07)', border:'rgba(127,140,141,0.25)' },
         };
         const s = roleStyles[role] || { color:'#7f8c8d', bg:'var(--muted)', border:'var(--border)' };
         const displayName = item.creatorName || '未知';
         const creatorTag = document.createElement('span');
         creatorTag.style.cssText = `font-size:.48rem;color:${s.color};background:${s.bg};border:1px solid ${s.border};border-radius:20px;padding:1px 8px;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;`;
-        const icon = document.createElement('span'); icon.textContent = '👤'; icon.style.fontSize = '.5rem';
+        const icon = document.createElement('span');
+        icon.innerHTML = `<svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="4.5" cy="3" r="1.8" fill="${s.color}" opacity="0.85"/><path d="M1 8c0-1.933 1.567-3.5 3.5-3.5S8 6.067 8 8" stroke="${s.color}" stroke-width="1.1" stroke-linecap="round" opacity="0.85"/></svg>`;
+        icon.style.cssText = 'display:inline-flex;align-items:center;flex-shrink:0;';
         const nameSpan = document.createElement('span'); nameSpan.textContent = displayName;
         creatorTag.appendChild(icon); creatorTag.appendChild(nameSpan);
         leftGroup.appendChild(creatorTag);
@@ -3888,10 +3901,14 @@ function _buildCdCard() {
     bottomRow.appendChild(leftGroup);
 
     // 删除按钮
-    if (isAdmin || item.createdBy === _cdGetToken()) {
-        const delBtn = document.createElement('button');
-        delBtn.style.cssText = 'font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;';
-        delBtn.textContent = '删除';
+    const isSAUser = _cdUser && _cdUser.role === 'superadmin';
+    const isOwner  = item.createdBy && _cdGetToken() && item.createdBy === _cdGetToken();
+    const canDelete = isSAUser || isOwner;
+
+    const delBtn = document.createElement('button');
+    delBtn.textContent = '删除';
+    if (canDelete) {
+        delBtn.style.cssText = 'font-size:.52rem;color:#aaa;cursor:pointer;border:1px solid var(--border);border-radius:6px;padding:2px 8px;background:var(--muted);flex-shrink:0;-webkit-tap-highlight-color:transparent;';
         delBtn.addEventListener('mouseenter', () => { delBtn.style.color='#B22222'; delBtn.style.borderColor='#B22222'; });
         delBtn.addEventListener('mouseleave', () => { delBtn.style.color='#aaa'; delBtn.style.borderColor='var(--border)'; });
         delBtn.addEventListener('click', e => {
@@ -3901,8 +3918,11 @@ function _buildCdCard() {
                 await _cdFetchTasks(); _cdActiveIdx = 0; _cdRefresh('data');
             });
         });
-        bottomRow.appendChild(delBtn);
+    } else {
+        delBtn.style.cssText = 'font-size:.52rem;color:#ccc;cursor:not-allowed;border:1px solid #e0ddd8;border-radius:6px;padding:2px 8px;background:#f5f3ef;flex-shrink:0;opacity:0.5;-webkit-tap-highlight-color:transparent;';
+        delBtn.disabled = true;
     }
+    bottomRow.appendChild(delBtn);
 
     actWrap.appendChild(bottomRow);
     card.appendChild(actWrap);
