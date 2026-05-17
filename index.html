@@ -3771,7 +3771,8 @@ function _buildCdCard() {
         endedDiv.style.cssText = 'text-align:center;padding:16px 0 8px;font-size:.72rem;color:#aaa;font-weight:700;letter-spacing:1px;';
         endedDiv.textContent = '已结束';
         const isSAUser2 = _cdUser && _cdUser.role === 'superadmin';
-        const isOwner2  = item.createdBy && _cdGetToken() && item.createdBy === _cdGetToken();
+        const isOwner2  = (item.createdBy && _cdGetToken() && item.createdBy === _cdGetToken())
+                       || (item.creatorName && _cdUser && item.creatorName === _cdUser.name);
         const canDelete2 = isSAUser2 || isOwner2;
         const delBtn = document.createElement('button');
         delBtn.textContent = '删除此项';
@@ -3902,7 +3903,8 @@ function _buildCdCard() {
 
     // 删除按钮
     const isSAUser = _cdUser && _cdUser.role === 'superadmin';
-    const isOwner  = item.createdBy && _cdGetToken() && item.createdBy === _cdGetToken();
+    const isOwner  = (item.createdBy && _cdGetToken() && item.createdBy === _cdGetToken())
+                  || (item.creatorName && _cdUser && item.creatorName === _cdUser.name);
     const canDelete = isSAUser || isOwner;
 
     const delBtn = document.createElement('button');
@@ -4008,9 +4010,22 @@ function _cdApplyCellColor() {
     }
 
     // 差集：清除旧范围中不在新范围内的格子
+    // 修复1：newLo/newHi 初始值为 -1，当新范围为空时 i >= newLo 恒为 true，
+    //        导致旧范围所有格子全被 continue 跳过而残留高亮。
+    // 修复2：旧 cd-target 格（_cdPrevTarget）必须无条件清除——
+    //        即使其索引恰好落在新卡片的 [newLo, newHi] 区间内，
+    //        它也不能被新卡片复用为 cd-range，否则会同时出现两个 cd-target 边框。
     if (_cdPrevLo >= 0) {
+        // 先单独强制清除旧 target 格（语义上永远不能被新 range 复用）
+        if (_cdPrevTarget >= 0 && _cdPrevTarget !== newTarget) {
+            const prevTc = _cellCache[_cdPrevTarget]?.cell;
+            if (prevTc) { prevTc.classList.remove('cd-range', 'cd-target'); delete prevTc.dataset.cdDays; }
+        }
+        const hasNewRange = newLo >= 0 && newHi >= 0;
         for (let i = _cdPrevLo; i <= _cdPrevHi; i++) {
-            if (i >= newLo && i <= newHi) continue; // 新范围内保留
+            if (i === _cdPrevTarget) continue; // 已在上面单独处理
+            // 新范围有效且 i 在范围内，或 i 恰好是新目标格，才保留
+            if ((hasNewRange && i >= newLo && i <= newHi) || i === newTarget) continue;
             const c = _cellCache[i]?.cell; if (!c) continue;
             const hasCd = c.classList.contains('cd-range') || c.classList.contains('cd-target');
             if (hasCd) { c.classList.remove('cd-range', 'cd-target'); delete c.dataset.cdDays; }
